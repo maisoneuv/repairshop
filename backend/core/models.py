@@ -36,7 +36,7 @@ class UserManager(BaseUserManager):
 
 
 class User(AbstractUser, PermissionsMixin):
-    # tenant = models.ForeignKey(Tenant, on_delete=models.CASCADE, null=True, blank=True)
+    tenant = models.ForeignKey(Tenant, on_delete=models.CASCADE, null=True, blank=True)
     email = models.EmailField(unique=True, max_length=255, verbose_name='email address')
     company = models.CharField(max_length=255, null=True)
     name = models.CharField(max_length=255, default='')

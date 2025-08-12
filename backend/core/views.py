@@ -213,8 +213,10 @@ class MyPermissionsView(APIView):
 @ensure_csrf_cookie
 @api_view(['POST'])
 def login_view(request):
-    username = request.data.get('username')
+    username = request.data.get('email')
     password = request.data.get('password')
+    print(f'username:{username}')
+    print(f'pass:{password}')
 
     user = authenticate(request, username=username, password=password)
     print(user)

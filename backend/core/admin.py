@@ -12,12 +12,22 @@ from tenants.models import Tenant
 from django.contrib.auth.admin import UserAdmin as DefaultUserAdmin
 from django.contrib.auth.models import Permission
 
+class UserRoleInline(admin.TabularInline):
+    model = UserRole
+    extra = 1
+    autocomplete_fields = ['role']
 
 @admin.register(User)
 class UserAdmin(DefaultUserAdmin):
+    inlines = [UserRoleInline]
     readonly_fields = DefaultUserAdmin.readonly_fields + ('display_roles_and_permissions',)
+    list_display = DefaultUserAdmin.list_display + ('tenant',)
     fieldsets = DefaultUserAdmin.fieldsets + (
+        (_("Tenant"), {"fields": ("tenant",)}),
         ("Tenant Roles & Permissions", {"fields": ("display_roles_and_permissions",)}),
+    )
+    add_fieldsets = DefaultUserAdmin.add_fieldsets + (
+        (_("Tenant"), {"fields": ("tenant",)}),
     )
 
     def display_roles_and_permissions(self, obj):
