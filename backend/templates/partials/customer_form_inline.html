@@ -1,0 +1,52 @@
+{% load widget_tweaks %}
+<div class="border p-4 rounded shadow bg-white mt-2">
+  <h3 class="text-lg font-semibold mb-2">New Customer</h3>
+  <form
+    id="customer-inline-form"
+    hx-post="{% url 'customers:customer_create_inline' %}"
+    hx-target="#customer-form-wrapper"
+    hx-swap="outerHTML">
+    {% csrf_token %}
+    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+      <div>
+        <label class="block font-medium" for="{{ form.phone_number.id_for_label }}">Phone Number</label>
+        {{ form.phone_number|add_class:"w-full border p-2 rounded" }}
+      </div>
+      <div>
+        <label class="block font-medium" for="{{ form.email.id_for_label }}">E-mail</label>
+        {{ form.email|add_class:"w-full border p-2 rounded" }}
+      </div>
+      <div>
+        <label class="block font-medium" for="{{ form.first_name.id_for_label }}">First Name</label>
+        {{ form.first_name|add_class:"w-full border p-2 rounded" }}
+      </div>
+      <div>
+        <label class="block font-medium" for="{{ form.last_name.id_for_label }}">Last Name</label>
+        {{ form.last_name|add_class:"w-full border p-2 rounded" }}
+      </div>
+      <div>
+        <label class="block font-medium" for="{{ form.referral_source.id_for_label }}">Referral Source</label>
+        {{ form.referral_source|add_class:"w-full border p-2 rounded" }}
+      </div>
+    </div>
+    <button type="submit" class="bg-green-600 text-white mt-2 px-3 py-1 rounded">Create</button>
+    <button type="button" onclick="closeCustomerForm()" class="ml-2 text-sm text-gray-500">Cancel</button>
+  </form>
+</div>
+<script>
+  function closeCustomerForm() {
+  document.getElementById('customer-form-wrapper').innerHTML = '';
+}
+
+  document.body.addEventListener('htmx:afterOnLoad', function(evt) {
+  const response = evt.detail.xhr.response;
+  try {
+    const json = JSON.parse(response);
+    if (json.success) {
+      selectCustomer(json.id, json.label);
+    }
+  } catch (e) {
+    // Not JSON (probably form error), do nothing
+  }
+});
+</script>

@@ -1,0 +1,48 @@
+{% extends "base.html" %}
+
+{% block content %}
+
+
+<section class="text-gray-600 body-font">
+  <div class="container px-5 py-24 mx-auto">
+    <div class="flex flex-col text-center w-full mb-20">
+      <h1 class="sm:text-4xl text-3xl font-medium title-font mb-2 text-gray-900">All Devices</h1>
+      <p class="lg:w-2/3 mx-auto leading-relaxed text-base"></p>
+    </div>
+    <div class="lg:w-2/3 w-full mx-auto overflow-auto">
+      <table class="table-auto w-full text-left whitespace-no-wrap">
+        <thead>
+          <tr>
+            <th class="px-4 py-3 title-font tracking-wider font-medium text-gray-900 text-sm bg-gray-100 rounded-tl rounded-bl">ID</th>
+            <th class="px-4 py-3 title-font tracking-wider font-medium text-gray-900 text-sm bg-gray-100">Manufacturer</th>
+            <th class="px-4 py-3 title-font tracking-wider font-medium text-gray-900 text-sm bg-gray-100">Model</th>
+            <th class="w-10 title-font tracking-wider font-medium text-gray-900 text-sm bg-gray-100 rounded-tr rounded-br"></th>
+          </tr>
+        </thead>
+        <tbody>
+        {% for device in devices %}
+          <tr>
+            <td class="px-4 py-3">{{device.id}}</td>
+              <a href="{% url 'inventory:device_detail' device.pk %}">
+                {{item.customer_asset}}
+              </a>
+            <td class="px-4 py-3">{{device.manufacturer}}</td>
+            <td class="px-4 py-3">{{device.model}}</td>
+            <td class="w-10 text-center text-xs underline">
+              <a href="{% url 'inventory:device_detail' device.pk %}">View</a>
+            </td>
+          </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    <div class="flex pl-4 mt-4 lg:w-2/3 w-full mx-auto">
+      <button class="flex ml-auto text-white bg-indigo-500 border-0 py-2 px-6 focus:outline-none hover:bg-indigo-600 rounded">
+          <a href="{% url 'inventory:device_create' %}">
+              New
+          </a>
+      </button>
+    </div>
+  </div>
+</section>
+{% endblock content %}

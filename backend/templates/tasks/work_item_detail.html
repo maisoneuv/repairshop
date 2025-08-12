@@ -1,0 +1,85 @@
+{% extends "base.html" %}
+
+
+
+{% block content %}
+<a href = "{% url 'tasks:work_item_list' %}"> go back </a>
+
+<hr />
+<div class=" grid grid-cols-3 mt-2">
+    <div class="col-span-2 border border-gray-300 rounded-lg mx-4 ml-1 p-3 shadow">
+      <div class="px-3 sm:px-0">
+        <h3 class="text-base/5 font-semibold text-gray-900">Work item detail</h3>
+      </div>
+      <div class="mt-4 border-t border-gray-100">
+          <div class="px-4 py-6 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-0">
+            <dt class="text-sm/6 font-medium text-gray-900">Summary</dt>
+            <dd class="mt-1 text-sm/6 text-gray-700 sm:col-span-2 sm:mt-0">{{ object.summary }}</dd>
+          </div>
+          <div class="px-4 py-6 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-0">
+            <dt class="text-sm/6 font-medium text-gray-900">Status</dt>
+            <dd class="mt-1 text-sm/6 text-gray-700 sm:col-span-2 sm:mt-0">{{ object.status }}</dd>
+          </div>
+          <div class="px-4 py-6 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-0">
+            <dt class="text-sm/6 font-medium text-gray-900">Owner</dt>
+            <dd class="mt-1 text-sm/6 text-gray-700 sm:col-span-2 sm:mt-0">{{ object.owner }}</dd>
+          </div>
+          <div class="px-4 py-6 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-0">
+            <dt class="text-sm/6 font-medium text-gray-900">Customer</dt>
+              <dd class="mt-1 text-sm/6 text-blue-900 sm:col-span-2 sm:mt-0 underline">
+                <a href="{% url 'customers:customer_detail' object.customer.pk %}">
+                     {{ object.customer }}
+                </a>
+              </dd>
+          </div>
+          <div class="px-4 py-6 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-0">
+            <dt class="text-sm/6 font-medium text-gray-900">Customer Asset</dt>
+            <dd class="mt-1 text-sm/6 text-gray-700 sm:col-span-2 sm:mt-0">{{ object.customer_asset }}</dd>
+          </div>
+            <div class="px-4 py-6 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-0">
+            <dt class="text-sm/6 font-medium text-gray-900">Description</dt>
+            <dd class="mt-1 text-sm/6 text-gray-700 sm:col-span-2 sm:mt-0">{{ object.description }}</dd>
+          </div>
+            <div class="px-4 py-6 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-0">
+            <dt class="text-sm/6 font-medium text-gray-900">Created on</dt>
+            <dd class="mt-1 text-sm/6 text-gray-700 sm:col-span-2 sm:mt-0">{{ object.created_date }}</dd>
+          </div>
+          <div class="px-4 py-6 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-0">
+          </div>
+      </div>
+        <button class="ml-auto text-white bg-indigo-400 border-1 py-1 px-5 focus:outline-none hover:bg-indigo-600 rounded">
+          <a href="{% url 'tasks:work_item_update' object.pk %}">
+              Update
+          </a>
+
+        </button>
+    </div>
+<!--    related tasks-->
+    <div class="col-span-1  ">
+        <div class="grid grid-rows-3 gap-2 h-full">
+            <div class="row-span-1 border border-gray-300 rounded-lg mx-4 ml-1 p-3">
+                <div class="px-3 sm:px-0 flex justify-between items-center">
+                    <h3 class="text-base/5 font-semibold text-gray-800">Related Tasks</h3>
+                    <button class="text-xs font-medium text-gray-500">
+                        <a href="{% url 'tasks:task_create' %}">
+                            New Task
+                        </a>
+                    </button>
+                </div>
+                <div class="mt-4 border-t border-gray-100">
+                    {% include 'tasks/task_table.html' with tasks=tasks %}
+                </div>
+            </div>
+            <div class="row-span-1 border border-gray-300 rounded-lg mx-4 ml-1 p-3">
+                <div class="px-3 sm:px-0">
+                    <h3 class="text-base/5 font-semibold text-gray-800">Device</h3>
+                </div>
+                <div class="mt-4 border-t border-gray-100">
+                    {% include 'tasks/task_table.html' with tasks=tasks %}
+                </div>
+            </div>
+
+        </div>
+    </div>
+</div>
+{% endblock content %}

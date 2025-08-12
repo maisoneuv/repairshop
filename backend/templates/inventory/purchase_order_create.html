@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+{% load tailwind_filters %}
+
+
+{% block content %}
+    <a href = "{% url 'inventory:purchase_order_list' %}"> go back </a>
+    <hr />
+    <div class="border border-gray-300 rounded-lg mx-4 my-2 p-4 shadow w-3/5 mx-auto">
+        <h1 class="text-base/5 font-semibold text-gray-900"> Create Purchase Order</h1>
+        <div class="mt-4 border-t border-gray-100 m-1 p-2 text-sm">
+            <form method="post">
+                {% csrf_token %}
+                {{ form|crispy }}
+                <button class="ml-auto text-white bg-indigo-400 border-1 py-1 px-5 focus:outline-none hover:bg-indigo-600 rounded" type="submit">
+                    Save
+                </button>
+            </form>
+        </div>
+    </div>
+{% endblock content %}

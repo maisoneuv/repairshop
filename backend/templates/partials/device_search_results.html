@@ -1,0 +1,25 @@
+ <ul class="border rounded shadow">
+        {% if devices %}
+            {% for device in devices %}
+              <li
+                class="device-option p-2 hover:bg-blue-100 cursor-pointer"
+                data-id="{{ device.id }}"
+                data-label="{{ device }} ({{ device.model }})"
+                onclick="selectItem('device', {{ device.id }}, '{{ device.model }}')"
+              >
+                {{ device }} — {{ device.serial_number}}
+              </li>
+            {% endfor %}
+        {% endif %}
+
+        <li class="device-option p-2 border font-bold hover:bg-gray-100 cursor-pointer"
+            data-create-url="{% url 'inventory:device_create_inline' %}"
+            data-action="create"
+            data-target="#device-form-wrapper"
+            data-url="{% url 'inventory:device_create_inline' %}"
+            hx-get="{% url 'inventory:device_create_inline' %}"
+            hx-target="#device-form-wrapper"
+            hx-swap="innerHTML">
+            Create new device
+        </li>
+    </ul>

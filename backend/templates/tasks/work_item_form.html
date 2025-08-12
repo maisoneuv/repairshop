@@ -1,0 +1,135 @@
+{% extends "base.html" %}
+{% load tailwind_filters widget_tweaks form_extras %}
+
+{% load static %}
+
+
+{% block content %}
+<div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+  <div class="space-y-6 border rounded shadow p-4">
+    <h2 class="text-l font-bold mb-4 mt-4">Create Repair</h2>
+
+    <!-- Search + Customer Autocomplete -->
+    <div class="space-y-6 bg-white p-4 rounded shadow">
+      <h3 class="text-sm font-semibold mb-1">Customer Data</h3>
+        <input type="text"
+               name="customer-search"
+               id="customer-search"
+               placeholder="Search customers"
+               data-autocomplete="customer"
+               hx-get="{% url 'tasks:customer_search' %}"
+               hx-target="#customer-results"
+               hx-trigger="keyup changed delay:300ms"
+               class="border p-2 w-full text-xs rounded"
+        >
+        <div id="customer-results" class="mt-2"></div>
+        <div id="customer-form-wrapper"></div>
+    </div>
+
+
+
+    <form method="post" class="space-y-6 bg-white p-3 rounded shadow" id="repair-form">
+        {% csrf_token %}
+      <input type="hidden" name="customer_id" id="customer-id">
+          <!-- Search + Device Autocomplete -->
+      <div class="space-y-6 bg-white p-4 rounded shadow">
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          <div class="col-span-2">
+            {% include "components/autocomplete.html" with name="device" url="device-search" %}
+          </div>
+          <div class="col-span-1">
+            <label class="block text-xs" for="serial_number">Serial Number</label>
+            <input type="text" id="serial_number" name="serial_number" class="border p-2 rounded w-full">
+          </div>
+        </div>
+      </div>
+        <!-- Device + Status Section -->
+      <div>
+        <h3 class="text-sm font-semibold mb-3">Issue & Diagnosis</h3>
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div class="sm:col-span-2">
+            <label class="block text-xs" for="{{ form.description.id_for_label }}">Issue Description</label>
+            {{ form.description|add_class:"w-full border p-2 rounded min-h-[80px]"|attr:"rows:3" }}
+          </div>
+          <div class="sm:col-span-2">
+            <label class="block text-xs" for="{{ form.device_condition.id_for_label }}">Device Condition</label>
+            {{ form.device_condition|add_class:"w-full border p-2 rounded" |attr:"rows:2"}}
+          </div>
+          <div class="sm:col-span-2">
+            <label class="block text-xs" for="{{ form.comments.id_for_label }}">Comments</label>
+            {{ form.comments|add_class:"w-full border p-2 rounded min-h-[50px] "|attr:"rows:2" }}
+          </div>
+        </div>
+      </div>
+
+          <!--  Assignment & Priority -->
+      <div>
+        <h3 class="text-sm font-semibold mb-3">Repair Assignment</h3>
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          <div>
+            <label class="block text-xs" for="{{ form.priority.id_for_label }}">Priority</label>
+            {{ form.priority|add_class:"w-full border p-2 rounded text-xs" }}
+          </div>
+          <div>
+            <label class="block text-xs" for="{{ form.owner.id_for_label }}">Owner</label>
+            {{ form.owner|add_class:"w-full border p-2 rounded text-xs" }}
+          </div>
+          <div>
+            <label class="block text-xs" for="{{ form.technician.id_for_label }}">Technician</label>
+            {{ form.technician|add_class:"w-full border p-2 rounded text-xs" }}
+          </div>
+        </div>
+      </div>
+
+        <!-- Location & Type -->
+      <div>
+        <h3 class="text-sm font-semibold mb-3">Logistics</h3>
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          <div>
+            <label class="block text-xs" for="{{ form.type.id_for_label }}">Repair Type</label>
+            {{ form.type|add_class:"w-full border p-2 rounded text-xs" }}
+          </div>
+          <div>
+            <label class="block text-xs" for="{{ form.customer_dropoff_point.id_for_label }}">Drop-off Point</label>
+            {{ form.customer_dropoff_point|add_class:"w-full border p-2 rounded text-xs" }}
+          </div>
+          <div>
+            <label class="block text-xs" for="{{ form.intake_method.id_for_label }}">Intake Method</label>
+            {{ form.intake_method|add_class:"w-full border p-2 rounded text-xs" }}
+          </div>
+        </div>
+      </div>
+
+          <!-- Finance -->
+      <div>
+        <h3 class="text-sm font-semibold mb-3">Pricing & Payments</h3>
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          <div>
+            {% field form.estimated_price "Estimated Price" "block text-xs" "w-full border p-2 rounded text-xs" %}
+          </div>
+          <div>
+            <label class="block text-xs" for="{{ form.prepaid_amount.id_for_label }}">Prepaid Amount</label>
+            {{ form.prepaid_amount|add_class:"w-full border p-2 rounded text-xs" }}
+          </div>
+            <div>
+            <label class="block text-xs" for="{{ form.payment_method.id_for_label }}">Payment Method</label>
+            {{ form.payment_method|add_class:"w-full border p-2 rounded text-xs" }}
+          </div>
+        </div>
+      </div>
+
+          <!-- Submit -->
+      <div class="text-right pt-4">
+        <button type="submit" class="bg-blue-600 text-sm text-white px-4 py-2 rounded hover:bg-blue-700">
+          Create Repair Order
+        </button>
+      </div>
+    </form>
+  </div>
+  <!-- Right Column: Customer Assets -->
+  <div id="customer-assets-wrapper" class="bg-white p-4 border rounded shadow self-start">
+  </div>
+</div>
+{% endblock content %}
+
+<script src="{% static 'js/autocomplete.js' %}"></script>

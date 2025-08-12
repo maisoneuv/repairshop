@@ -1,0 +1,44 @@
+{% load widget_tweaks %}
+<div class="border p-4 rounded shadow bg-white mt-2">
+  <h3 class="text-m font-semibold mb-2">New Device</h3>
+  <form
+    id="device-inline-form"
+    hx-post="{% url 'inventory:device_create_inline' %}"
+    hx-target="#device-form-wrapper"
+    hx-swap="outerHTML">
+    {% csrf_token %}
+    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+      <div>
+        <label class="block font-medium text-xs">Device Category</label>
+        <input type="text" id="category-id" class="w-full border p-2 rounded text-xs">
+      </div>
+      <div>
+        <label class="block font-medium text-xs" for="{{ form.manufacturer.id_for_label }}">Manufacturer</label>
+        {{ form.manufacturer|add_class:"w-full border p-2 rounded text-xs" }}
+      </div>
+      <div>
+        <label class="block font-medium text-xs" for="{{ form.model.id_for_label }}">Model</label>
+        {{ form.model|add_class:"w-full border p-2 rounded text-xs" }}
+      </div>
+    </div>
+    <button type="submit" class="bg-green-600 text-white mt-2 px-3 py-1 rounded">Create</button>
+    <button type="button" onclick="closeForm()" class="ml-2 text-sm text-gray-500">Cancel</button>
+  </form>
+</div>
+<script>
+  function closeCustomerForm() {
+  document.getElementById('device-form-wrapper').innerHTML = '';
+}
+
+  document.body.addEventListener('htmx:afterOnLoad', function(evt) {
+  const response = evt.detail.xhr.response;
+  try {
+    const json = JSON.parse(response);
+    if (json.success) {
+      selectItem('device', json.id, json.label);
+    }
+  } catch (e) {
+    // Not JSON (probably form error), do nothing
+  }
+});
+</script>

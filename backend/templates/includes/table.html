@@ -1,0 +1,32 @@
+
+
+    <table class="table-auto w-full text-left whitespace-no-wrap">
+      <thead>
+        <tr>
+          {% for col in columns %}
+            <th class="px-4 py-3 title-font tracking-wider font-medium text-gray-900 text-sm bg-gray-100">
+              {{ col.label }}
+            </th>
+          {% endfor %}
+        </tr>
+      </thead>
+      <tbody>
+        {% for row in rows %}
+          <tr>
+            {% for cell in row %}
+              {% if cell.column.is_link %}
+                <td class="px-4 py-3 text-indigo-700">
+                  <a href="{% url cell.column.url_name cell.url_param %}">
+                    {{ cell.display_text }}
+                  </a>
+                </td>
+              {% else %}
+                <td class="px-4 py-3">
+                  {{ cell.value }}
+                </td>
+              {% endif %}
+            {% endfor %}
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>

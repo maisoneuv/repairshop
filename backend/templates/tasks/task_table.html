@@ -1,0 +1,34 @@
+{% block content %}
+    <div class=" w-full mx-auto overflow-auto">
+      <table class="table-auto w-full text-left whitespace-no-wrap m-1">
+        <thead>
+          <tr>
+            <th class="px-3 py-2 title-font tracking-wider font-medium text-gray-900 text-xs bg-gray-100 rounded-tl rounded-bl">ID</th>
+            <th class="px-3 py-2 title-font tracking-wider font-medium text-gray-900 text-xs bg-gray-100">Summary</th>
+            <th class="px-3 py-2 title-font tracking-wider font-medium text-gray-900 text-xs bg-gray-100">Due Date</th>
+            <th class="px-3 py-2 title-font tracking-wider font-medium text-gray-900 text-xs bg-gray-100">Assigned To</th>
+            <th class="w-10 title-font tracking-wider font-medium text-gray-900 text-xs bg-gray-100 rounded-tr rounded-br"></th>
+          </tr>
+        </thead>
+        <tbody>
+        {% for task in tasks %}
+          <tr>
+            <td class="px-4 py-3 text-xs">{{task.id}}</td>
+            <td class="px-4 py-3 text-xs">
+                <a href="{% url 'tasks:task_detail' task.id %}">
+                    {{task.summary}}
+                </a>
+            </td>
+            <td class="px-4 py-3 text-xs">{{task.due_date}}</td>
+            <td class="px-4 py-3 text-xs text-gray-900">{{task.assigned_employee}}</td>
+            <td class="w-10 text-center text-xs underline">
+<!--                <button class="flex ml-auto text-white bg-indigo-500 border-0 py-1 px-3 focus:outline-none hover:bg-indigo-600 rounded">-->
+                    <a href="{% url 'tasks:task_detail' task.pk %}">View</a>
+<!--                </button>-->
+            </td>
+          </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+{% endblock content %}

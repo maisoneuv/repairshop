@@ -1,0 +1,27 @@
+{% comment %}
+Required context variables:
+- name: the name of the field (e.g. "customer")
+- url: the autocomplete search endpoint
+- placeholder: placeholder text
+- create_url: (optional) the URL to open the "create new" inline form
+- create_target: (optional) the ID of the container to insert the create form into
+{% endcomment %}
+
+<div class="mb-4">
+  <label for="{{ name }}-search" class="block font-medium capitalize">{{ name|capfirst }}</label>
+  <input type="text"
+         name="{{ name }}-search"
+         id="{{ name }}-search"
+         data-autocomplete="{{ name }}"
+         placeholder="{{ placeholder|default:'Search...' }}"
+         autocomplete="off"
+         hx-get="{{ url }}"
+         hx-target="#{{ name }}-results"
+         hx-trigger="keyup changed delay:300ms"
+         class="w-full border p-2 rounded"
+  >
+  <input type="hidden" name="{{ name }}_id" id="{{ name }}-id">
+
+  <div id="{{ name }}-results" class="mt-2"></div>
+  <div id="{{ name }}-form-wrapper"></div>
+</div>

@@ -1,0 +1,63 @@
+{% extends "base.html" %}
+
+{% block content %}
+<a href = "{% url 'tasks:work_item_list' %}"> go back </a>
+
+<hr />
+<div class=" grid grid-cols-5 mt-2">
+    <div class="col-span-2 border border-gray-300 rounded-lg mx-4 ml-1 p-3 shadow">
+      <div class="px-3 sm:px-0">
+        <h3 class="text-base/5 font-semibold text-gray-900">Purchase Order Item</h3>
+      </div>
+      <div class="mt-4 border-t border-gray-100">
+          <div class="px-4 py-6 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-0">
+            <dt class="text-sm/6 font-medium text-gray-900">Order Number</dt>
+            <dd class="mt-1 text-sm/6 text-indigo-700 sm:col-span-2 sm:mt-0">
+                <a href="{% url 'inventory:purchase_order_detail' item.purchase_order.pk %}">
+                {{ item.purchase_order }}
+                </a>
+            </dd>
+          </div>
+          <div class="px-4 py-6 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-0">
+            <dt class="text-sm/6 font-medium text-gray-900">Inventory Item</dt>
+            <dd class="mt-1 text-sm/6 text-indigo-700 sm:col-span-2 sm:mt-0">
+                <a href="{% url 'inventory:inventory_detail' item.inventory_item.pk %}">
+                    {{ item.inventory_item }}
+                </a>
+            </dd>
+          </div>
+          <div class="px-4 py-6 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-0">
+            <dt class="text-sm/6 font-medium text-gray-900">Quantity</dt>
+            <dd class="mt-1 text-sm/6 text-gray-700 sm:col-span-2 sm:mt-0">{{ item.get_quantity_with_unit }}</dd>
+          </div>
+          <div class="px-4 py-6 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-0">
+            <dt class="text-sm/6 font-medium text-gray-900">Unit Cost</dt>
+            <dd class="mt-1 text-sm/6 text-gray-700 sm:col-span-2 sm:mt-0">{{ item.unit_cost }}</dd>
+          </div>
+      </div>
+        <button class="ml-auto text-white bg-indigo-400 border-1 py-1 px-5 focus:outline-none hover:bg-indigo-600 rounded">
+            <a href="{% url 'inventory:purchase_order_item_update' object.pk %}">
+              Update
+          </a>
+        </button>
+    </div>
+<!--    inventory balance-->
+<!--    <div class="col-span-2  ">-->
+<!--        <div class="grid grid-rows-3 gap-2 h-full">-->
+<!--            <div class="row-span-1 border border-gray-300 rounded-lg mx-4 ml-1 p-3">-->
+<!--                <div class="px-3 sm:px-0 flex justify-between items-center">-->
+<!--                    <h3 class="text-base/5 font-semibold text-gray-800">Inventory Balance</h3>-->
+<!--                    <button class="text-xs font-medium text-gray-500">-->
+<!--                        <a href="{% url 'inventory:inventory_balance_create' %}">-->
+<!--                            Add Balance-->
+<!--                        </a>-->
+<!--                    </button>-->
+<!--                </div>-->
+<!--                <div class="mt-4 border-t border-gray-100">-->
+<!--                    {% include "includes/table.html" with columns=balance_columns rows=balance_rows %}-->
+<!--                </div>-->
+<!--            </div>-->
+<!--        </div>-->
+<!--    </div>-->
+</div>
+{% endblock content %}

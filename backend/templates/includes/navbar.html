@@ -1,0 +1,148 @@
+<nav class="md:mr-auto md:ml-4 md:py-1 md:pl-4
+                md:border-l md:border-gray-400 flex flex-wrap
+                items-center text-base justify-center space-x-4">
+
+      <!-- Customers (Dropdown) -->
+      <div class="relative group">
+        <a href="#" class="hover:text-gray-900 inline-flex items-center">
+          Customers
+          <!-- Optional dropdown icon -->
+          <svg class="ml-1 w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+            <path fill-rule="evenodd"
+                  d="M5.293 7.293a1 1 0 011.414 0L10 10.586
+                     l3.293-3.293a1 1 0 011.414 1.414l-4 4a1 1 0 01
+                     -1.414 0l-4-4a1 1 0 010-1.414z"
+                  clip-rule="evenodd" />
+          </svg>
+        </a>
+        <!-- Dropdown menu -->
+        <div class="absolute left-0 top-full w-48 bg-white
+                    border border-gray-200 rounded shadow-lg
+                    hidden group-hover:block z-50">
+          <a href="{% url 'customers:customer_list' %}"
+             class="block px-4 py-2 text-gray-700 hover:bg-gray-100">
+            All Customers
+          </a>
+          <a href="{% url 'customers:asset_list' %}"
+             class="block px-4 py-2 text-gray-700 hover:bg-gray-100">
+            Customer Assets
+          </a>
+          <a href="#"
+             class="block px-4 py-2 text-gray-700 hover:bg-gray-100">
+            My Customers
+          </a>
+        </div>
+      </div>
+
+      <!-- Work Items (Dropdown) -->
+      <div class="relative group">
+        <a href="#" class="hover:text-gray-900 inline-flex items-center">
+          Work Items
+          <svg class="ml-1 w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+            <path fill-rule="evenodd"
+                  d="M5.293 7.293a1 1 0 011.414 0L10 10.586
+                     l3.293-3.293a1 1 0 011.414 1.414l-4 4a1 1 0 01
+                     -1.414 0l-4-4a1 1 0 010-1.414z"
+                  clip-rule="evenodd" />
+          </svg>
+        </a>
+        <div class="absolute left-0 top-full w-48 bg-white
+                    border border-gray-200 rounded shadow-lg
+                    hidden group-hover:block z-50">
+          <a href="{% url 'tasks:work_item_list' %}"
+             class="block px-4 py-2 text-gray-700 hover:bg-gray-100">
+            All Work Items
+          </a>
+          <a href="#"
+             class="block px-4 py-2 text-gray-700 hover:bg-gray-100">
+            Pending Items
+          </a>
+        </div>
+      </div>
+
+      <!-- Tasks (Dropdown) -->
+      <div class="relative group">
+        <a href="#" class="hover:text-gray-900 inline-flex items-center">
+          Tasks
+          <svg class="ml-1 w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+            <path fill-rule="evenodd"
+                  d="M5.293 7.293a1 1 0 011.414 0L10 10.586
+                     l3.293-3.293a1 1 0 011.414 1.414l-4 4a1 1 0 01
+                     -1.414 0l-4-4a1 1 0 010-1.414z"
+                  clip-rule="evenodd" />
+          </svg>
+        </a>
+        <div class="absolute left-0 top-full w-48 bg-white
+                    border border-gray-200 rounded shadow-lg
+                    hidden group-hover:block z-50">
+          <a href="{% url 'tasks:task_list' %}"
+             class="block px-4 py-2 text-gray-700 hover:bg-gray-100">
+            All Tasks
+          </a>
+          <a href="#"
+             class="block px-4 py-2 text-gray-700 hover:bg-gray-100">
+            My Tasks
+          </a>
+          <a href="#"
+             class="block px-4 py-2 text-gray-700 hover:bg-gray-100">
+            Due Soon
+          </a>
+        </div>
+      </div>
+
+      <!-- Inventory (Dropdown) -->
+      <div class="relative group">
+        <a href="#" class="hover:text-gray-900 inline-flex items-center">
+          Inventory
+          <svg class="ml-1 w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+            <path fill-rule="evenodd"
+                  d="M5.293 7.293a1 1 0 011.414 0L10 10.586
+                     l3.293-3.293a1 1 0 011.414 1.414l-4 4a1 1 0 01
+                     -1.414 0l-4-4a1 1 0 010-1.414z"
+                  clip-rule="evenodd" />
+          </svg>
+        </a>
+        <div class="absolute left-0 top-full w-48 bg-white
+                    border border-gray-200 rounded shadow-lg
+                    hidden group-hover:block z-50">
+          <a href="{% url 'inventory:device_list' %}"
+             class="block px-4 py-2 text-gray-700 hover:bg-gray-100">
+            All Devices
+          </a>
+          <a href="{% url 'inventory:inventory_balance_list' %}"
+             class="block px-4 py-2 text-gray-700 hover:bg-gray-100">
+            Manage Inventory
+          </a>
+          <a href="{% url 'inventory:purchase_order_list' %}"
+             class="block px-4 py-2 text-gray-700 hover:bg-gray-100">
+            Purchase Orders
+          </a>
+        </div>
+      </div>
+
+  <!-- Users (Dropdown) -->
+      <div class="relative group">
+        <a href="#" class="hover:text-gray-900 inline-flex items-center">
+          Users
+          <svg class="ml-1 w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+            <path fill-rule="evenodd"
+                  d="M5.293 7.293a1 1 0 011.414 0L10 10.586
+                     l3.293-3.293a1 1 0 011.414 1.414l-4 4a1 1 0 01
+                     -1.414 0l-4-4a1 1 0 010-1.414z"
+                  clip-rule="evenodd" />
+          </svg>
+        </a>
+        <div class="absolute left-0 top-full w-48 bg-white
+                    border border-gray-200 rounded shadow-lg
+                    hidden group-hover:block z-50">
+          <a href="#"
+             class="block px-4 py-2 text-gray-700 hover:bg-gray-100">
+            All Users
+          </a>
+          <a href="#"
+             class="block px-4 py-2 text-gray-700 hover:bg-gray-100">
+            User Roles
+          </a>
+        </div>
+      </div>
+    </nav>

@@ -1,0 +1,59 @@
+{% extends "base.html" %}
+
+{% block content %}
+
+
+<section class="text-gray-600 body-font">
+  <div class="container px-5 py-24 mx-auto">
+    <div class="flex flex-col text-center w-full mb-20">
+      <h1 class="sm:text-4xl text-3xl font-medium title-font mb-2 text-gray-900">All Customer Assets</h1>
+      <p class="lg:w-2/3 mx-auto leading-relaxed text-base"></p>
+    </div>
+    <div class="lg:w-2/3 w-full mx-auto overflow-auto">
+      <table class="table-auto w-full text-left whitespace-no-wrap">
+        <thead>
+          <tr>
+            <th class="px-4 py-3 title-font tracking-wider font-medium text-gray-900 text-sm bg-gray-100 rounded-tl rounded-bl">ID</th>
+            <th class="px-4 py-3 title-font tracking-wider font-medium text-gray-900 text-sm bg-gray-100">Serial Number</th>
+            <th class="px-4 py-3 title-font tracking-wider font-medium text-gray-900 text-sm bg-gray-100">Customer</th>
+            <th class="px-4 py-3 title-font tracking-wider font-medium text-gray-900 text-sm bg-gray-100">Device</th>
+            <th class="w-10 title-font tracking-wider font-medium text-gray-900 text-sm bg-gray-100 rounded-tr rounded-br"></th>
+          </tr>
+        </thead>
+        <tbody>
+        {% for asset in assets %}
+          <tr>
+            <td class="px-4 py-3">{{asset.id}}</td>
+            <td class="px-4 py-3">
+                <a href="{% url 'customers:asset_detail' asset.pk %}">
+                    {{asset.serial_number}}
+                </a>
+            </td>
+            <td class="px-4 py-3 underline text-blue-800">
+                <a href="{% url 'inventory:device_detail' asset.device.pk %}">
+                    {{asset.device}}
+                </a>
+            </td>
+            <td class="px-4 py-3 underline text-blue-800">
+                <a href="{% url 'customers:customer_detail' asset.customer.pk %}">
+                    {{asset.customer}}
+                </a>
+            </td>
+            <td class="w-10 text-center underline">
+                <a href="{% url 'customers:asset_detail' asset.pk %}">View</a>
+            </td>
+          </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    <div class="flex pl-4 mt-4 lg:w-2/3 w-full mx-auto">
+      <button class="flex ml-auto text-white bg-indigo-500 border-0 py-2 px-6 focus:outline-none hover:bg-indigo-600 rounded">
+          <a href="{% url 'customers:asset_create' %}">
+              New
+          </a>
+      </button>
+    </div>
+  </div>
+</section>
+{% endblock content %}

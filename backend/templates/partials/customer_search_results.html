@@ -1,0 +1,21 @@
+
+
+    <ul class="border rounded shadow">
+        {% if customers %}
+            {% for customer in customers %}
+              <li
+                class="customer-option p-2 hover:bg-blue-100 cursor-pointer"
+                data-id="{{ customer.id }}"
+                data-label="{{ customer.first_name }} ({{ customer.phone_number }})"
+                onclick="selectItem('customer', {{ customer.id }}, '{{ customer.first_name }} ({{ customer.phone_number }})')"
+              >
+                {{ customer.first_name }} — {{ customer.phone_number }} — {{ customer.email }}
+              </li>
+            {% endfor %}
+        {% endif %}
+
+        <li class="customer-option p-2 border font-bold hover:bg-gray-100 cursor-pointer"
+            data-create-url="{% url 'customers:customer_create_inline' %}">
+            Create new customer
+        </li>
+    </ul>

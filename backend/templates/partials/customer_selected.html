@@ -1,0 +1,6 @@
+<script src="https://unpkg.com/htmx.org@1.9.2"></script>
+
+<div class="p-2 bg-green-100 rounded">
+  Selected customer: {{ customer.first_name }} — {{ customer.email }} — {{ customer.phone_number }}
+</div>
+<input type="hidden" name="customer_id" value="{{ customer.id }}">

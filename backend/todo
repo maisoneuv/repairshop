@@ -1,0 +1,39 @@
+login
+locations
+roles
+check on_delete config
+signal to automatically assign categories to devices
+aggregated inventory list from all locations
+external ids
+filtering by customer's assets on work items
+change tailwind reference
+autonumber on work item with pattern
+na work item przy customerze numer telefonu i email
+timeline postów na tasku
+priorytet na zgłoszeniu
+kategoria inventory item zamiast device
+kod do danego inventory item
+kompletacja zgłoszenia i sprzętu: kable i ładowarki do telefonu itd
+notatki dla deviców (knowledge base)
+zdjęcia do zgłoszen
+obługiwanie formularzy z klawiatury
+
+
+----priorytety----
+tworzenie zgłoszenia: szukaj klienta po numerze telefonu/mail - jeżeli nie istnieje to stwórz nowego klienta
+na zgłoszeniu dodaj sprzęt
+widok zgłoszenia: customer asset-lista
+1.częsci: ile kosztoqały
+2. zapotrzebowanie na części z poziomu zgłoszenia
+
+
+work item form:
+1. customer - customer details (phone, email)
+5. intake
+miejsce odbioru
+numer seryjny sprzetu
+2. customer asset
+3. desc
+4. device condition
+
+6.

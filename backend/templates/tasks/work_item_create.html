@@ -1,0 +1,44 @@
+{% extends "base.html" %}
+{% load tailwind_filters %}
+
+
+{% block content %}
+
+    <a href = "{% url 'tasks:work_item_list' %}"> go back </a>
+    <hr />
+    <div class=" grid grid-cols-3 mt-2">
+        <div class="col-span-2 border border-gray-300 rounded-lg mx-4 my-2 p-4 shadow w-3/5 mx-auto">
+            <h1 class="text-base/5 font-semibold text-gray-900"> Create new item</h1>
+
+                <form method="post">
+                    {% csrf_token %}
+                    {{ form.media }}
+                    {{ form|crispy }}
+                    <button class="ml-auto text-white bg-indigo-400 border-1 py-1 px-5 focus:outline-none hover:bg-indigo-600 rounded" type="submit">
+                        Save
+                    </button>
+                </form>
+            </div>
+        </div>
+        <div id="customer-modal" class="hidden">
+            <div class="modal-content">
+                <h2>Create New Customer</h2>
+                <div id="customer-form-container"
+                     hx-get="/customers/create/"
+                     hx-trigger="revealed"
+                     hx-target="#customer-form-container">
+                </div>
+            </div>
+        </div>
+
+
+    </div>
+{% endblock content %}
+
+{% block scripts %}
+    <script>
+        $("#id_customer").select2({
+            placeholder: 'Search customer'
+        });
+    </script>
+{% endblock scripts %}

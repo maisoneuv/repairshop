@@ -1,0 +1,12 @@
+<script src="https://unpkg.com/htmx.org@1.9.2"></script>
+
+<ul class="border rounded divide-y">
+  {% for customer in customers %}
+    <li class="p-2 cursor-pointer hover:bg-gray-100"
+        hx-get="{% url 'customers:select_customer' customer.id %}"
+        hx-target="#customer-results"
+        hx-swap="outerHTML">
+      <a href="#" class="block">{{ customer.first_name }} — {{ customer.email }} — {{ customer.phone_number }}</a>
+    </li>
+  {% endfor %}
+</ul>
