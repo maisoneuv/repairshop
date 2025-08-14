@@ -19,7 +19,7 @@ class AddressSerializer(serializers.ModelSerializer):
 class UserSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
-        fields = ['id', 'email', 'is_active', 'is_staff', 'is_superuser']
+        fields = ['id', 'email', 'is_active', 'is_staff', 'is_superuser', 'name']
         read_only_fields = ['id', 'is_superuser']
 
 class PermissionSerializer(serializers.ModelSerializer):

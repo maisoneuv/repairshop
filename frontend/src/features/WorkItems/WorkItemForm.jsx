@@ -8,11 +8,12 @@ import FieldRenderer from "../../components/FieldRenderer";
 import WorkItemFormLayout from "./layouts/WorkItemFormLayout";
 import { fetchWorkItemSchema, createWorkItem } from "../../api/workItems";
 import { initializeForm, validateRequiredFields } from "../../utils/form";
-import { renderCustomerField, renderDeviceField } from "./customFields";
 import { cleanFormData } from "../../utils/cleanFormData";
 import DeviceForm from "../../pages/DeviceForm";
 import CustomerAutocomplete from "../../components/autocomplete/CustomerAutocomplete";
-
+import LocationAutocomplete from "../../components/autocomplete/LocationAutocomplete";
+import EmployeeAutocomplete from "../../components/autocomplete/EmployeeAutocomplete";
+import DeviceAutocomplete from "../../components/autocomplete/DeviceAutocomplete";
 
 
 export default function WorkItemForm({ onCreated }) {
@@ -28,11 +29,12 @@ export default function WorkItemForm({ onCreated }) {
     const [selectedOwner, setSelectedOwner] = useState(null);
     const [selectedDropoffPoint, setSelectedDropoffPoint] = useState(null);
     const [selectedDevice, setSelectedDevice] = useState(null);
+    const [selectedTechnician, setSelectedTechnician] = useState(null);
     const [serialNumber, setSerialNumber] = useState("");
     const [showDeviceModal, setShowDeviceModal] = useState(false);
 
 
-    const { employee, loading } = useUser();
+    const { employee, loading, tenantSlug, user } = useUser();
 
     const navigate = useNavigate();
 
@@ -46,17 +48,20 @@ export default function WorkItemForm({ onCreated }) {
     }, []);
 
     useEffect(() => {
+        console.log(tenantSlug);
         if (!loading && employee) {
+            console.log(user);
             setFormData((prev) => ({
                 ...prev,
                 owner: employee.id,
                 customer_dropoff_point: employee.location_id,
+                tenant: tenantSlug
             }));
 
             setSelectedOwner({
                 id: employee.id,
-                name: employee.user.name,
-                email: employee.user.email,
+                name: user.name,
+                email: user.email,
             });
 
             setSelectedDropoffPoint({
@@ -64,7 +69,7 @@ export default function WorkItemForm({ onCreated }) {
                 name: employee.location_name,
             });
         }
-    }, [employee, loading]);
+    }, [employee, loading, tenantSlug]);
 
     const handleFieldChange = (name, value) => {
         setFormData((prev) => ({ ...prev, [name]: value }));
@@ -72,8 +77,10 @@ export default function WorkItemForm({ onCreated }) {
 
     const handleSubmit = async (e) => {
         e.preventDefault();
-
+        console.log(formData);
+        formData.tenant = tenantSlug;
         const newErrors = validateRequiredFields(schema, formData);
+        console.log("newErrors", newErrors);
         if (Object.keys(newErrors).length > 0) {
             setFieldErrors(newErrors);
             const firstErrorField = Object.keys(newErrors)[0];
@@ -93,6 +100,7 @@ export default function WorkItemForm({ onCreated }) {
                 ...cleanedForm,
                 device: selectedDevice?.id || null,
                 serial_number: serialNumber || null,
+                tenant: tenantSlug,
             };
 
             console.log(fullData);
@@ -108,7 +116,7 @@ export default function WorkItemForm({ onCreated }) {
 
     return (
         <>
-            <form onSubmit={handleSubmit} className="space-y-3 text-sm max-w-3xl border rounded p-4 bg-white">
+            <form onSubmit={handleSubmit} noValidate className="space-y-3 text-sm max-w-3xl border rounded p-4 bg-white">
                 {WorkItemFormLayout.map((section) => (
                     <div key={section.label} className="mb-6">
                         <h2 className="text-sm font-semibold mb-2">{section.label}</h2>
@@ -148,19 +156,21 @@ export default function WorkItemForm({ onCreated }) {
 
                                 if (name === "customer_asset") {
                                     return (
-                                        <div className={widthClass}>
+                                        <div className={widthClass}
+                                             key={name}>
                                             <h2 className="text-sm font-semibold mb-2">Device Details</h2>
                                             <div className="flex gap-4">
                                                 <div className="w-1/2">
-                                                    {renderDeviceField({
-                                                        schema,
-                                                        formData,
-                                                        selectedDevice,
-                                                        setSelectedDevice,
-                                                        handleFieldChange,
-                                                        fieldErrors,
-                                                        setShowDeviceModal,
-                                                    })}
+                                                    <DeviceAutocomplete
+                                                        value={selectedDevice}
+                                                        onSelect={(item) => {
+                                                            setSelectedDevice(item);
+                                                            handleFieldChange("device", item.id);
+                                                        }}
+                                                        onCreateNewClick={() => setShowDeviceModal(true)}
+                                                        required={schema.customer_asset.required}
+                                                        error={fieldErrors?.device}
+                                                    />
                                                 </div>
                                                 <div className="w-1/2">
                                                     <label className="block font-medium mb-1">Serial Number</label>
@@ -178,18 +188,23 @@ export default function WorkItemForm({ onCreated }) {
                                 }
 
 
-                                if (name === "owner") {
+                                if (name === "owner" || name === "technician") {
+                                    const isOwner = name === "owner";
                                     return (
                                         <div key={name} className={widthClass}>
-                                            <AutocompleteInput
-                                                label="Owner"
-                                                fetchUrl="http://localhost:8000/service/api/employee/search/"
-                                                value={selectedOwner}
-                                                displayField={(item) => `${item.name} (${item.email})`}
+                                            <EmployeeAutocomplete
+                                                label={isOwner ? "Owner" : "Technician"}
+                                                value={isOwner ? selectedOwner : selectedTechnician}
                                                 onSelect={(item) => {
-                                                    setSelectedOwner(item);
-                                                    handleFieldChange("owner", item.id);
-                                                }}
+                                                    if (isOwner) {
+                                                        setSelectedOwner(item);
+                                                    } else {
+                                                        setSelectedTechnician(item);
+                                                    }
+                                                    handleFieldChange(name, item.id);
+                                                    }}
+                                                    required={schema[name].required}
+                                                    error={fieldErrors?.[name]}
                                             />
                                         </div>
                                     );
@@ -198,20 +213,15 @@ export default function WorkItemForm({ onCreated }) {
                                 if (name === "customer_dropoff_point") {
                                     return (
                                         <div key={name} className={widthClass}>
-                                            <label className="block font-semibold mb-1">Drop-off Location</label>
-                                            <input
-                                                name="customer_dropoff_point"
-                                                type="number"
-                                                value={formData.customer_dropoff_point}
-                                                onChange={(e) => handleFieldChange("customer_dropoff_point", e.target.value)}
-                                                className="w-full border rounded px-3 py-2"
-                                                required
+                                            <LocationAutocomplete
+                                                value={selectedDropoffPoint}
+                                                onSelect={(item) => {
+                                                    setSelectedDropoffPoint(item);
+                                                    handleFieldChange("customer_dropoff_point", item.id);
+                                                }}
+                                                required={schema.customer_dropoff_point.required}
+                                                error={fieldErrors?.customer_dropoff_point}
                                             />
-                                            {selectedDropoffPoint?.name && (
-                                                <p className="text-sm text-gray-500 mt-1">
-                                                    Location: <span className="font-medium">{selectedDropoffPoint.name}</span>
-                                                </p>
-                                            )}
                                         </div>
                                     );
                                 }

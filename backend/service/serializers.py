@@ -1,6 +1,5 @@
-# employees/serializers.py
 from rest_framework import serializers
-from .models import Employee
+from .models import Employee, Location
 from core.models import User
 
 class EmployeeSerializer(serializers.ModelSerializer):
@@ -23,3 +22,8 @@ class CurrentEmployeeSerializer(serializers.ModelSerializer):
     class Meta:
         model = Employee
         fields = ['id', 'user', 'location_id', 'location_name', 'role']
+
+class LocationSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Location
+        fields = ['id', 'name']

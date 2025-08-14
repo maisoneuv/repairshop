@@ -16,6 +16,10 @@ export function getDeviceSearchPath(query) {
     return `/inventory/api/devices/search/?q=${encodeURIComponent(query)}`;
 }
 
+export function getLocationSearchPath(query) {
+    return `/service/api/locations/search/?q=${encodeURIComponent(query)}`;
+}
+
 export function getObjectDetailPath(app, id) {
     return `/${app}/${id}/`;
 }
@@ -26,7 +30,6 @@ export function getObjectDetailPath(app, id) {
  */
 export const buildSearchFn = (pathBuilder) => async (query) => {
     const path = pathBuilder(query);
-    console.log(query);
     const response = await apiClient.get(path);
     return response.data;
 };
