@@ -1,4 +1,5 @@
-from .models import Customer
+from inventory.serializers import DeviceSerializer
+from .models import Customer, Asset
 from rest_framework import serializers
 from core.serializers import AddressSerializer
 from core.models import Address
@@ -14,3 +15,11 @@ class CustomerSerializer(serializers.ModelSerializer):
         address_data = validated_data.pop("address", None)
         address = Address.objects.create(**address_data) if address_data else None
         return Customer.objects.create(address=address, **validated_data)
+
+
+class AssetSerializer(serializers.ModelSerializer):
+    device = DeviceSerializer(read_only=True)
+
+    class Meta:
+        model = Asset
+        fields = ["id", "serial_number", "device"]

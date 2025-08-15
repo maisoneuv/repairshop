@@ -1,6 +1,5 @@
 import { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
-import AutocompleteInput from "../../components/AutocompleteInput";
 import Modal from "../../components/Modal";
 import CustomerForm from "../../components/CustomerForm";
 import { useUser } from "../../context/UserContext";
@@ -14,7 +13,7 @@ import CustomerAutocomplete from "../../components/autocomplete/CustomerAutocomp
 import LocationAutocomplete from "../../components/autocomplete/LocationAutocomplete";
 import EmployeeAutocomplete from "../../components/autocomplete/EmployeeAutocomplete";
 import DeviceAutocomplete from "../../components/autocomplete/DeviceAutocomplete";
-
+import CustomerAssetList from "../Customers/CustomerAssetList";
 
 export default function WorkItemForm({ onCreated }) {
     const fieldRefs = useRef({});
@@ -32,9 +31,9 @@ export default function WorkItemForm({ onCreated }) {
     const [selectedTechnician, setSelectedTechnician] = useState(null);
     const [serialNumber, setSerialNumber] = useState("");
     const [showDeviceModal, setShowDeviceModal] = useState(false);
+    const [selectedAsset, setSelectedAsset] = useState(null);
 
-
-    const { employee, loading, tenantSlug, user } = useUser();
+    const { employee, loading, currentTenant, user } = useUser();
 
     const navigate = useNavigate();
 
@@ -42,20 +41,19 @@ export default function WorkItemForm({ onCreated }) {
         fetchWorkItemSchema()
             .then((data) => {
                 setSchema(data);
-                setFormData(initializeForm(data));
+                setFormData((prev) => ({ ...initializeForm(data), ...prev }));
             })
             .catch((err) => setError("Failed to load form schema"));
     }, []);
 
     useEffect(() => {
-        console.log(tenantSlug);
+        console.log(currentTenant);
         if (!loading && employee) {
             console.log(user);
             setFormData((prev) => ({
                 ...prev,
                 owner: employee.id,
                 customer_dropoff_point: employee.location_id,
-                tenant: tenantSlug
             }));
 
             setSelectedOwner({
@@ -69,7 +67,7 @@ export default function WorkItemForm({ onCreated }) {
                 name: employee.location_name,
             });
         }
-    }, [employee, loading, tenantSlug]);
+    }, [employee, loading]);
 
     const handleFieldChange = (name, value) => {
         setFormData((prev) => ({ ...prev, [name]: value }));
@@ -78,9 +76,9 @@ export default function WorkItemForm({ onCreated }) {
     const handleSubmit = async (e) => {
         e.preventDefault();
         console.log(formData);
-        formData.tenant = tenantSlug;
+        formData.tenant = currentTenant.id;
         const newErrors = validateRequiredFields(schema, formData);
-        console.log("newErrors", newErrors);
+         console.log("newErrors", newErrors);
         if (Object.keys(newErrors).length > 0) {
             setFieldErrors(newErrors);
             const firstErrorField = Object.keys(newErrors)[0];
@@ -100,7 +98,7 @@ export default function WorkItemForm({ onCreated }) {
                 ...cleanedForm,
                 device: selectedDevice?.id || null,
                 serial_number: serialNumber || null,
-                tenant: tenantSlug,
+                tenant: currentTenant?.id || null,
             };
 
             console.log(fullData);
@@ -116,8 +114,9 @@ export default function WorkItemForm({ onCreated }) {
 
     return (
         <>
-            <form onSubmit={handleSubmit} noValidate className="space-y-3 text-sm max-w-3xl border rounded p-4 bg-white">
-                {WorkItemFormLayout.map((section) => (
+            <div className="flex gap-6">
+                <form onSubmit={handleSubmit} noValidate className="space-y-3 text-sm max-w-3xl border rounded p-4 bg-white flex-1">
+                    {WorkItemFormLayout.map((section) => (
                     <div key={section.label} className="mb-6">
                         <h2 className="text-sm font-semibold mb-2">{section.label}</h2>
                         <div className="flex flex-wrap gap-4">
@@ -142,6 +141,10 @@ export default function WorkItemForm({ onCreated }) {
                                                 onSelect={(item) => {
                                                     setSelectedCustomer(item);
                                                     handleFieldChange("customer", item.id);
+                                                    setSelectedAsset(null);
+                                                    setSelectedDevice(null);
+                                                    setSerialNumber("");
+                                                    handleFieldChange("customer_asset", null);
                                                 }}
                                                 displayField={(item) =>
                                                     `${item.first_name} ${item.last_name} (${item.email})`
@@ -246,15 +249,29 @@ export default function WorkItemForm({ onCreated }) {
                     </div>
                 ))}
 
-                {error && <p className="text-red-600 text-sm">{error}</p>}
+                    {error && <p className="text-red-600 text-sm">{error}</p>}
 
-                <button
-                    type="submit"
-                    className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700"
-                >
-                    Create Work Item
-                </button>
-            </form>
+                    <button
+                        type="submit"
+                        className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700"
+                    >
+                        Create Work Item
+                    </button>
+                </form>
+                {selectedCustomer && (
+                    <CustomerAssetList
+                        customerId={selectedCustomer.id}
+                        selectedAssetId={selectedAsset?.id}
+                        onSelect={(asset) => {
+                            setSelectedAsset(asset);
+                            setSelectedDevice(asset.device);
+                            setSerialNumber(asset.serial_number);
+                            handleFieldChange("device", asset.device.id);
+                            handleFieldChange("customer_asset", asset.id);
+                        }}
+                    />
+                )}
+            </div>
 
             <Modal
                 isOpen={showCustomerModal}

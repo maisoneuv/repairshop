@@ -6,7 +6,7 @@ from rest_framework.decorators import api_view
 from rest_framework.exceptions import PermissionDenied
 from rest_framework.response import Response
 
-from .serializers import CustomerSerializer
+from .serializers import CustomerSerializer, AssetSerializer
 from .models import Customer, Asset
 from django.views.generic import TemplateView, ListView, DetailView, CreateView, UpdateView
 from .forms import CustomerForm, CustomerAssetForm, CustomerInlineForm, CustomerAssetInlineForm
@@ -286,3 +286,11 @@ def get_referral_sources(request):
 #     queryset = Customer.objects.all()
 #     serializer_class = CustomerSerializer
 #     search_fields = ['first_name', 'last_name', 'email', 'phone_number']
+
+@api_view(["GET"])
+def customer_assets_api(request, pk):
+    """Return all assets (devices) for a given customer."""
+    customer = get_object_or_404(Customer, pk=pk)
+    assets = customer.asset_set.select_related("device").all()
+    serializer = AssetSerializer(assets, many=True)
+    return Response(serializer.data)

@@ -16,6 +16,7 @@ class WorkItemSerializer(serializers.ModelSerializer):
         fields = "__all__"
         extra_kwargs = {
             "customer_asset": {"required": False, "allow_null": True},
+            "tenant": {"read_only": True},
         }
 
     def create(self, validated_data):
