@@ -7,7 +7,7 @@ from customers.models import Customer, Asset
 from tasks.models import WorkItem, Task
 from inventory.models import (Device, Category, InventoryItem, InventoryList, AttributeDefinition,
                               PartAttributeValue,InventoryBalance, PurchaseOrderItem, PurchaseOrder, Supplier)
-from service.models import Employee, Location
+from service.models import Employee, Location, RepairShop
 from tenants.models import Tenant
 from django.contrib.auth.admin import UserAdmin as DefaultUserAdmin
 from django.contrib.auth.models import Permission
@@ -100,3 +100,4 @@ admin.site.register(PurchaseOrder)
 admin.site.register(PurchaseOrderItem)
 admin.site.register(Supplier)
 admin.site.register(Tenant)
+admin.site.register(RepairShop)

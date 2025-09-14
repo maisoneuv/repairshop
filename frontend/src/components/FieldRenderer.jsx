@@ -5,9 +5,9 @@ export default function FieldRenderer({ name, label, config, value, onChange, er
     const isRequired = config.required;
     const hasChoices = Array.isArray(config.choices) && config.choices.length > 0;
 
-    useEffect(() => {
-        console.log("Schema for", name, config);
-    }, [name, config]);
+    // useEffect(() => {
+    //     console.log("Schema for", name, config);
+    // }, [name, config]);
 
     const handleChange = (e) => {
         onChange(name, e.target.value);

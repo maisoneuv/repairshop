@@ -1,5 +1,7 @@
 import { useState, useEffect } from "react";
 import AddressForm from "./AddressForm";
+import apiClient from "../api/apiClient";
+import {getCSRFToken} from "../utils/csrf";
 
 export default function CustomerForm({ onSuccess }) {
     const [formData, setFormData] = useState({
@@ -16,7 +18,7 @@ export default function CustomerForm({ onSuccess }) {
             country: "",
             building_number: "",
             apartment_number: ""
-        }
+        },
     });
 
     const [error, setError] = useState("");
@@ -26,8 +28,7 @@ export default function CustomerForm({ onSuccess }) {
     useEffect(() => {
         async function fetchChoices() {
             try {
-                const res = await fetch("http://localhost:8000/customers/api/referral-sources/");
-                const data = await res.json();
+                const { data } = await apiClient.get("/customers/api/referral-sources/");
                 setReferralChoices(data);
             } catch (err) {
                 console.error("Failed to fetch referral sources", err);
@@ -35,6 +36,7 @@ export default function CustomerForm({ onSuccess }) {
         }
         fetchChoices();
     }, []);
+
 
     const handleChange = (e) => {
         const { name, value } = e.target;
@@ -47,23 +49,18 @@ export default function CustomerForm({ onSuccess }) {
 
     const handleSubmit = async (e) => {
         e.preventDefault();
+        console.log(formData);
+        const isEmpty = (v) => v == null || String(v).trim() === "";
+        if (!formData.address || Object.values(formData.address).every(isEmpty)) {
+            delete formData.address;
+        }
 
         try {
-            const res = await fetch("http://localhost:8000/customers/api/customers/", {
-                method: "POST",
-                headers: {
-                    "Content-Type": "application/json",
-                },
-                body: JSON.stringify(formData),
-            });
-
-            if (!res.ok) {
-                const err = await res.json();
-                throw new Error(JSON.stringify(err));
-            }
-
-            const newCustomer = await res.json();
-            onSuccess(newCustomer);
+            const { data: newCustomer } = await apiClient.post(
+                  "/customers/api/customers/",
+                   formData
+                 );
+             onSuccess?.(newCustomer);
         } catch (err) {
             setError("Could not create customer: " + err.message);
         }

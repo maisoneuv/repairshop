@@ -2,6 +2,7 @@ import React, { createContext, useCallback, useContext, useEffect, useMemo, useS
 import apiClient from "../api/apiClient"; // axios instance with withCredentials=true (recommended)
 import { useNavigate } from "react-router-dom";
 import {getCSRFToken} from "../utils/csrf";
+import { setActiveTenant as setClientActiveTenant } from "../api/apiClient";
 
 /**
  * UserContext — fully tenant-aware
@@ -98,16 +99,27 @@ export function UserProvider({ children }) {
     const [availableTenants, setAvailableTenants] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
+    const [activeTenant, setActiveTenant] = useState(null);
+
+    useEffect(() => {
+        try {
+            const stored = localStorage.getItem("activeTenant");
+            if (stored) {
+                setActiveTenant(stored);
+                setClientActiveTenant(stored); // keep axios in sync
+            }
+        } catch {}
+    }, []);
 
     // Keep apiClient header aligned whenever currentTenant changes
     useEffect(() => {
-        const slug = currentTenant?.subdomain || deriveTenantSlugFromHost();
-        if (slug) {
-            apiClient.defaults.headers.common["X-Tenant"] = slug;
-        } else {
-            delete apiClient.defaults.headers.common["X-Tenant"];
+        const slug = user?.active_tenant_slug || null;
+        if (slug && slug !== activeTenant) {
+            setActiveTenant(slug);            // update context
+            setClientActiveTenant(slug);      // update axios (adds X-Tenant automatically)
+            try { localStorage.setItem("activeTenant", slug); } catch {}
         }
-    }, [currentTenant]);
+    }, [user, activeTenant]);
 
     // Initial bootstrap: decide what tenant header to use for the FIRST profile call
     const computeFirstTenantHeader = () => {

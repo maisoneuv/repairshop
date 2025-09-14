@@ -1,16 +1,20 @@
 # employees/views.py
 from django.contrib.auth.models import Permission
-from rest_framework.exceptions import PermissionDenied, NotFound
+from django_filters.rest_framework import DjangoFilterBackend
+from rest_framework.exceptions import PermissionDenied, NotFound, ValidationError
 from rest_framework.permissions import IsAuthenticatedOrReadOnly
+from rest_framework.viewsets import ModelViewSet
 
+from core.mixins import TenantScopedMixin
 from core.models import UserRole
 from core.serializers import UserSerializer
 from core.views import GenericSearchView
-from .models import Employee, Location
-from .serializers import EmployeeSerializer, CurrentEmployeeSerializer, LocationSerializer
+from .models import Employee, Location, RepairShop
+from .serializers import EmployeeSerializer, CurrentEmployeeSerializer, LocationSerializer, ShopSerializer
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
+from rest_framework import filters
 
 
 class EmployeeSearchView(GenericSearchView):
@@ -43,6 +47,15 @@ class LocationSearchView(GenericSearchView):
             return Location.objects.none()
         return Location.objects.all()
 
+
+class LocationViewSet(TenantScopedMixin, ModelViewSet):
+    permission_classes = [IsAuthenticated]
+    serializer_class = LocationSerializer
+    queryset = Location.objects.all()
+
+    def get_queryset(self):
+        return (super().get_queryset()
+                .select_related("shop", "address", "customer"))
 
 
 class CurrentEmployeeView(APIView):
@@ -96,7 +109,6 @@ class CurrentEmployeeView(APIView):
             rolepermission__role__tenant=tenant
         ).distinct().values_list('codename', flat=True)
 
-        # Construct response
         data = {
             "user": UserSerializer(employee.user).data,
             "employee": {
@@ -118,3 +130,18 @@ class CurrentEmployeeView(APIView):
         }
 
         return Response(data)
+
+class ShopViewSet(TenantScopedMixin, ModelViewSet):
+    permission_classes = [IsAuthenticated]
+    serializer_class = ShopSerializer
+    filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
+    # allow ?type=partner&active=true
+    filterset_fields = {"type": ["exact"], "active": ["exact"]}
+    search_fields = ["name", "contact_email", "contact_phone"]
+    ordering_fields = ["name", "active", "id"]
+    ordering = ["name"]
+
+    def get_queryset(self):
+        return (super().get_queryset()
+                .select_related("address"))
+

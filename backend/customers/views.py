@@ -6,6 +6,7 @@ from rest_framework.decorators import api_view
 from rest_framework.exceptions import PermissionDenied
 from rest_framework.response import Response
 
+from core.mixins import TenantScopedMixin
 from .serializers import CustomerSerializer, AssetSerializer
 from .models import Customer, Asset
 from django.views.generic import TemplateView, ListView, DetailView, CreateView, UpdateView
@@ -219,7 +220,7 @@ class CustomerAPISearchView(generics.ListAPIView):
 #     queryset = Customer.objects.all()
 #     serializer_class = CustomerSerializer
 
-class CustomerViewSet(viewsets.ModelViewSet):
+class CustomerViewSet(TenantScopedMixin, viewsets.ModelViewSet):
     serializer_class = CustomerSerializer
 
     def get_queryset(self):
@@ -240,7 +241,8 @@ class CustomerViewSet(viewsets.ModelViewSet):
 
     def perform_create(self, serializer):
         user = self.request.user
-
+        print(f'customer requests: {self.request.data}')
+        print("resolved tenant:", getattr(self.request, "tenant", None))
         if user.is_superuser:
             serializer.save()
             return

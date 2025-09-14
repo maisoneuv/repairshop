@@ -11,7 +11,7 @@ class WorkItemForm(forms.ModelForm):
     class Meta:
         model = WorkItem
         fields = [ "customer_asset", "description", "device_condition", "comments", "priority",
-                  "intake_method", "owner", "type", "customer_dropoff_point", "technician", "estimated_price", "prepaid_amount",
+                  "intake_method", "owner", "type", "dropoff_point", "technician", "estimated_price", "prepaid_amount",
                   "payment_method"]
 
     def __init__(self, *args, **kwargs):
@@ -20,7 +20,7 @@ class WorkItemForm(forms.ModelForm):
 
         if not self.is_bound and user and hasattr(user, 'employee'):
             self.fields['owner'].initial = user.employee
-            self.fields['customer_dropoff_point'].initial = user.employee.location
+            self.fields['dropoff_point'].initial = user.employee.location
 
 
 

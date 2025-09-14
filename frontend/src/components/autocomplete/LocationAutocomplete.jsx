@@ -6,13 +6,14 @@ export default function LocationAutocomplete({
                                                  onSelect,
                                                  error,
                                                  required,
+                                                 label = "Drop-off Location",
                                                  placeholder = "Search location...",
                                                  ...props
                                              }) {
     return (
         <div>
             <label className="block font-medium mb-1">
-                Drop-off Location
+                {label}
                 {required && <span className="text-red-500 ml-1">*</span>}
             </label>
             <AutocompleteInput

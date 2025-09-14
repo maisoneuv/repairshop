@@ -97,6 +97,10 @@ def work_item_create(request):
         if form.is_valid():
             print('request: ', request.POST)
             work_item = form.save(commit=False)
+            if hasattr(request, "tenant") and request.tenant:
+                work_item.tenant = request.tenant
+            else:
+                raise ValueError("Tenant is required to create a work item.")
             print(work_item)
             customer_id = request.POST.get("customer_id")
             print(customer_id)
@@ -251,16 +255,18 @@ class WorkItemViewSet(viewsets.ModelViewSet):
 
         return WorkItem.objects.none()
 
+    def get_serializer_context(self):
+        ctx = super().get_serializer_context()
+        ctx["tenant"] = getattr(self.request, "tenant", None)
+        return ctx
+
     def perform_create(self, serializer):
-        user = self.request.user
-
-        if user.is_superuser:
-            serializer.save()
-            return
-
-        if not user.has_permission('tasks.add_workitem', self.request.tenant):
-            raise PermissionDenied("You don't have permission to add work items.")
-
+        if not self.request.tenant:
+            from rest_framework.exceptions import ValidationError
+            raise ValidationError({"detail": "X-Tenant header required"})
+        if not self.request.user.has_permission('tasks.add_workitem', self.request.tenant):
+            from rest_framework.exceptions import PermissionDenied
+            raise PermissionDenied("You do not have permission to create a work item")
         serializer.save(tenant=self.request.tenant)
 
     def perform_update(self, serializer):

@@ -33,6 +33,10 @@ intake_methods = [
     ('Courier pickup from customer', 'Courier pickup from customer')
 ]
 
+class MoveMethod(models.TextChoices):
+    WALK_IN = "walkin", "Customer drop-off in person"
+    COURIER = "courier", "Courier"
+    DRIVER  = "driver",  "Courier pickup from customer"
 
 payment_methods = [
     ('Card', 'Card'),
@@ -45,10 +49,10 @@ class WorkItem(models.Model):
     reference_id = models.CharField(max_length=50, blank=True, null=True)
     description = models.TextField()
     status = models.CharField(choices=work_item_statuses, default='New')
-    customer = models.ForeignKey(Customer, blank=False, null=False, on_delete=models.CASCADE)
+    customer = models.ForeignKey(Customer, blank=False, null=False, on_delete=models.PROTECT)
     created_date = models.DateTimeField(auto_now_add=True)
     closed_date = models.DateTimeField(blank=True, null=True)
-    owner = models.ForeignKey(Employee, on_delete=models.CASCADE, related_name="owner") #todo
+    owner = models.ForeignKey(Employee, on_delete=models.PROTECT, related_name="owner") #todo
     due_date = models.DateField(null=True, blank=True)
     type = models.CharField(choices=work_item_types,default='Chargeable Repair')
     estimated_price = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True,
@@ -57,17 +61,21 @@ class WorkItem(models.Model):
                                       validators=[MinValueValidator(Decimal('0.01'))])
     repair_cost = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True,
                                       validators=[MinValueValidator(Decimal('0.01'))])
-    customer_dropoff_point = models.ForeignKey(Location, on_delete=models.CASCADE)
-    customer_pickup_point = models.ForeignKey(Address, on_delete=models.CASCADE, null=True, blank=True)
-    customer_asset = models.ForeignKey(Asset, on_delete=models.CASCADE, blank=True, null=True)
+    dropoff_point = models.ForeignKey(Location, on_delete=models.PROTECT, related_name="dropoff_items")
+    pickup_point = models.ForeignKey(Location, on_delete=models.PROTECT, null=True, blank=True, related_name="pickup_items")
+    customer_asset = models.ForeignKey(Asset, on_delete=models.PROTECT, blank=True, null=True)
     priority = models.CharField(choices=priority_choices, default='Standard')
     comments = models.TextField(blank=True, null=True)
     device_condition = models.TextField(blank=True, null=True)
-    technician = models.ForeignKey(Employee, on_delete=models.CASCADE, null=True, blank=True, related_name="technician")
+    technician = models.ForeignKey(Employee, on_delete=models.PROTECT, null=True, blank=True, related_name="technician")
     prepaid_amount = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True,
                                          validators=[MinValueValidator(Decimal('0.01'))])
-    intake_method = models.CharField(choices=intake_methods, default='Customer drop-off in person')
+    intake_method = models.CharField(choices=MoveMethod.choices, default=MoveMethod.WALK_IN)
+    dropoff_method = models.CharField(max_length=20, choices=MoveMethod.choices, default=MoveMethod.WALK_IN)
     payment_method = models.CharField(choices=payment_methods, blank=True, null=True)
+    fulfillment_shop = models.ForeignKey("service.RepairShop", null=True, blank=True,
+                                         on_delete=models.PROTECT,
+                                         help_text="Who actually performs the repair (internal or partner).")
     # paid
     #currency todo
     notes = GenericRelation(Note)

@@ -1,6 +1,10 @@
 import { getCSRFToken } from "../utils/csrf";
 import apiClient from './apiClient';
 
+function deriveTenantFromHost() {
+  const [maybeTenant] = window.location.hostname.split(".");
+  return maybeTenant || null;
+}
 
 export async function fetchWorkItems(){
   try {
@@ -15,6 +19,7 @@ export async function fetchWorkItems(){
 export async function fetchWorkItemSchema(){
   try {
     const response = await apiClient.get("/tasks/api/schema/work-item/");
+    console.log('schema',response);
     return response.data;
   } catch (error) {
     console.error("Error fetching work item schema:", error);
@@ -23,14 +28,17 @@ export async function fetchWorkItemSchema(){
 }
 
 export async function createWorkItem(data) {
+  const tenant = deriveTenantFromHost();
   try {
     const response = await apiClient.post(
         '/tasks/work-items/',
         data,
         {
           headers: {
-            'X-CSRFToken': getCSRFToken()
-          }
+            "X-CSRFToken": getCSRFToken(),
+            "X-Tenant": tenant,
+            "Content-Type": "application/json"
+          },
         }
     );
     return response.data;
