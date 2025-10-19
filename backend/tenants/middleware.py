@@ -1,9 +1,12 @@
 from typing import Optional
+import logging
 from django.utils.deprecation import MiddlewareMixin
 from django.core.exceptions import PermissionDenied
 from django.http import HttpRequest
 
 from tenants.models import Tenant
+
+logger = logging.getLogger(__name__)
 
 TENANT_OPTIONAL_PATHS = (
     "/auth/login",
@@ -32,6 +35,8 @@ def _derive_slug_from_host(host: str) -> Optional[str]:
 class TenantMiddleware(MiddlewareMixin):
     def process_request(self, request: HttpRequest):
         request.tenant = None
+        header_val = request.META.get("HTTP_X_TENANT")
+        logger.warning("TenantMiddleware incoming host=%s header=%s user=%s", request.get_host(), header_val, getattr(request, "user", None))
 
         # 1) If authenticated, prefer the user's active tenant
         user = getattr(request, "user", None)
@@ -39,18 +44,21 @@ class TenantMiddleware(MiddlewareMixin):
             active = getattr(user, "active_tenant", None)
             if active:
                 request.tenant = active
+                logger.warning("TenantMiddleware using active tenant %s", active)
 
         # 2) Header hint (when not set yet)
         if request.tenant is None:
             header_slug = request.META.get("HTTP_X_TENANT")
             if header_slug:
-                request.tenant = Tenant.objects.filter(name=header_slug).first()
+                request.tenant = Tenant.objects.filter(subdomain=header_slug).first()
+                logger.warning("TenantMiddleware header slug %s -> %s", header_slug, request.tenant)
 
         # 3) Host fallback (multi-tenant via subdomain)
         if request.tenant is None:
             slug = _derive_slug_from_host(request.get_host())
             if slug:
-                request.tenant = Tenant.objects.filter(name=slug).first()
+                request.tenant = Tenant.objects.filter(subdomain=slug).first()
+                logger.warning("TenantMiddleware host slug %s -> %s", slug, request.tenant)
 
         # 4) Enforce membership only when authenticated and not on optional paths
         if (

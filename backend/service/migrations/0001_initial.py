@@ -10,7 +10,7 @@ class Migration(migrations.Migration):
     initial = True
 
     dependencies = [
-        ('customers', '0001_initial'),
+        ('core', '0003_address'),
         migrations.swappable_dependency(settings.AUTH_USER_MODEL),
     ]
 
@@ -21,7 +21,7 @@ class Migration(migrations.Migration):
                 ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
                 ('name', models.CharField(max_length=255)),
                 ('type', models.CharField(choices=[('internal', 'Internal'), ('external', 'External')], default='internal')),
-                ('address', models.OneToOneField(on_delete=django.db.models.deletion.CASCADE, to='customers.address')),
+                ('address', models.OneToOneField(on_delete=django.db.models.deletion.CASCADE, to='core.address')),
             ],
         ),
         migrations.CreateModel(

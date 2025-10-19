@@ -1,7 +1,7 @@
 from rest_framework import serializers
 from .models import WorkItem, Task
 from service.serializers import EmployeeSerializer, LocationSerializer, ShopSerializer
-from service.models import Employee, RepairShop
+from service.models import Employee, RepairShop, Location
 from inventory.models import Device
 from customers.models import Asset
 
@@ -18,6 +18,7 @@ class WorkItemSerializer(serializers.ModelSerializer):
         queryset=RepairShop.objects.all(),
         write_only=True, required=False, allow_null=True
     )
+    device_name = serializers.SerializerMethodField()
 
     class Meta:
         model = WorkItem
@@ -47,20 +48,55 @@ class WorkItemSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError({"fulfillment_shop_id": "Unknown for this tenant."})
         return attrs
 
+    def get_device_name(self, obj):
+        asset = getattr(obj, "customer_asset", None)
+        device = getattr(asset, "device", None)
+        if not device:
+            return None
+        manufacturer = getattr(device, "manufacturer", "") or ""
+        model = getattr(device, "model", "") or ""
+        if manufacturer and model:
+            return f"{manufacturer} {model}".strip()
+        return model or manufacturer or None
+
     def create(self, validated_data):
         req = self.context["request"]
         tenant = getattr(req, "tenant", None)
         if not tenant: raise serializers.ValidationError({"detail": "Tenant not resolved"})
 
+        def resolve_location(payload, allow_null=False):
+            if payload is None:
+                if allow_null:
+                    return None
+                raise serializers.ValidationError({"detail": "Location required"})
+
+            if isinstance(payload, int):
+                try:
+                    return Location.objects.get(id=payload)
+                except Location.DoesNotExist:
+                    raise serializers.ValidationError({"detail": "Location not found"})
+
+            if isinstance(payload, dict) and "id" in payload:
+                remaining = {
+                    key for key, value in payload.items()
+                    if key != "id" and value not in (None, "")
+                }
+
+                if not remaining:
+                    try:
+                        return Location.objects.get(id=payload["id"])
+                    except Location.DoesNotExist:
+                        raise serializers.ValidationError({"detail": "Location not found"})
+
+            serializer = LocationSerializer(data=payload, context={"request": req})
+            serializer.is_valid(raise_exception=True)
+            return serializer.save()
+
         pe_data = validated_data.pop("pickup_point")
         de_data = validated_data.pop("dropoff_point")
 
-        pe = LocationSerializer(data=pe_data, context={"request": req})
-        pe.is_valid(raise_exception=True)
-        pe = pe.save()
-        de = LocationSerializer(data=de_data, context={"request": req})
-        de.is_valid(raise_exception=True)
-        de = de.save()
+        pe = resolve_location(pe_data, allow_null=True)
+        de = resolve_location(de_data)
 
         fs_id = validated_data.pop("fulfillment_shop_id", None)
         if fs_id is not None:
@@ -83,6 +119,9 @@ class WorkItemSerializer(serializers.ModelSerializer):
         if asset:
             validated_data["customer_asset"] = asset
 
+        validated_data["pickup_point"] = pe
+        validated_data["dropoff_point"] = de
+
         return super().create(validated_data)
 
 class TaskSerializer(serializers.ModelSerializer):
@@ -97,6 +136,9 @@ class TaskSerializer(serializers.ModelSerializer):
     class Meta:
         model = Task
         fields = "__all__"
+        extra_kwargs = {
+            "tenant": {"read_only": True},
+        }
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)

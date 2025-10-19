@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Location Picker Test</title>
+    <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        .dropdown-test {
+            position: fixed;
+            top: 200px;
+            left: 50px;
+            width: 300px;
+            background: white;
+            border: 1px solid #ccc;
+            border-radius: 8px;
+            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1);
+            z-index: 999999;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+
+        .dropdown-item {
+            padding: 12px 16px;
+            cursor: pointer;
+            border-bottom: 1px solid #eee;
+        }
+
+        .dropdown-item:hover {
+            background-color: #f5f5f5;
+        }
+
+        .dropdown-item:last-child {
+            border-bottom: none;
+        }
+
+        .group-header {
+            background: #f9f9f9;
+            padding: 8px 12px;
+            font-size: 12px;
+            font-weight: 600;
+            color: #666;
+            border-bottom: 1px solid #eee;
+        }
+    </style>
+</head>
+<body class="bg-gray-100 p-8">
+    <h1 class="text-2xl font-bold mb-4">Location Picker Portal Test</h1>
+
+    <div class="bg-white p-6 rounded-lg shadow-md max-w-md">
+        <h2 class="text-lg font-semibold mb-4">Test Form</h2>
+
+        <div class="mb-4">
+            <label class="block text-sm font-medium text-gray-700 mb-2">
+                Location Test Input
+            </label>
+            <input
+                type="text"
+                id="location-input"
+                class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                placeholder="Type 'test' to see dropdown..."
+                autocomplete="off"
+            />
+        </div>
+
+        <button
+            id="test-btn"
+            class="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700"
+        >
+            Test Portal Dropdown
+        </button>
+    </div>
+
+    <script>
+        document.getElementById('test-btn').addEventListener('click', function() {
+            // Remove existing dropdown
+            const existing = document.getElementById('test-dropdown');
+            if (existing) {
+                existing.remove();
+            }
+
+            // Get input position
+            const input = document.getElementById('location-input');
+            const rect = input.getBoundingClientRect();
+
+            // Create dropdown
+            const dropdown = document.createElement('div');
+            dropdown.id = 'test-dropdown';
+            dropdown.className = 'dropdown-test';
+            dropdown.style.top = (rect.bottom + window.scrollY + 2) + 'px';
+            dropdown.style.left = (rect.left + window.scrollX) + 'px';
+            dropdown.style.width = rect.width + 'px';
+
+            dropdown.innerHTML = `
+                <div class="group-header">Shops</div>
+                <div class="dropdown-item" onclick="selectItem('Shop 1')">
+                    <div class="font-medium text-sm">Main Shop</div>
+                    <div class="text-xs text-gray-500 mt-1">123 Main St, City</div>
+                </div>
+
+                <div class="group-header">Customer Addresses</div>
+                <div class="dropdown-item" onclick="selectItem('Customer Home')">
+                    <div class="font-medium text-sm">John's Home</div>
+                    <div class="text-xs text-gray-500 mt-1">456 Oak Ave, Town</div>
+                </div>
+
+                <div class="group-header">Other</div>
+                <div class="dropdown-item text-blue-600 font-medium" onclick="openModal()">
+                    Other address...
+                </div>
+            `;
+
+            document.body.appendChild(dropdown);
+
+            // Close on click outside
+            setTimeout(() => {
+                document.addEventListener('click', function closeDropdown(e) {
+                    if (!dropdown.contains(e.target) && e.target !== input) {
+                        dropdown.remove();
+                        document.removeEventListener('click', closeDropdown);
+                    }
+                });
+            }, 100);
+        });
+
+        function selectItem(name) {
+            document.getElementById('location-input').value = name;
+            document.getElementById('test-dropdown').remove();
+            alert('Selected: ' + name);
+        }
+
+        function openModal() {
+            document.getElementById('test-dropdown').remove();
+            alert('Would open "Other address..." modal here');
+        }
+
+        // Test typing
+        document.getElementById('location-input').addEventListener('input', function(e) {
+            if (e.target.value.toLowerCase().includes('test')) {
+                document.getElementById('test-btn').click();
+            }
+        });
+    </script>
+</body>
+</html>

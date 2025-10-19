@@ -1,22 +1,41 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import FieldRenderer from "./FieldRenderer";
 
 export default function DynamicForm({ schema, layout, onSubmit, initialValues = {} }) {
     const [formData, setFormData] = useState({});
     const [fieldErrors, setFieldErrors] = useState({});
 
+    const visibleFields = useMemo(() => {
+        const names = new Set();
+        layout.forEach((section) => {
+            (section.fields || []).forEach(({ name }) => {
+                if (name) names.add(name);
+            });
+        });
+        return names;
+    }, [layout]);
+
     useEffect(() => {
-        if (!schema || Object.keys(formData).length > 0) return; //
+        if (!schema || Object.keys(formData).length > 0) return;
 
         const initial = {};
         for (const key in schema) {
-            initial[key] = initialValues[key] ?? schema[key].default ?? "";
+            const hasInitial = Object.prototype.hasOwnProperty.call(initialValues, key);
+            initial[key] = hasInitial ? initialValues[key] : schema[key].default ?? "";
+        }
+        if (process.env.NODE_ENV !== "production") {
+            // eslint-disable-next-line no-console
+            console.debug("[DynamicForm] initialising form data", initial);
         }
         setFormData(initial);
-    }, [schema]);
+    }, [schema, initialValues, formData]);
 
     const handleChange = (name, value) => {
         setFormData((prev) => ({ ...prev, [name]: value }));
+        if (process.env.NODE_ENV !== "production") {
+            // eslint-disable-next-line no-console
+            console.debug("[DynamicForm] field change", name, value);
+        }
     };
 
     const handleSubmit = async (e) => {
@@ -25,11 +44,15 @@ export default function DynamicForm({ schema, layout, onSubmit, initialValues = 
 
         const errors = {};
         for (const key in schema) {
+            if (!visibleFields.has(key)) continue;
             if (schema[key].required && !formData[key]) {
                 errors[key] = "This field is required.";
             }
         }
-
+        if (process.env.NODE_ENV !== "production") {
+            // eslint-disable-next-line no-console
+            console.debug("[DynamicForm] submit attempt", { formData, errors });
+        }
         if (Object.keys(errors).length > 0) {
             setFieldErrors(errors);
             const firstErrorField = Object.keys(errors)[0];
@@ -38,7 +61,15 @@ export default function DynamicForm({ schema, layout, onSubmit, initialValues = 
             return;
         }
 
-        await onSubmit(formData);
+        try {
+            await onSubmit(formData);
+        } catch (err) {
+            if (process.env.NODE_ENV !== "production") {
+                // eslint-disable-next-line no-console
+                console.error("[DynamicForm] submit failed", err);
+            }
+            throw err;
+        }
     };
 
     return (

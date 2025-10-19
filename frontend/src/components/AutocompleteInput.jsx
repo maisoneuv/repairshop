@@ -36,6 +36,7 @@ export default function AutocompleteInput({
     const [showResults, setShowResults] = useState(false);
     const [loading, setLoading] = useState(false);
     const [selectedItem, setSelectedItem] = useState(null);
+    const [highlightedIndex, setHighlightedIndex] = useState(-1);
 
     // 🔁 Fetch full object from ID on mount
     useEffect(() => {
@@ -62,6 +63,7 @@ export default function AutocompleteInput({
         searchFn(query)
             .then((data) => {
                 setResults(data);
+                setHighlightedIndex(data.length ? 0 : -1);
                 setLoading(false);
             })
             .catch((err) => {
@@ -71,11 +73,18 @@ export default function AutocompleteInput({
 
     }, [query, searchFn]);
 
+    useEffect(() => {
+        if (highlightedIndex >= results.length) {
+            setHighlightedIndex(results.length ? Math.max(0, results.length - 1) : -1);
+        }
+    }, [results, highlightedIndex]);
+
     const handleSelect = (item) => {
         setSelectedItem(item);
         setQuery(displayField(item));
         onSelect(item);
         setShowResults(false);
+        setHighlightedIndex(-1);
     };
 
     return (
@@ -89,6 +98,39 @@ export default function AutocompleteInput({
                 onChange={(e) => {
                     setQuery(e.target.value);
                     setShowResults(true);
+                    setHighlightedIndex(-1);
+                }}
+                onKeyDown={(e) => {
+                    if (!showResults) {
+                        if (e.key === 'ArrowDown' && results.length) {
+                            setShowResults(true);
+                            setHighlightedIndex(0);
+                            e.preventDefault();
+                        }
+                        return;
+                    }
+
+                    if (e.key === 'ArrowDown' && results.length) {
+                        e.preventDefault();
+                        setHighlightedIndex((prev) => {
+                            const next = prev + 1;
+                            return next >= results.length ? 0 : next;
+                        });
+                    } else if (e.key === 'ArrowUp' && results.length) {
+                        e.preventDefault();
+                        setHighlightedIndex((prev) => {
+                            if (prev <= 0) return results.length - 1;
+                            return prev - 1;
+                        });
+                    } else if (e.key === 'Enter') {
+                        if (highlightedIndex >= 0 && highlightedIndex < results.length) {
+                            e.preventDefault();
+                            handleSelect(results[highlightedIndex]);
+                        }
+                    } else if (e.key === 'Escape') {
+                        setShowResults(false);
+                        setHighlightedIndex(-1);
+                    }
                 }}
                 onBlur={() => setTimeout(() => setShowResults(false), 200)}
             />
@@ -97,11 +139,16 @@ export default function AutocompleteInput({
                 <div className="absolute top-full left-0 w-full bg-white border border-gray-300 rounded-md shadow-lg mt-1 max-h-60 overflow-y-auto text-sm z-50">
                     {loading && <div className="px-4 py-2 text-gray-500">Loading...</div>}
 
-                    {!loading && results.length > 0 && results.map((item) => (
+                    {!loading && results.length > 0 && results.map((item, index) => (
                         <div
                             key={item.id}
                             onMouseDown={() => handleSelect(item)}
-                            className="px-4 py-2 bg-white hover:bg-blue-100 hover:text-blue-800 cursor-pointer transition-colors border-b border-gray-100 last:border-none"
+                            onMouseEnter={() => setHighlightedIndex(index)}
+                            className={`px-4 py-2 cursor-pointer transition-colors border-b border-gray-100 last:border-none ${
+                                highlightedIndex === index
+                                    ? 'bg-blue-100 text-blue-800'
+                                    : 'bg-white hover:bg-blue-50'
+                            }`}
                         >
                             <div className="font-medium">{displayField(item)}</div>
                         </div>

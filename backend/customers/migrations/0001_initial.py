@@ -10,6 +10,7 @@ class Migration(migrations.Migration):
     initial = True
 
     dependencies = [
+        ('core', '0003_address'),
     ]
 
     operations = [
@@ -42,7 +43,7 @@ class Migration(migrations.Migration):
                 ('last_name', models.CharField(max_length=255)),
                 ('email', models.EmailField(max_length=254, unique=True)),
                 ('phone_number', models.CharField(blank=True, max_length=9, null=True, validators=[django.core.validators.RegexValidator(message='Phone number must be entered without any special characters. Up to 9 digits allowed', regex='\\d{7,9}$')])),
-                ('address', models.OneToOneField(blank=True, null=True, on_delete=django.db.models.deletion.CASCADE, to='customers.address')),
+                ('address', models.OneToOneField(blank=True, null=True, on_delete=django.db.models.deletion.CASCADE, to='core.address')),
             ],
         ),
         migrations.CreateModel(

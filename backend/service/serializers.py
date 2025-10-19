@@ -37,12 +37,28 @@ class LocationSerializer(serializers.ModelSerializer):
         fields = ["id", "type", "name", "shop_id", "customer_id", "address_id", "address"]
 
     def to_internal_value(self, data):
+        # Handle integer IDs (for existing locations) by returning the location instance
+        if isinstance(data, int):
+            try:
+                location = Location.objects.get(id=data)
+                return {"id": location.id}
+            except Location.DoesNotExist:
+                raise serializers.ValidationError(f"Location with id {data} does not exist")
+
+        # Handle dictionary data (for new locations or detailed data)
         d = dict(data or {})
         if isinstance(d.get("address"), dict) and all(not (v or "").strip() for v in d["address"].values()):
             d["address"] = None
         return super().to_internal_value(d)
 
     def create(self, validated):
+        # If caller passed an existing location id, just return that instance
+        if set(validated.keys()) == {"id"}:
+            try:
+                return Location.objects.get(id=validated["id"])
+            except Location.DoesNotExist:
+                raise serializers.ValidationError({"id": "Location not found"})
+
         req = self.context["request"];
         tenant = getattr(req, "tenant", None)
         if not tenant: raise serializers.ValidationError({"detail": "Tenant not resolved"})

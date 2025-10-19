@@ -11,3 +11,9 @@ node_modules/
 dist/
 .build/
 .env.local
+
+# IDE / editor cruft
+.idea/
+*.iml
+.vscode/
+.DS_Store

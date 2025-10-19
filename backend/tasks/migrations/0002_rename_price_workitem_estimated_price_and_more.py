@@ -7,7 +7,7 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('customers', '0001_initial'),
+        ('core', '0003_address'),
         ('tasks', '0001_initial'),
     ]
 
@@ -20,7 +20,7 @@ class Migration(migrations.Migration):
         migrations.AddField(
             model_name='workitem',
             name='customer_pickup_point',
-            field=models.ForeignKey(default=0.0, on_delete=django.db.models.deletion.CASCADE, to='customers.address'),
+            field=models.ForeignKey(default=0.0, on_delete=django.db.models.deletion.CASCADE, to='core.address'),
             preserve_default=False,
         ),
         migrations.AddField(

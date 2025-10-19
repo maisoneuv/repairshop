@@ -14,7 +14,8 @@ import os
 from pathlib import Path
 from corsheaders.defaults import default_headers
 
-
+def _csv_env(key, default=""):
+    return [x.strip() for x in os.getenv(key, default).split(",") if x.strip()]
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -24,16 +25,14 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # See https://docs.djangoproject.com/en/5.0/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = 'django-insecure-90@%t3&z8op81c8nha%nlf0$p+@kil4&p*g*&+*!y^kiz-^wh1'
+SECRET_KEY = os.environ.get('DJANGO_SECRET_KEY'),
+if not SECRET_KEY:
+    raise ValueError("No DJANGO_SECRET_KEY set in environment variables!")
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+DEBUG = os.environ.get('DJANGO_DEBUG', 'False').lower() == 'true'
 
-ALLOWED_HOSTS = [
-    "localhost",
-    "repairhero.localhost",
-    "fixiit.localhost",
-    ]
+ALLOWED_HOSTS = os.environ.get('DJANGO_ALLOWED_HOSTS', '').split(',')
 
 
 # Application definition
@@ -47,7 +46,6 @@ INSTALLED_APPS = [
     'django.contrib.staticfiles',
     'dal',
     'dal_select2',
-    'widget_tweaks',
     'core',
     'django_htmx',
     'rest_framework',
@@ -99,27 +97,27 @@ WSGI_APPLICATION = 'app.wsgi.application'
 # Database
 # https://docs.djangoproject.com/en/5.0/ref/settings/#databases
 
-# DATABASES = {
-#     'default': {
-#         'ENGINE': 'django.db.backends.postgresql_psycopg2',
-#         'HOST': os.environ.get('DB_HOST'),
-#         'NAME': os.environ.get('DB_NAME'),
-#         'USER': os.environ.get('DB_USER'),
-#         'PASSWORD': os.environ.get('DB_PASS'),
-#         'PORT': 5432
-#     }
-# }
-
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.postgresql_psycopg2',
-        'HOST': 'localhost',
-        'NAME': 'secret',
-        'USER': 'postgres',
-        'PASSWORD': 'postgres',
-        'PORT': 5432
+        'HOST': os.environ.get('DB_HOST', "localhost"),
+        'NAME': os.environ.get('DB_NAME'),
+        'USER': os.environ.get('DB_USER'),
+        'PASSWORD': os.environ.get('DB_PASS'),
+        'PORT': os.environ.get("DB_PORT", "5432"),
     }
 }
+
+# DATABASES = {
+#     'default': {
+#         'ENGINE': 'django.db.backends.postgresql_psycopg2',
+#         'HOST': 'localhost',
+#         'NAME': 'secret',
+#         'USER': 'postgres',
+#         'PASSWORD': 'postgres',
+#         'PORT': 5432
+#     }
+# }
 
 
 # Password validation
@@ -155,9 +153,9 @@ USE_TZ = True
 
 # Static files (CSS, JavaScript, Images)
 # https://docs.djangoproject.com/en/5.0/howto/static-files/
-
-STATIC_URL = 'src/static/'
-STATICFILES_DIRS = [ BASE_DIR / 'static' ]
+STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
+STATIC_URL = '/static/'
+STATICFILES_DIRS = []
 
 # Default primary key field type
 # https://docs.djangoproject.com/en/5.0/ref/settings/#default-auto-field
@@ -178,24 +176,15 @@ LOGIN_REDIRECT_URL = '/'
 CRISPY_TEMPLATE_PACK = 'tailwind'
 CRISPY_ALLOWED_TEMPLATE_PACKS = "tailwind"
 
-# CORS_ALLOWED_ORIGINS = [
-#     'http://localhost:5173',  # React dev server
-#     'http://repairhero.localhost:5173'
-# ]
+CORS_ALLOWED_ORIGINS = os.environ.get('DJANGO_CORS_ALLOWED_ORIGINS', '').split(',')
 CORS_ALLOW_CREDENTIALS = True
 
-CSRF_TRUSTED_ORIGINS = [
-    'http://localhost:5173',
-    'http://127.0.0.1:5173',
-    'http://repairhero.localhost:5173',
-    'http://fixit.localhost:5173',
-    'http://repairhero.localhost:8000',
-]
+CSRF_TRUSTED_ORIGINS = os.environ.get('DJANGO_CSRF_TRUSTED_ORIGINS', '').split(',')
 
-CORS_ALLOWED_ORIGIN_REGEXES = [
-    r"^http://localhost:5173$",
-    r"^http://.*\.localhost:5173$",
-]
+# CORS_ALLOWED_ORIGIN_REGEXES = [
+#     r"^http://localhost:5173$",
+#     r"^http://.*\.localhost:5173$",
+# ]
 
 # SESSION_COOKIE_DOMAIN = ".localhost"
 

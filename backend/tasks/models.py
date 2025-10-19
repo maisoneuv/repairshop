@@ -34,7 +34,7 @@ intake_methods = [
 ]
 
 class MoveMethod(models.TextChoices):
-    WALK_IN = "walkin", "Customer drop-off in person"
+    WALK_IN = "walk_in", "Customer drop-off in person"
     COURIER = "courier", "Courier"
     DRIVER  = "driver",  "Courier pickup from customer"
 

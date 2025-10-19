@@ -1,19 +1,11 @@
-import {getCSRFToken} from "../utils/csrf";
+import apiClient from "./apiClient";
 
 export async function createCategory(name) {
-    const res = await fetch("http://localhost:8000/inventory/api/category/", {
-        method: "POST",
-        headers: { "Content-Type": "application/json",
-                   "X-CSRFToken": getCSRFToken() },
-        credentials: "include",
-        body: JSON.stringify({ name }),
-    });
-
-    if (!res.ok) {
-        const errorDetails = await res.text(); // log for debugging
-        console.error("Category creation failed:", errorDetails);
+    try {
+        const response = await apiClient.post("/inventory/api/category/", { name });
+        return response.data;
+    } catch (error) {
+        console.error("Category creation failed:", error);
         throw new Error("Failed to create category");
     }
-
-    return res.json();
 }

@@ -1,0 +1,27 @@
+FROM python:3.12-slim
+
+# system deps for psycopg2 & build
+RUN apt-get update && apt-get install -y build-essential libpq-dev && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+# copy only dependency manifests first if/when you add them
+# (for now, we'll install by scanning; better to add requirements.txt later)
+COPY backend /app
+
+# install pip tools & freeze dependencies
+# NOTE: Consider writing a requirements.txt for repeatability.
+RUN pip install --upgrade pip \
+ && pip install "Django==5.*" djangorestframework drf-spectacular django-cors-headers \
+    django-crispy-forms crispy-tailwind django-htmx django-autocomplete-light django-extensions \
+    django-filter psycopg2-binary gunicorn django-widget-tweaks django-mptt
+
+ENV DJANGO_SETTINGS_MODULE=app.settings \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1
+
+# collect static at build-time if you serve Django static files
+RUN mkdir -p /app/staticfiles
+
+# EXPOSE is optional; Nginx will connect internally
+CMD ["gunicorn", "--workers", "3", "--bind", "0.0.0.0:8000", "app.wsgi:application"]

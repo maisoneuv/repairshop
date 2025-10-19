@@ -235,6 +235,13 @@ def device_search(request):
 
 class WorkItemViewSet(viewsets.ModelViewSet):
     serializer_class = WorkItemSerializer
+    filter_backends = [filters.SearchFilter, DjangoFilterBackend]
+    search_fields = [
+        "reference_id",
+        "customer__first_name",
+        "customer__last_name",
+        "customer__email",
+    ]
 
     def get_queryset(self):
         user = self.request.user
@@ -319,6 +326,10 @@ class WorkItemViewSet(viewsets.ModelViewSet):
         if "customerDetails" in includes and instance.customer_id:
             data["customerDetails"] = CustomerSerializer(instance.customer).data
 
+        if "deviceDetails" in includes and instance.customer_asset_id:
+            from customers.serializers import AssetSerializer
+            data["deviceDetails"] = AssetSerializer(instance.customer_asset).data
+
         if "owner" in includes and instance.owner_id:
             data["owner"] = EmployeeSerializer(instance.owner).data
 
@@ -369,15 +380,21 @@ class TaskViewSet(viewsets.ModelViewSet):
 
     def perform_create(self, serializer):
         user = self.request.user
+        tenant = getattr(self.request, "tenant", None)
+
+        if tenant is None:
+            from rest_framework.exceptions import ValidationError
+            raise ValidationError({"detail": "X-Tenant header required"})
 
         if user.is_superuser:
-            serializer.save()
+            serializer.save(tenant=tenant)
             return
 
-        if not user.has_permission('tasks.add_task', self.request.tenant):
+        has_perm = hasattr(user, "has_permission") and user.has_permission('tasks.add_task', tenant)
+        if not has_perm:
             raise PermissionDenied("You don't have permission to add tasks.")
 
-        serializer.save(tenant=self.request.tenant)
+        serializer.save(tenant=tenant)
 
     def perform_update(self, serializer):
         user = self.request.user
