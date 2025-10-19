@@ -53,6 +53,23 @@ const api = axios.create({
     withCredentials: true,
 });
 
+export function normalizeApiPath(urlOrPath) {
+    if (!urlOrPath || typeof urlOrPath !== "string") return urlOrPath;
+
+    if (/^https?:\/\//i.test(urlOrPath)) {
+        try {
+            const parsed = new URL(urlOrPath);
+            const path = parsed.pathname || "/";
+            const query = parsed.search || "";
+            return `${path}${query}` || "/";
+        } catch {
+            return urlOrPath;
+        }
+    }
+
+    return urlOrPath.startsWith("/") ? urlOrPath : `/${urlOrPath}`;
+}
+
 /** Paths that should NOT carry X-Tenant (anonymous/auth infra) */
 const TENANT_OPTIONAL_PATHS = new Set([
     "/auth/login", "/auth/logout", "/auth/session", "/auth/csrf",

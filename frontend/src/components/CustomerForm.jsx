@@ -1,29 +1,56 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import AddressForm from "./AddressForm";
 import apiClient from "../api/apiClient";
-import {getCSRFToken} from "../utils/csrf";
 
-export default function CustomerForm({ onSuccess }) {
-    const [formData, setFormData] = useState({
-        first_name: "",
-        last_name: "",
-        email: "",
-        phone_number: "",
-        tax_code: "",
-        referral_source: "",
-        address: {
-            street: "",
-            city: "",
-            postal_code: "",
-            country: "",
-            building_number: "",
-            apartment_number: ""
-        },
-    });
+const emptyForm = {
+    first_name: "",
+    last_name: "",
+    email: "",
+    phone_number: "",
+    tax_code: "",
+    referral_source: "",
+    address: {
+        street: "",
+        city: "",
+        postal_code: "",
+        country: "",
+        building_number: "",
+        apartment_number: ""
+    },
+};
+
+export default function CustomerForm({ onSuccess, initialData = null, mode = "create", submitLabel = "Create Customer" }) {
+    const initialState = useMemo(() => {
+        if (!initialData) return JSON.parse(JSON.stringify(emptyForm));
+
+        return {
+            first_name: initialData.first_name || "",
+            last_name: initialData.last_name || "",
+            email: initialData.email || "",
+            phone_number: initialData.phone_number || "",
+            tax_code: initialData.tax_code || "",
+            referral_source: initialData.referral_source || "",
+            address: {
+                street: initialData.address?.street || "",
+                city: initialData.address?.city || "",
+                postal_code: initialData.address?.postal_code || "",
+                country: initialData.address?.country || "",
+                building_number: initialData.address?.building_number || "",
+                apartment_number: initialData.address?.apartment_number || "",
+            },
+        };
+    }, [initialData]);
+
+    const [formData, setFormData] = useState(initialState);
 
     const [error, setError] = useState("");
     const [referralChoices, setReferralChoices] = useState([]);
-    const [showAddress, setShowAddress] = useState(false);
+    const [showAddress, setShowAddress] = useState(Boolean(initialData?.address));
+
+    useEffect(() => {
+        setFormData(initialState);
+        setShowAddress(Boolean(initialData?.address));
+    }, [initialState, initialData]);
 
     useEffect(() => {
         async function fetchChoices() {
@@ -49,20 +76,33 @@ export default function CustomerForm({ onSuccess }) {
 
     const handleSubmit = async (e) => {
         e.preventDefault();
-        console.log(formData);
         const isEmpty = (v) => v == null || String(v).trim() === "";
-        if (!formData.address || Object.values(formData.address).every(isEmpty)) {
-            delete formData.address;
+        const payload = {
+            ...formData,
+            address: formData.address ? { ...formData.address } : null,
+        };
+
+        if (!payload.address || Object.values(payload.address).every(isEmpty)) {
+            payload.address = null;
         }
 
         try {
-            const { data: newCustomer } = await apiClient.post(
-                  "/customers/api/customers/",
-                   formData
-                 );
-             onSuccess?.(newCustomer);
+            let response;
+            if (mode === "edit" && initialData?.id) {
+                response = await apiClient.patch(
+                    `/customers/api/customers/${initialData.id}/`,
+                    payload
+                );
+            } else {
+                response = await apiClient.post(
+                    "/customers/api/customers/",
+                    payload
+                );
+            }
+
+            onSuccess?.(response.data);
         } catch (err) {
-            setError("Could not create customer: " + err.message);
+            setError("Could not save customer: " + (err?.message || ""));
         }
     };
 
@@ -167,7 +207,7 @@ export default function CustomerForm({ onSuccess }) {
                 type="submit"
                 className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700"
             >
-                Create Customer
+                {submitLabel}
             </button>
         </form>
     );

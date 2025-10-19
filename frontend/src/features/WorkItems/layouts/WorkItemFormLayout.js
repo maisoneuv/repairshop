@@ -25,8 +25,8 @@ const workItemLayout = [
         label: "Logistics",
         fields: [
             { name: "intake_method", width: "1/3" },
-            { name: "customer_dropoff_point", width: "1/3" },
-            { name: "customer_pickup_point", width: "1/3" },
+            { name: "dropoff_point", width: "1/3" },
+            { name: "pickup_point", width: "1/3" },
         ],
     },
     {

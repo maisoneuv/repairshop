@@ -1,6 +1,9 @@
 import { useEffect, useState } from "react";
 import AutocompleteInput from "./AutocompleteInput";
 import { resolveAsset } from "../api/assets";
+import { buildSearchFn, getDeviceSearchPath } from "../api/autocompleteApi";
+
+const searchDevices = buildSearchFn(getDeviceSearchPath);
 
 export default function AssetSelector({ selectedCustomer, onAssetResolved }) {
     const [selectedDevice, setSelectedDevice] = useState(null);
@@ -41,7 +44,7 @@ export default function AssetSelector({ selectedCustomer, onAssetResolved }) {
         <div className="space-y-2">
             <AutocompleteInput
                 label="Device"
-                fetchUrl="http://localhost:8000/inventory/api/devices/search/"
+                searchFn={searchDevices}
                 value={selectedDevice}
                 onSelect={setSelectedDevice}
                 displayField={(item) => `${item.brand || ""} ${item.name}`}

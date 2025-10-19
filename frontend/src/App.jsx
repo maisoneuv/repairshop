@@ -3,6 +3,7 @@ import { Routes, Route, Navigate } from "react-router-dom";
 import AppLayout from "./layouts/AppLayout";
 import Home from "./pages/Home";
 import WorkItemDetail from "./pages/WorkItemDetail";
+import WorkItemPage from "./pages/WorkItemPage";
 import TaskDetail from "./features/Tasks/TaskDetail";
 import TaskList from "./features/Tasks/TaskList";
 import TaskForm from "./features/Tasks/TaskForm";
@@ -28,6 +29,7 @@ function App() {
             <Route element={<AppLayout />}>
                 <Route path="/" element={<Home />} />
                 <Route path="/work-items" element={<WorkItemList />} />
+                <Route path="/work-items/new" element={<WorkItemPage />} />
                 <Route path="/work-items/:id" element={<WorkItemDetail />} />
                 <Route path="/tasks/new" element={<TaskForm />} />
                 <Route path="/tasks/:id" element={<TaskDetail />} />

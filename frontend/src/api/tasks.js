@@ -16,6 +16,10 @@ export async function fetchTaskSchema() {
 
 export async function createTask(data) {
     try {
+        if (process.env.NODE_ENV !== "production") {
+            // eslint-disable-next-line no-console
+            console.debug("[api/tasks] POST /tasks/tasks/", data);
+        }
         const response = await apiClient.post(
             "/tasks/tasks/",
             data,
@@ -25,6 +29,10 @@ export async function createTask(data) {
                 }
             }
         );
+        if (process.env.NODE_ENV !== "production") {
+            // eslint-disable-next-line no-console
+            console.debug("[api/tasks] response", response.data);
+        }
         return response.data;
     } catch (error) {
         console.error("Error creating task:", error);

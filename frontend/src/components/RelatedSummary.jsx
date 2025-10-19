@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { fetchSchema } from "../api/schema";
 import DynamicForm from "./DynamicForm";
+import apiClient, { normalizeApiPath } from "../api/apiClient";
 
 export default function RelatedSummary({
                                            title,
@@ -22,17 +23,13 @@ export default function RelatedSummary({
     useEffect(() => {
         if (!fetchUrl || initialData) return;
 
-        fetch(fetchUrl, { credentials: "include" })
+        apiClient.get(normalizeApiPath(fetchUrl))
             .then((res) => {
-                if (!res.ok) throw new Error("Failed to load related data");
-                return res.json();
-            })
-            .then((json) => {
-                setData(json);
+                setData(res.data);
                 setLoading(false);
             })
             .catch((err) => {
-                setError(err.message);
+                setError(err.message || "Failed to load related data");
                 setLoading(false);
             });
     }, [fetchUrl, initialData]);
@@ -47,15 +44,8 @@ export default function RelatedSummary({
 
     const handleSave = async () => {
         try {
-            const res = await fetch(fetchUrl, {
-                method: "PUT",
-                headers: { "Content-Type": "application/json" },
-                credentials: "include",
-                body: JSON.stringify(editedData),
-            });
-            if (!res.ok) throw new Error("Failed to update record");
-            const updated = await res.json();
-            setData(updated);
+            const res = await apiClient.put(normalizeApiPath(fetchUrl), editedData);
+            setData(res.data);
             setIsEditing(false);
         } catch (err) {
             alert(err.message);

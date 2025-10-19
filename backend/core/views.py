@@ -111,7 +111,7 @@ class NoteViewSet(viewsets.ModelViewSet):
         model = self.kwargs["model"]
         obj_id = self.kwargs["obj_id"]
         content_type = ContentType.objects.get(model=model)
-        print(self.request.user)
+        print(f'user:{self.request.user}')
         serializer.save(author=self.request.user, content_type=content_type, object_id=obj_id)
 
     def perform_update(self, serializer):

@@ -30,6 +30,7 @@ export async function fetchWorkItemSchema(){
 export async function createWorkItem(data) {
   const tenant = deriveTenantFromHost();
   try {
+    console.log(data);
     const response = await apiClient.post(
         '/tasks/work-items/',
         data,

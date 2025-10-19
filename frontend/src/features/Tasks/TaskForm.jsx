@@ -3,7 +3,7 @@ import { useNavigate, useSearchParams } from "react-router-dom";
 import DynamicForm from "../../components/DynamicForm";
 import { fetchSchema } from "../../api/schema";
 import { createTask } from "../../api/tasks";
-import TaskFormLayout from "./Layouts/TaskFormLayout";
+import taskLayout from "./layouts/TaskFormLayout";
 
 export default function TaskForm({ initialContext = {}, onSuccess, hideTitle = false }) {
     const [schema, setSchema] = useState(null);
@@ -19,14 +19,42 @@ export default function TaskForm({ initialContext = {}, onSuccess, hideTitle = f
 
     const handleSubmit = async (formData) => {
         try {
-            const newTask = await createTask(formData);
-            navigate(`/tasks/${newTask.id}`);
+            const payload = { ...formData };
+            if (Object.prototype.hasOwnProperty.call(payload, "assigned_employee")) {
+                payload.assigned_employee_id = payload.assigned_employee;
+                delete payload.assigned_employee;
+            }
+            if (process.env.NODE_ENV !== "production") {
+                // eslint-disable-next-line no-console
+                console.debug("[TaskForm] submitting", payload);
+            }
+            const newTask = await createTask(payload);
+
+            // If onSuccess callback is provided (modal context), call it instead of navigating
+            if (onSuccess) {
+                if (process.env.NODE_ENV !== "production") {
+                    // eslint-disable-next-line no-console
+                    console.debug("[TaskForm] success via modal", newTask);
+                }
+                onSuccess(newTask);
+            } else {
+                // Otherwise navigate to the task detail page (standalone form)
+                if (process.env.NODE_ENV !== "production") {
+                    // eslint-disable-next-line no-console
+                    console.debug("[TaskForm] success navigate", newTask.id);
+                }
+                navigate(`/tasks/${newTask.id}`);
+            }
         } catch (err) {
+            if (process.env.NODE_ENV !== "production") {
+                // eslint-disable-next-line no-console
+                console.error("[TaskForm] submit error", err);
+            }
             setError(typeof err === "string" ? err : JSON.stringify(err));
         }
     };
 
-    const initialValues = {};
+    const initialValues = { ...initialContext };
     if (!isNaN(workItemFromContext)) {
         initialValues.work_item = workItemFromContext;
     }
@@ -38,7 +66,7 @@ export default function TaskForm({ initialContext = {}, onSuccess, hideTitle = f
             {!hideTitle && <h1 className="text-xl font-bold mb-4">Create New Task</h1>}
             <DynamicForm
                 schema={schema}
-                layout={TaskFormLayout}
+                layout={taskLayout}
                 onSubmit={handleSubmit}
                 initialValues={initialValues}
             />

@@ -1,6 +1,14 @@
 import { useState } from "react";
 import AutocompleteInput from "../components/AutocompleteInput";
-import {createCategory} from "../api/categories";
+import apiClient from "../api/apiClient";
+import { createCategory } from "../api/categories";
+import {
+    buildSearchFn,
+    getCategorySearchPath,
+    getManufacturerSearchPath,
+} from "../api/autocompleteApi";
+const searchManufacturers = buildSearchFn(getManufacturerSearchPath);
+const searchCategories = buildSearchFn(getCategorySearchPath);
 
 export default function DeviceForm({ onSuccess }) {
     const [formData, setFormData] = useState({
@@ -35,22 +43,7 @@ export default function DeviceForm({ onSuccess }) {
         };
 
         try {
-            console.log(payload)
-            const res = await fetch("http://localhost:8000/inventory/api/devices/", {
-                method: "POST",
-                headers: {
-                    "Content-Type": "application/json",
-                },
-                body: JSON.stringify(payload),
-            });
-
-            if (!res.ok) {
-                const err = await res.json();
-                throw new Error(JSON.stringify(err));
-            }
-
-            const newDevice = await res.json();
-            console.log(newDevice);
+            const { data: newDevice } = await apiClient.post("/inventory/api/devices/", payload);
             onSuccess(newDevice);
         } catch (err) {
             setError("Could not create device: " + err.message);
@@ -89,7 +82,7 @@ export default function DeviceForm({ onSuccess }) {
                 <label className="block text-sm font-medium">Manufacturer</label>
                 {!unknownManufacturer && (
                     <AutocompleteInput
-                        fetchUrl="http://localhost:8000/inventory/api/devices/manufacturers/"
+                        searchFn={searchManufacturers}
                         value={formData.manufacturer}
                         onSelect={(item) => setField("manufacturer", item.name)}
                         onCreateNewItem={(customValue) => setField("manufacturer", customValue)}
@@ -115,7 +108,7 @@ export default function DeviceForm({ onSuccess }) {
             <div>
                 <label className="block text-sm font-medium">Category</label>
                 <AutocompleteInput
-                    fetchUrl="http://localhost:8000/inventory/api/category/search/"
+                    searchFn={searchCategories}
                     value={selectedCategory}
                     onSelect={(item) => {
                         setSelectedCategory(item);

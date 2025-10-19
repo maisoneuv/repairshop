@@ -1,22 +1,26 @@
+import apiClient from './apiClient';
+
 export async function fetchNotes(model, id) {
-    const res = await fetch(`http://localhost:8000/core/notes/${model}/${id}/`, {
-        credentials: "include",
-    });
-    if (!res.ok) throw new Error("Failed to fetch notes");
-    return res.json();
+    try {
+        const response = await apiClient.get(`/core/notes/${model}/${id}/`);
+        return response.data;
+    } catch (error) {
+        console.error("Error fetching notes:", error);
+        throw new Error("Failed to fetch notes");
+    }
 }
 
-export async function createNote(model, id, content, csrfToken) {
-    const res = await fetch(`http://localhost:8000/core/notes/${model}/${id}/`, {
-        method: "POST",
-        headers: {
-            "Content-Type": "application/json",
-            "X-CSRFToken": csrfToken,
-        },
-        credentials: "include",
-        body: JSON.stringify({ content }),
-    });
-
-    if (!res.ok) throw await res.json();
-    return res.json();
+export async function createNote(model, id, content) {
+    try {
+        const response = await apiClient.post(`/core/notes/${model}/${id}/`, {
+            content
+        });
+        return response.data;
+    } catch (error) {
+        console.error("Error creating note:", error);
+        if (error.response && error.response.data) {
+            throw error.response.data;
+        }
+        throw new Error("Failed to create note");
+    }
 }

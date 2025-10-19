@@ -1,5 +1,6 @@
 import React, { useEffect } from "react";
 import AutocompleteInput from "./AutocompleteInput";
+import apiClient from "../api/apiClient";
 
 export default function FieldRenderer({ name, label, config, value, onChange, error }) {
     const isRequired = config.required;
@@ -77,13 +78,87 @@ export default function FieldRenderer({ name, label, config, value, onChange, er
     }
 
     if (config.type === "foreignkey") {
+        const getSearchConfig = (app, model) => {
+            if (app === "service" && model === "Employee") {
+                return { path: "/service/api/employee/search/", param: "q" };
+            }
+            if (app === "service" && model === "Location") {
+                return { path: "/service/api/locations/search/", param: "q" };
+            }
+            if (app === "inventory" && model === "Device") {
+                return { path: "/inventory/api/devices/search/", param: "q" };
+            }
+            if (app === "customers" && model === "Customer") {
+                return { path: "/customers/api/customers/search/", param: "q" };
+            }
+            if (app === "inventory" && model === "Category") {
+                return { path: "/inventory/api/category/search/", param: "q" };
+            }
+            if (app === "tasks" && model === "WorkItem") {
+                return {
+                    path: "/tasks/work-items/",
+                    param: "search",
+                    map: (data) => data?.results ?? [],
+                    detailPath: (id) => `/tasks/work-items/${id}/`,
+                    display: (item) => {
+                        if (!item) return "";
+                        const ref = item.reference_id || `#${item.id}`;
+                        const customer = item.customerDetails?.name || item.customer?.name;
+                        return customer ? `${ref} — ${customer}` : ref;
+                    },
+                };
+            }
+
+            return {
+                path: `/${app}/${model.toLowerCase()}s/search/`,
+                param: "q",
+            };
+        };
+
+        const searchConfig = getSearchConfig(config.related_app, config.related_model);
+
+        const searchFn = async (query) => {
+            if (!searchConfig?.path) return [];
+            try {
+                const response = await apiClient.get(searchConfig.path, {
+                    params: { [searchConfig.param || "q"]: query },
+                });
+                const raw = response.data;
+                if (typeof searchConfig.map === "function") {
+                    return searchConfig.map(raw);
+                }
+                return raw;
+            } catch (error) {
+                console.error("Search error:", error);
+                return [];
+            }
+        };
+
+        const getDetailFn = async (id) => {
+            if (searchConfig?.detailPath) {
+                try {
+                    const { data: detail } = await apiClient.get(searchConfig.detailPath(id));
+                    return detail;
+                } catch (error) {
+                    console.error("Detail fetch error:", error);
+                }
+            }
+            return { id };
+        };
+
+        const displayField =
+            typeof searchConfig?.display === "function"
+                ? searchConfig.display
+                : (item) => item.name || item.email || `#${item.id}`;
+
         return (
             <AutocompleteInput
                 label={label || name}
                 value={value}
-                fetchUrl={`http://localhost:8000/${config.related_app}/${config.related_model.toLowerCase()}s/search/`}
-                displayField={(item) => item.name || item.email || `#${item.id}`}
-                onSelect={(item) => onChange(name, item.id)}
+                searchFn={searchFn}
+                getDetailFn={getDetailFn}
+                displayField={displayField}
+                onSelect={(item) => onChange(name, item.id ?? item)}
             />
         );
     }

@@ -16,6 +16,14 @@ export function getDeviceSearchPath(query) {
     return `/inventory/api/devices/search/?q=${encodeURIComponent(query)}`;
 }
 
+export function getManufacturerSearchPath(query) {
+    return `/inventory/api/devices/manufacturers/?q=${encodeURIComponent(query)}`;
+}
+
+export function getCategorySearchPath(query) {
+    return `/inventory/api/category/search/?q=${encodeURIComponent(query)}`;
+}
+
 export function getLocationSearchPath(query) {
     return `/service/api/locations/search/?q=${encodeURIComponent(query)}`;
 }

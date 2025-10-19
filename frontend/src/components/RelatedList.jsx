@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import Modal from "./Modal";
+import apiClient, { normalizeApiPath } from "../api/apiClient";
 
 export default function RelatedList({
                                         title,
@@ -15,15 +16,17 @@ export default function RelatedList({
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [ordering, setOrdering] = useState("-created_date");
 
-    const loadItems = () => {
-        const url = relatedUrl.includes("?")
-            ? `${relatedUrl}&ordering=${ordering}`
-            : `${relatedUrl}?ordering=${ordering}`;
+    const loadItems = async () => {
+        try {
+            const url = relatedUrl.includes("?")
+                ? `${relatedUrl}&ordering=${ordering}`
+                : `${relatedUrl}?ordering=${ordering}`;
 
-        fetch(url, { credentials: "include" })
-            .then((res) => res.json())
-            .then(setItems)
-            .catch(console.error);
+            const response = await apiClient.get(normalizeApiPath(url));
+            setItems(response.data);
+        } catch (error) {
+            console.error("Error loading items:", error);
+        }
     };
 
     useEffect(() => {

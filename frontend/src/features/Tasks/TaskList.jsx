@@ -1,16 +1,22 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
+import apiClient from "../../api/apiClient";
 
 export default function TaskList() {
     const [tasks, setTasks] = useState([]);
 
     useEffect(() => {
-        fetch("http://localhost:8000/tasks/tasks/", {
-            credentials: "include",
-        })
-            .then((res) => res.json())
-            .then(setTasks)
+        let isMounted = true;
+
+        apiClient.get("/tasks/tasks/")
+            .then((res) => {
+                if (isMounted) setTasks(res.data);
+            })
             .catch(console.error);
+
+        return () => {
+            isMounted = false;
+        };
     }, []);
 
     return (

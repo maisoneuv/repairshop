@@ -10,9 +10,12 @@ import { initializeForm, validateRequiredFields } from "../../utils/form";
 import { cleanFormData } from "../../utils/cleanFormData";
 import DeviceForm from "../../pages/DeviceForm";
 import CustomerAutocomplete from "../../components/autocomplete/CustomerAutocomplete";
-import LocationAutocomplete from "../../components/autocomplete/LocationAutocomplete";
 import DeviceAutocomplete from "../../components/autocomplete/DeviceAutocomplete";
 import CustomerAssetList from "../Customers/CustomerAssetList";
+import CustomerInfoCard from "../Customers/CustomerInfoCard";
+import LocationPicker from "../../components/LocationPicker";
+import { createFreeformLocation, ensureCustomerAddressLocation } from "../../api/locations";
+import { getCustomer } from "../../api/customers";
 
 export default function WorkItemForm({ onCreated }) {
     const fieldRefs = useRef({});
@@ -25,6 +28,7 @@ export default function WorkItemForm({ onCreated }) {
 
     const [selectedCustomer, setSelectedCustomer] = useState(null);
     const [selectedDropoffPoint, setSelectedDropoffPoint] = useState(null);
+    const [selectedPickupPoint, setSelectedPickupPoint] = useState(null);
     const [selectedDevice, setSelectedDevice] = useState(null);
     const [serialNumber, setSerialNumber] = useState("");
     const [showDeviceModal, setShowDeviceModal] = useState(false);
@@ -38,7 +42,7 @@ export default function WorkItemForm({ onCreated }) {
         fetchWorkItemSchema()
             .then((data) => {
                 setSchema(data);
-                setFormData((prev) => ({ ...initializeForm(data), ...prev }));
+                setFormData((prev) => ({ ...initializeForm(data), intake_method: 'walk_in', ...prev }));
             })
             .catch((err) => setError("Failed to load form schema"));
     }, []);
@@ -50,7 +54,7 @@ export default function WorkItemForm({ onCreated }) {
             setFormData((prev) => ({
                 ...prev,
                 owner: employee.id,
-                customer_dropoff_point: employee.location_id,
+                dropoff_point: employee.location_id,
             }));
 
             setSelectedDropoffPoint({
@@ -59,6 +63,21 @@ export default function WorkItemForm({ onCreated }) {
             });
         }
     }, [employee, loading]);
+
+    const handleCreateLocation = async (addressData) => {
+        try {
+            const locationData = {
+                ...addressData,
+                customer_id: selectedCustomer?.id || null
+            };
+
+            const newLocation = await createFreeformLocation(locationData);
+            return newLocation;
+        } catch (error) {
+            console.error("Error creating location:", error);
+            throw error;
+        }
+    };
 
     const handleFieldChange = (name, value) => {
         setFormData((prev) => ({ ...prev, [name]: value }));
@@ -84,10 +103,84 @@ export default function WorkItemForm({ onCreated }) {
         }
 
         try {
-            const cleanedForm = cleanFormData(formData, schema);
+            const workingFormData = { ...formData };
+
+            const ensureLocationForField = async (selectedItem, fieldName) => {
+                if (!selectedItem) {
+                    workingFormData[fieldName] = null;
+                    return;
+                }
+
+                const rawId = selectedItem.id;
+
+                if (typeof rawId === "number") {
+                    workingFormData[fieldName] = rawId;
+                    return;
+                }
+
+                const numericId = Number(rawId);
+                if (!Number.isNaN(numericId) && `${numericId}` === `${rawId}`) {
+                    workingFormData[fieldName] = numericId;
+                    return;
+                }
+
+                if (selectedItem.source === "customer_address") {
+                    const customerId = selectedItem.customer_id || selectedCustomer?.id;
+                    const addressId = selectedItem.address_id;
+
+                    if (!customerId || !addressId) {
+                        throw new Error("Customer address details unavailable for selection.");
+                    }
+
+                    const locationLabel = selectedItem.name && selectedItem.name.trim()
+                        ? selectedItem.name
+                        : `${selectedCustomer?.first_name || "Customer"} ${selectedCustomer?.last_name || "Address"}`.trim();
+
+                    const location = await ensureCustomerAddressLocation({
+                        customerId,
+                        addressId,
+                        label: locationLabel,
+                    });
+
+                    workingFormData[fieldName] = location.id;
+
+                    if (fieldName === "dropoff_point") {
+                        setSelectedDropoffPoint(location);
+                    } else if (fieldName === "pickup_point") {
+                        setSelectedPickupPoint(location);
+                    }
+
+                    return;
+                }
+
+                // Fallback: keep whatever identifier we have
+                workingFormData[fieldName] = rawId;
+            };
+
+            await ensureLocationForField(selectedDropoffPoint, "dropoff_point");
+            await ensureLocationForField(selectedPickupPoint, "pickup_point");
+
+            setFormData((prev) => ({
+                ...prev,
+                dropoff_point: workingFormData.dropoff_point,
+                pickup_point: workingFormData.pickup_point,
+            }));
+
+            const cleanedForm = cleanFormData(workingFormData, schema);
+            const selectedDeviceId = (() => {
+                if (selectedDevice === null || selectedDevice === undefined) return null;
+                if (typeof selectedDevice === "object" && "id" in selectedDevice) {
+                    return selectedDevice.id;
+                }
+                return selectedDevice;
+            })();
+            let deviceId = cleanedForm.device ?? selectedDeviceId ?? null;
+            if (deviceId && typeof deviceId === "object" && "id" in deviceId) {
+                deviceId = deviceId.id;
+            }
             const fullData = {
                 ...cleanedForm,
-                device: selectedDevice?.id || null,
+                device: deviceId,
                 serial_number: serialNumber || null,
                 tenant: currentTenant?.id || null,
             };
@@ -105,148 +198,230 @@ export default function WorkItemForm({ onCreated }) {
 
     return (
         <>
-            <div className="flex gap-6 items-start w-full overflow-x-auto">
-                <form
-                    onSubmit={handleSubmit}
-                    noValidate
-                    className="flex-1 space-y-4 text-sm max-w-6xl"
-                >
-                    {WorkItemFormLayout.map((section) => (
-                        <div
-                            key={section.label}
-                            className="border rounded-lg p-4 bg-white"
-                        >
-                            <h2 className="text-sm font-medium mb-4 text-gray-500">
-                                {section.label}
-                            </h2>
-                            <div className="grid grid-cols-6 gap-4">
-                                {section.fields.map(({ name, width }) => {
-                                    const widthClass = {
-                                        full: "col-span-6",
-                                        "1/2": "col-span-6 md:col-span-3",
-                                        "1/3": "col-span-6 md:col-span-2",
-                                    }[width];
 
-                                    if (!schema[name]) return null;
-
-                                    if (name === "customer") {
-                                        return (
-                                            <div
-                                                key={name}
-                                                className={widthClass}
-                                                ref={(el) => (fieldRefs.current[name] = el)}
-                                            >
-                                                <CustomerAutocomplete
-                                                    value={selectedCustomer}
-                                                    onSelect={(item) => {
-                                                        setSelectedCustomer(item);
-                                                        handleFieldChange("customer", item.id);
-                                                        setSelectedAsset(null);
-                                                        setSelectedDevice(null);
-                                                        setSerialNumber("");
-                                                        handleFieldChange("customer_asset", null);
-                                                    }}
-                                                    displayField={(item) =>
-                                                        `${item.first_name} ${item.last_name} (${item.email})`
-                                                    }
-                                                    onCreateNewClick={() => setShowCustomerModal(true)}
-                                                    required={schema.customer.required}
-                                                    error={fieldErrors?.customer}
-                                                />
-                                            </div>
-                                        );
-                                    }
-
-                                    if (name === "customer_asset") {
-                                        return (
-                                            <div className={widthClass} key={name}>
-                                                <div className="flex gap-4">
-                                                    <div className="w-1/2">
-                                                        <DeviceAutocomplete
-                                                            value={selectedDevice}
-                                                            onSelect={(item) => {
-                                                                setSelectedDevice(item);
-                                                                handleFieldChange("device", item.id);
-                                                            }}
-                                                            onCreateNewClick={() =>
-                                                                setShowDeviceModal(true)
-                                                            }
-                                                            required={
-                                                                schema.customer_asset.required
-                                                            }
-                                                            error={fieldErrors?.device}
-                                                        />
-                                                    </div>
-                                                    <div className="w-1/2">
-                                                        <label className="block font-medium mb-1">
-                                                            Serial Number
-                                                        </label>
-                                                        <input
-                                                            type="text"
-                                                            className="w-full px-3 py-2 border rounded"
-                                                            value={serialNumber}
-                                                            onChange={(e) =>
-                                                                setSerialNumber(
-                                                                    e.target.value
-                                                                )
-                                                            }
-                                                            placeholder="Enter serial number"
-                                                        />
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        );
-                                    }
-
-                                    if (name === "customer_dropoff_point") {
-                                        return (
-                                            <div key={name} className={widthClass}>
-                                                <LocationAutocomplete
-                                                    value={selectedDropoffPoint}
-                                                    onSelect={(item) => {
-                                                        setSelectedDropoffPoint(item);
-                                                        handleFieldChange("customer_dropoff_point", item.id);
-                                                    }}
-                                                    required={schema.customer_dropoff_point.required}
-                                                    error={fieldErrors?.customer_dropoff_point}
-                                                />
-                                            </div>
-                                        );
-                                    }
-
-                                    return (
-                                        <div
-                                            key={name}
-                                            className={widthClass}
-                                            ref={(el) => (fieldRefs.current[name] = el)}
-                                        >
-                                            <FieldRenderer
-                                                name={name}
-                                                config={schema[name]}
-                                                value={formData[name]}
-                                                onChange={handleFieldChange}
-                                                error={fieldErrors[name]}
-                                            />
-                                        </div>
-                                    );
-                                })}
-                            </div>
-                        </div>
-                    ))}
-
-                    {error && (
-                        <p className="text-red-600 text-sm">{error}</p>
-                    )}
-
-                    <button
-                        type="submit"
-                        className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700"
+            <div className="flex gap-6 items-start w-full">
+                <div className="flex-1">
+                    <form
+                        onSubmit={handleSubmit}
+                        noValidate
+                        className="space-y-6"
                     >
-                        Create Work Item
-                    </button>
-                </form>
-                {selectedCustomer && (
-                    <div className="w-80 flex-shrink-0">
+                        {WorkItemFormLayout.map((section) => (
+                            <div
+                                key={section.label}
+                                className="bg-white rounded-xl shadow-lg border border-gray-200 overflow-visible"
+                            >
+                                <div className="px-6 py-4 border-b border-gray-100">
+                                    <div className="flex items-center justify-between">
+                                        <h2 className="text-base font-semibold text-gray-800">
+                                            {section.label}
+                                        </h2>
+                                        {section.label === "Logistics" && (
+                                            <div className="flex bg-gray-100 p-1 rounded-lg">
+                                                <button
+                                                    type="button"
+                                                    className={`px-4 py-2 rounded-md text-sm font-medium transition-all ${
+                                                        formData.intake_method === 'walk_in'
+                                                            ? 'bg-blue-600 text-white shadow-md'
+                                                            : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
+                                                    }`}
+                                                    onClick={() => handleFieldChange('intake_method', 'walk_in')}
+                                                >
+                                                    Walk-in
+                                                </button>
+                                                <button
+                                                    type="button"
+                                                    className={`px-4 py-2 rounded-md text-sm font-medium transition-all ${
+                                                        formData.intake_method === 'courier'
+                                                            ? 'bg-blue-600 text-white shadow-md'
+                                                            : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
+                                                    }`}
+                                                    onClick={() => handleFieldChange('intake_method', 'courier')}
+                                                >
+                                                    Courier
+                                                </button>
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+                                <div className="p-6">
+                                    <div className="grid grid-cols-6 gap-6">
+                                        {section.fields.map(({ name, width }) => {
+                                            const widthClass = {
+                                                full: "col-span-6",
+                                                "1/2": "col-span-6 md:col-span-3",
+                                                "1/3": "col-span-6 md:col-span-2",
+                                            }[width];
+
+                                            if (!schema[name]) return null;
+
+                                            // Skip intake_method field since we handle it with toggle buttons
+                                            if (name === "intake_method") return null;
+
+                                            if (name === "customer") {
+                                                return (
+                                                    <div
+                                                        key={name}
+                                                        className={widthClass}
+                                                        ref={(el) => (fieldRefs.current[name] = el)}
+                                                    >
+                                                        <CustomerAutocomplete
+                                                            value={selectedCustomer}
+                                                            onSelect={async (item) => {
+                                                                let detailed = item;
+                                                                try {
+                                                                    detailed = await getCustomer(item.id);
+                                                                } catch (err) {
+                                                                    console.error("Failed to load customer details", err);
+                                                                }
+
+                                                                setSelectedCustomer(detailed);
+                                                                handleFieldChange("customer", detailed.id);
+                                                                setSelectedAsset(null);
+                                                                setSelectedDevice(null);
+                                                                setSerialNumber("");
+                                                                handleFieldChange("customer_asset", null);
+                                                            }}
+                                                            displayField={(item) =>
+                                                                `${item.first_name} ${item.last_name} (${item.email})`
+                                                            }
+                                                            onCreateNewClick={() => setShowCustomerModal(true)}
+                                                            required={schema.customer.required}
+                                                            error={fieldErrors?.customer}
+                                                        />
+                                                    </div>
+                                                );
+                                            }
+
+                                            if (name === "customer_asset") {
+                                                return (
+                                                    <div className={widthClass} key={name}>
+                                                        <div className="grid grid-cols-2 gap-4">
+                                                            <div>
+                                                                <DeviceAutocomplete
+                                                                    value={selectedDevice}
+                                                                    onSelect={(item) => {
+                                                                        setSelectedDevice(item);
+                                                                        handleFieldChange("device", item.id);
+                                                                    }}
+                                                                    onCreateNewClick={() =>
+                                                                        setShowDeviceModal(true)
+                                                                    }
+                                                                    required={
+                                                                        schema.customer_asset.required
+                                                                    }
+                                                                    error={fieldErrors?.device}
+                                                                />
+                                                            </div>
+                                                            <div>
+                                                                <label className="block text-sm font-medium text-gray-700 mb-2">
+                                                                    Serial Number
+                                                                </label>
+                                                                <input
+                                                                    type="text"
+                                                                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                                                    value={serialNumber}
+                                                                    onChange={(e) =>
+                                                                        setSerialNumber(
+                                                                            e.target.value
+                                                                        )
+                                                                    }
+                                                                    placeholder="Enter serial number"
+                                                                />
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                );
+                                            }
+
+                                            if (name === "dropoff_point") {
+                                                return (
+                                                    <div key={name} className={widthClass}>
+                                                        <LocationPicker
+                                                            value={selectedDropoffPoint}
+                                                            onSelect={(item) => {
+                                                                setSelectedDropoffPoint(item);
+                                                                handleFieldChange("dropoff_point", item.id);
+                                                            }}
+                                                            label="Drop-off Location"
+                                                            placeholder="Search drop-off location..."
+                                                            customerId={selectedCustomer?.id}
+                                                            onCreateLocation={handleCreateLocation}
+                                                            required={schema.dropoff_point.required}
+                                                            error={fieldErrors?.dropoff_point}
+                                                        />
+                                                    </div>
+                                                );
+                                            }
+
+                                            if (name === "pickup_point") {
+                                                return (
+                                                    <div key={name} className={widthClass}>
+                                                        <LocationPicker
+                                                            value={selectedPickupPoint}
+                                                            onSelect={(item) => {
+                                                                setSelectedPickupPoint(item);
+                                                                handleFieldChange("pickup_point", item.id);
+                                                            }}
+                                                            label="Pickup Location"
+                                                            placeholder="Search pickup location..."
+                                                            customerId={selectedCustomer?.id}
+                                                            onCreateLocation={handleCreateLocation}
+                                                            required={schema.pickup_point?.required}
+                                                            error={fieldErrors?.pickup_point}
+                                                        />
+                                                    </div>
+                                                );
+                                            }
+
+                                            return (
+                                                <div
+                                                    key={name}
+                                                    className={widthClass}
+                                                    ref={(el) => (fieldRefs.current[name] = el)}
+                                                >
+                                                    <FieldRenderer
+                                                        name={name}
+                                                        config={schema[name]}
+                                                        value={formData[name]}
+                                                        onChange={handleFieldChange}
+                                                        error={fieldErrors[name]}
+                                                    />
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+                                </div>
+                            </div>
+                        ))}
+
+                        {error && (
+                            <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+                                <p className="text-red-600 text-sm">{error}</p>
+                            </div>
+                        )}
+
+                        <div className="flex justify-end">
+                            <button
+                                type="submit"
+                                className="bg-blue-600 text-white px-6 py-3 rounded-lg font-medium hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 shadow-lg transition-colors"
+                            >
+                                Create Work Item
+                            </button>
+                        </div>
+                    </form>
+                </div>
+
+                <div className="w-80 space-y-4">
+                    <CustomerInfoCard
+                        customer={selectedCustomer}
+                        onUpdated={(updated) => {
+                            setSelectedCustomer(updated);
+                            handleFieldChange("customer", updated.id);
+                        }}
+                    />
+
+                    {selectedCustomer ? (
                         <CustomerAssetList
                             customerId={selectedCustomer.id}
                             selectedAssetId={selectedAsset?.id}
@@ -264,8 +439,15 @@ export default function WorkItemForm({ onCreated }) {
                                 );
                             }}
                         />
-                    </div>
-                )}
+                    ) : (
+                        <div className="bg-white rounded-xl shadow-lg border border-gray-200 p-6">
+                            <h3 className="text-base font-semibold text-gray-800 mb-3">Customer Devices</h3>
+                            <p className="text-sm text-gray-500">
+                                Select a customer to view their devices
+                            </p>
+                        </div>
+                    )}
+                </div>
             </div>
 
             <Modal
@@ -274,9 +456,17 @@ export default function WorkItemForm({ onCreated }) {
                 title="Create New Customer"
             >
                 <CustomerForm
-                    onSuccess={(newCustomer) => {
-                        setSelectedCustomer(newCustomer);
-                        handleFieldChange("customer", newCustomer.id);
+                    submitLabel="Create Customer"
+                    onSuccess={async (newCustomer) => {
+                        let detailed = newCustomer;
+                        try {
+                            detailed = await getCustomer(newCustomer.id);
+                        } catch (err) {
+                            console.error("Failed to load customer details", err);
+                        }
+
+                        setSelectedCustomer(detailed);
+                        handleFieldChange("customer", detailed.id);
                         setShowCustomerModal(false);
                     }}
                 />
