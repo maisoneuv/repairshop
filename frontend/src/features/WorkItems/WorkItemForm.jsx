@@ -246,7 +246,7 @@ export default function WorkItemForm({ onCreated }) {
                                 </div>
                                 <div className="p-6">
                                     <div className="grid grid-cols-6 gap-6">
-                                        {section.fields.map(({ name, width }) => {
+                                        {section.fields.map(({ name, width, label }) => {
                                             const widthClass = {
                                                 full: "col-span-6",
                                                 "1/2": "col-span-6 md:col-span-3",
@@ -257,6 +257,7 @@ export default function WorkItemForm({ onCreated }) {
 
                                             // Skip intake_method field since we handle it with toggle buttons
                                             if (name === "intake_method") return null;
+
 
                                             if (name === "customer") {
                                                 return (
@@ -382,6 +383,7 @@ export default function WorkItemForm({ onCreated }) {
                                                 >
                                                     <FieldRenderer
                                                         name={name}
+                                                        label={label}
                                                         config={schema[name]}
                                                         value={formData[name]}
                                                         onChange={handleFieldChange}

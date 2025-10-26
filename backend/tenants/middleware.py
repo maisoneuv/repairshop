@@ -1,5 +1,6 @@
 from typing import Optional
 import logging
+from django.conf import settings
 from django.utils.deprecation import MiddlewareMixin
 from django.core.exceptions import PermissionDenied
 from django.http import HttpRequest
@@ -19,6 +20,8 @@ TENANT_OPTIONAL_PATHS = (
     "/dj-rest-auth/logout/",
 )
 
+DEFAULT_TENANT_SUBDOMAIN = getattr(settings, "DEFAULT_TENANT_SUBDOMAIN", None)
+
 def _derive_slug_from_host(host: str) -> Optional[str]:
     host = (host or "").split(":")[0]
     if host in ("localhost", "127.0.0.1", "[::1]"):
@@ -34,6 +37,7 @@ def _derive_slug_from_host(host: str) -> Optional[str]:
 
 class TenantMiddleware(MiddlewareMixin):
     def process_request(self, request: HttpRequest):
+        
         request.tenant = None
         header_val = request.META.get("HTTP_X_TENANT")
         logger.warning("TenantMiddleware incoming host=%s header=%s user=%s", request.get_host(), header_val, getattr(request, "user", None))
@@ -59,6 +63,11 @@ class TenantMiddleware(MiddlewareMixin):
             if slug:
                 request.tenant = Tenant.objects.filter(subdomain=slug).first()
                 logger.warning("TenantMiddleware host slug %s -> %s", slug, request.tenant)
+
+        # 3b) Fallback to a configured default tenant when running without subdomains.
+        if request.tenant is None and DEFAULT_TENANT_SUBDOMAIN:
+            request.tenant = Tenant.objects.filter(subdomain=DEFAULT_TENANT_SUBDOMAIN).first()
+            logger.warning("TenantMiddleware default slug %s -> %s", DEFAULT_TENANT_SUBDOMAIN, request.tenant)
 
         # 4) Enforce membership only when authenticated and not on optional paths
         if (
