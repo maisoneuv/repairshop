@@ -16,13 +16,15 @@ work_item_create,
 WorkItemViewSet,
 WorkItemSchemaView,
 TaskSchemaView,
-TaskViewSet)
+TaskViewSet,
+TaskTypeViewSet)
 
 app_name = "tasks"
 
 router = DefaultRouter()
 router.register(r'work-items', WorkItemViewSet, basename='workitem')
 router.register(r'tasks', TaskViewSet, basename='task')
+router.register(r'task-types', TaskTypeViewSet, basename='tasktype')
 
 urlpatterns = [
     path('item_list', WorkItemListView.as_view(), name="work_item_list"),

@@ -10,7 +10,7 @@ from crispy_forms.layout import Layout, Field, HTML, Div, Submit
 class WorkItemForm(forms.ModelForm):
     class Meta:
         model = WorkItem
-        fields = ["customer", "customer_asset", "description", "device_condition", "comments", "priority",
+        fields = ["customer", "customer_asset", "description", "device_condition", "accessories", "comments", "priority",
                   "intake_method", "owner", "type", "dropoff_point", "technician", "estimated_price", "prepaid_amount",
                   "payment_method"]
 

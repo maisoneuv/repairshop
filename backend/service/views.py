@@ -42,6 +42,26 @@ class EmployeeSearchView(GenericSearchView):
         return Employee.objects.select_related('user').filter(tenant=self.request.tenant)
 
 
+class EmployeeListView(APIView):
+    """Returns all employees for the tenant (for picklist dropdown)."""
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        user = request.user
+
+        if user.is_superuser:
+            queryset = Employee.objects.select_related('user').all()
+        elif not request.tenant:
+            return Response([], status=status.HTTP_200_OK)
+        elif not user.has_permission('view_all_employees', request.tenant):
+            return Response([], status=status.HTTP_200_OK)
+        else:
+            queryset = Employee.objects.select_related('user').filter(tenant=request.tenant)
+
+        serializer = EmployeeSerializer(queryset, many=True)
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
+
 class LocationSearchView(GenericSearchView):
     serializer_class = LocationSerializer
     permission_classes = [IsAuthenticated]

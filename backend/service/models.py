@@ -65,7 +65,7 @@ class Employee(models.Model):
     location = models.ForeignKey(Location, on_delete=models.CASCADE)
 
     def __str__(self):
-        return self.user.name
+        return f"{self.user.first_name} {self.user.last_name}"
 
     class Meta:
         permissions = [

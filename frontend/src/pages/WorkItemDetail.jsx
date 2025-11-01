@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useParams, Link } from "react-router-dom";
 import { fetchSchema } from "../api/schema";
-import { fetchWorkItem } from "../api/workItems";
+import { fetchWorkItem, updateWorkItemField } from "../api/workItems";
 import WorkItemDetailHeader from "../components/WorkItemDetailHeader";
 import WorkItemHighlights from "../components/WorkItemHighlights";
 import WorkItemTabs from "../components/WorkItemTabs";
@@ -10,12 +10,16 @@ import DeviceCard from "../components/DeviceCard";
 import RelatedList from "../components/RelatedList";
 import EnhancedActivityTimeline from "../components/EnhancedActivityTimeline";
 import TaskForm from "../features/Tasks/TaskForm";
+import ModelDetailLayout from "../components/ModelDetailLayout";
+import WorkitemDetailLayout from "../features/WorkItems/WorkitemDetailLayout";
 
 export default function WorkItemDetail() {
     const { id } = useParams();
     const [schema, setSchema] = useState(null);
     const [workItem, setWorkItem] = useState(null);
     const [formData, setFormData] = useState({});
+    const [editMode, setEditMode] = useState(false);
+    const [isSaving, setIsSaving] = useState(false);
 
     useEffect(() => {
         async function load() {
@@ -37,9 +41,100 @@ export default function WorkItemDetail() {
         load();
     }, [id]);
 
+    const normalizeFieldValue = (name, value) => {
+        if (value === undefined) return null;
+        if (value === null) return null;
+        if (name === "owner" || name === "technician") {
+            if (typeof value === "object") {
+                return value.id ?? value.pk ?? null;
+            }
+            return value ?? null;
+        }
+
+        const fieldSchema = schema?.[name];
+        if (fieldSchema?.type === "foreignkey") {
+            if (typeof value === "object") {
+                return value.id ?? value.pk ?? null;
+            }
+        }
+        return value ?? null;
+    };
+
+    const buildPatchPayload = (name, value) => {
+        const normalized = normalizeFieldValue(name, value);
+        if (name === "owner") {
+            return { owner_id: normalized };
+        }
+        if (name === "technician") {
+            return { technician_id: normalized };
+        }
+        return { [name]: normalized };
+    };
+
+    const editableFieldNames = WorkitemDetailLayout.flatMap((section) =>
+        section.fields.filter((field) => field.editable).map((field) => field.name)
+    );
+
     const handleEdit = () => {
-        // TODO: Implement edit functionality
-        console.log("Edit work item");
+        if (!workItem || editMode) return;
+        setFormData(workItem);
+        setEditMode(true);
+    };
+
+    const handleCancelEdit = () => {
+        if (workItem) {
+            setFormData(workItem);
+        }
+        setEditMode(false);
+    };
+
+    const handleFieldChange = (name, value) => {
+        setFormData((prev) => ({ ...prev, [name]: value }));
+    };
+
+    const handleFieldSave = async (name, value) => {
+        if (!workItem) return;
+        try {
+            const payload = buildPatchPayload(name, value);
+            const updated = await updateWorkItemField(workItem.id, payload);
+            setWorkItem((prev) => ({ ...prev, ...updated }));
+            setFormData((prev) => ({ ...prev, ...updated }));
+        } catch (err) {
+            console.error(`Failed to update field ${name}:`, err);
+        }
+    };
+
+    const handleCustomerUpdated = (updatedCustomer) => {
+        setWorkItem((prev) => {
+            if (!prev) return prev;
+            const next = { ...prev, customerDetails: updatedCustomer };
+            if (prev.customer && typeof prev.customer === "object") {
+                next.customer = { ...prev.customer, ...updatedCustomer };
+            }
+            return next;
+        });
+    };
+
+    const handleSaveAll = async () => {
+        if (!workItem) return;
+        const payload = editableFieldNames.reduce((acc, name) => {
+            if (Object.prototype.hasOwnProperty.call(formData, name)) {
+                Object.assign(acc, buildPatchPayload(name, formData[name]));
+            }
+            return acc;
+        }, {});
+
+        try {
+            setIsSaving(true);
+            const updated = await updateWorkItemField(workItem.id, payload);
+            setWorkItem(updated);
+            setFormData(updated);
+            setEditMode(false);
+        } catch (err) {
+            console.error("Failed to save work item changes:", err);
+        } finally {
+            setIsSaving(false);
+        }
     };
 
     const handleNewTask = () => {
@@ -80,9 +175,6 @@ export default function WorkItemDetail() {
                     onEdit={handleEdit}
                 />
 
-                {/* Highlights Panel */}
-                <WorkItemHighlights workItem={workItem} />
-
                 {/* Main Content Area */}
                 <div className="flex flex-col xl:flex-row gap-4 sm:gap-6 mt-4 sm:mt-6">
                     {/* Left Column - Main Content */}
@@ -94,11 +186,51 @@ export default function WorkItemDetail() {
                                 <div>
                                     {activeTab === 'details' && (
                                         <div className="space-y-4 sm:space-y-6">
+                                            {/* Work Item Details */}
+                                            <div className="bg-white rounded-xl shadow-lg border border-gray-200 p-6">
+                                                <div className="flex items-center justify-between mb-4">
+                                                    {editMode && (
+                                                        <span className="text-sm text-gray-500">
+                                                            Edit mode enabled
+                                                        </span>
+                                                    )}
+                                                </div>
+                                                <ModelDetailLayout
+                                                    data={workItem}
+                                                    schema={schema}
+                                                    layout={WorkitemDetailLayout}
+                                                    editable
+                                                    editMode={editMode}
+                                                    formData={formData}
+                                                    onFieldChange={handleFieldChange}
+                                                    onFieldSave={handleFieldSave}
+                                                />
+                                                {editMode && (
+                                                    <div className="flex justify-end gap-2 mt-6">
+                                                        <button
+                                                            type="button"
+                                                            onClick={handleCancelEdit}
+                                                            className="px-4 py-2 rounded-lg border border-gray-300 text-gray-600 hover:bg-gray-50 transition-colors"
+                                                        >
+                                                            Cancel
+                                                        </button>
+                                                        <button
+                                                            type="button"
+                                                            onClick={handleSaveAll}
+                                                            disabled={isSaving}
+                                                            className="px-4 py-2 rounded-lg bg-indigo-600 text-white font-medium hover:bg-indigo-700 transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+                                                        >
+                                                            {isSaving ? "Saving..." : "Save Changes"}
+                                                        </button>
+                                                    </div>
+                                                )}
+                                            </div>
+
                                             {/* Customer and Device Cards Row */}
                                             <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
                                                 <CustomerCard
                                                     customer={workItem.customerDetails}
-                                                    onEdit={() => console.log('Edit customer')}
+                                                    onUpdated={handleCustomerUpdated}
                                                 />
                                                 <DeviceCard
                                                     device={workItem.deviceDetails}
@@ -106,14 +238,14 @@ export default function WorkItemDetail() {
                                                 />
                                             </div>
 
-                                            {/* Issue Description */}
+                                            {/* Comments */}
                                             {workItem.description && (
                                                 <div className="bg-white rounded-xl shadow-lg border border-gray-200 p-6">
                                                     <h3 className="text-lg font-semibold text-gray-900 mb-3">
-                                                        Issue Description
+                                                        Comments
                                                     </h3>
                                                     <div className="text-gray-700 whitespace-pre-wrap bg-gray-50 p-4 rounded-lg">
-                                                        {workItem.description}
+                                                        {workItem.comments}
                                                     </div>
                                                 </div>
                                             )}
@@ -126,6 +258,18 @@ export default function WorkItemDetail() {
                                                     </h3>
                                                     <div className="text-gray-700 whitespace-pre-wrap bg-gray-50 p-4 rounded-lg">
                                                         {workItem.device_condition}
+                                                    </div>
+                                                </div>
+                                            )}
+
+                                            {/* Accessories */}
+                                            {workItem.accessories && (
+                                                <div className="bg-white rounded-xl shadow-lg border border-gray-200 p-6">
+                                                    <h3 className="text-lg font-semibold text-gray-900 mb-3">
+                                                        Accessories
+                                                    </h3>
+                                                    <div className="text-gray-700 whitespace-pre-wrap bg-gray-50 p-4 rounded-lg">
+                                                        {workItem.accessories}
                                                     </div>
                                                 </div>
                                             )}
@@ -159,7 +303,7 @@ export default function WorkItemDetail() {
                                 relatedUrl={`/tasks/tasks/?work_item=${workItem.id}`}
                                 renderAsTable={false}
                                 sortableFields={[
-                                    { label: "Summary", field: "summary" },
+                                    { label: "Task Type", field: "task_type__name" },
                                     { label: "Status", field: "status" },
                                     { label: "Assignee", field: "assigned_employee" },
                                 ]}
@@ -170,21 +314,39 @@ export default function WorkItemDetail() {
                                                 to={`/tasks/${task.id}`}
                                                 className="text-indigo-600 hover:text-indigo-800 font-medium text-sm transition-colors"
                                             >
-                                                {task.summary}
+                                                {task.task_type?.name || task.summary || `Task #${task.id}`}
                                             </Link>
                                             <span className={`px-2 py-1 text-xs rounded-full ${
-                                                task.status === 'completed' ? 'bg-green-100 text-green-800' :
-                                                task.status === 'in_progress' ? 'bg-yellow-100 text-yellow-800' :
+                                                task.status === 'Done' ? 'bg-green-100 text-green-800' :
+                                                task.status === 'In progress' ? 'bg-blue-100 text-blue-800' :
+                                                task.status === 'Reopened' ? 'bg-yellow-100 text-yellow-800' :
                                                 'bg-gray-100 text-gray-800'
                                             }`}>
                                                 {task.status}
                                             </span>
                                         </div>
-                                        {task.assigned_employee && (
-                                            <p className="text-gray-500 text-xs mt-1">
-                                                Assigned to: {task.assigned_employee.name || task.assigned_employee.email}
-                                            </p>
-                                        )}
+                                        <div className="mt-2 space-y-1">
+                                            {task.task_type && (
+                                                <p className="text-gray-600 text-xs">
+                                                    <span className="font-medium">Type:</span> {task.task_type.name}
+                                                </p>
+                                            )}
+                                            {task.summary && (
+                                                <p className="text-gray-600 text-xs">
+                                                    <span className="font-medium">Summary:</span> {task.summary}
+                                                </p>
+                                            )}
+                                            {task.assigned_employee && (
+                                                <p className="text-gray-500 text-xs">
+                                                    <span className="font-medium">Assigned to:</span> {task.assigned_employee.name || task.assigned_employee.email}
+                                                </p>
+                                            )}
+                                            {task.created_date && (
+                                                <p className="text-gray-400 text-xs">
+                                                    <span className="font-medium">Created:</span> {new Date(task.created_date).toLocaleDateString()}
+                                                </p>
+                                            )}
+                                        </div>
                                     </div>
                                 )}
                                 renderForm={({ onSuccess }) => (

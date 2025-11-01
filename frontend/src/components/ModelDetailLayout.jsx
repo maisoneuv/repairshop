@@ -1,4 +1,5 @@
 import InlineField from "../components/InlineField";
+import EmployeeAutocomplete from "./autocomplete/EmployeeAutocomplete";
 
 export default function ModelDetailLayout({
                                               data,
@@ -7,9 +8,10 @@ export default function ModelDetailLayout({
                                               editable = true,
                                               editMode = false,
                                               formData,
-                                              onChange,
+                                              onFieldChange,
                                               onFieldSave,
                                           }) {
+
     return (
         <div className="space-y-6">
             {layout.map((section) => (
@@ -25,7 +27,6 @@ export default function ModelDetailLayout({
                                 "1/3": "w-full md:w-1/3",
                             }[width || "full"];
 
-                            const isEditing = editMode && fieldEditable;
                             const value = editMode ? formData[name] : data[name];
                             const fieldType = type || schema[name].type;
                             const isTextArea =
@@ -34,6 +35,9 @@ export default function ModelDetailLayout({
 
                             const options =
                                 fieldType === "select" ? schema[name].choices || [] : undefined;
+                            const isEmployeeForeignKey =
+                                schema[name]?.type === "foreignkey" &&
+                                schema[name]?.related_model === "Employee";
 
                             return (
                                 <div key={name} className={widthClass}>
@@ -43,9 +47,22 @@ export default function ModelDetailLayout({
                                             value={value}
                                             type={isTextArea ? "textarea" : fieldType}
                                             options={options}
+                                            renderEditor={isEmployeeForeignKey
+                                                ? ({ value: current, onChange }) => (
+                                                    <EmployeeAutocomplete
+                                                        value={current}
+                                                        onSelect={(employee) => {
+                                                            onChange(employee);
+                                                        }}
+                                                        required={schema[name]?.required}
+                                                        placeholder="Select employee..."
+                                                        showLabel={false}
+                                                    />
+                                                )
+                                                : undefined}
                                             onSave={(val) =>
                                                 editMode
-                                                    ? onChange(name, val)
+                                                    ? onFieldChange(name, val)
                                                     : onFieldSave(name, val)
                                             }
                                             editMode={editMode}

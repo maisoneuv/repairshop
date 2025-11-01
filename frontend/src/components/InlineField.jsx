@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {PencilLine} from "lucide-react";
 
 export default function InlineField({
@@ -9,13 +9,25 @@ export default function InlineField({
                                         editMode = false,
                                         onSave,
                                         linkToRecord = null,
+                                        renderEditor,
                                     }) {
     const [editing, setEditing] = useState(false);
     const [inputValue, setInputValue] = useState(value);
 
-    const handleSave = () => {
+    useEffect(() => {
+        setInputValue(value);
+    }, [value]);
+
+    const handleValueChange = (nextValue) => {
+        setInputValue(nextValue);
+        if (editMode) {
+            onSave(nextValue);
+        }
+    };
+
+    const handleSave = (nextValue = inputValue) => {
         setEditing(false);
-        onSave(inputValue);
+        onSave(nextValue);
     };
 
     const renderDisplayValue = () => {
@@ -32,37 +44,43 @@ export default function InlineField({
             </label>
 
             {editMode || editing ? (
-                <div className="flex gap-2">
-                    {type === "select" ? (
+                <div className="flex gap-2 items-start">
+                    {renderEditor ? (
+                        renderEditor({
+                            value: inputValue,
+                            onChange: (val) => handleValueChange(val),
+                            editMode,
+                        })
+                    ) : type === "select" ? (
                         <select
                             value={inputValue}
-                            onChange={(e) => setInputValue(e.target.value)}
+                            onChange={(e) => handleValueChange(e.target.value)}
                             className="w-full border px-2 py-1 rounded"
                         >
-                            {options.map(([val, label]) => (
+                            {options.map(([val, optionLabel]) => (
                                 <option key={val} value={val}>
-                                    {label}
+                                    {optionLabel}
                                 </option>
                             ))}
                         </select>
                     ) : type === "textarea" ? (
                         <textarea
                             value={inputValue}
-                            onChange={(e) => setInputValue(e.target.value)}
+                            onChange={(e) => handleValueChange(e.target.value)}
                             className="w-full border px-2 py-1 rounded"
                         />
                     ) : (
                         <input
                             type={type}
                             value={inputValue}
-                            onChange={(e) => setInputValue(e.target.value)}
+                            onChange={(e) => handleValueChange(e.target.value)}
                             className="w-full border px-2 py-1 rounded"
                         />
                     )}
 
                     {!editMode && (
                         <button
-                            onClick={handleSave}
+                            onClick={() => handleSave()}
                             className="text-sm text-blue-600 border px-2 py-1 rounded hover:bg-blue-50"
                         >
                             Save

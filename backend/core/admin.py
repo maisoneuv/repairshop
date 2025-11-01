@@ -86,8 +86,7 @@ class CustomPermissionAdmin(admin.ModelAdmin):
 admin.site.register(models.Address)
 admin.site.register(Customer)
 admin.site.register(Asset)
-admin.site.register(WorkItem)
-admin.site.register(Task)
+# WorkItem and Task are registered in tasks/admin.py with custom admin classes
 admin.site.register(Employee)
 admin.site.register(Location)
 admin.site.register(Category)

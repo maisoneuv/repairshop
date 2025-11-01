@@ -12,6 +12,10 @@ export function getEmployeeSearchPath(query) {
     return `/service/api/employee/search/?q=${encodeURIComponent(query)}`;
 }
 
+export function getEmployeeListPath() {
+    return `/service/api/employee/list/`;
+}
+
 export function getDeviceSearchPath(query) {
     return `/inventory/api/devices/search/?q=${encodeURIComponent(query)}`;
 }
@@ -38,6 +42,16 @@ export function getObjectDetailPath(app, id) {
  */
 export const buildSearchFn = (pathBuilder) => async (query) => {
     const path = pathBuilder(query);
+    const response = await apiClient.get(path);
+    return response.data;
+};
+
+/**
+ * Generic function to build a fetchAllFn for AutocompleteInput (picklist behavior)
+ * Uses apiClient with subdomain-aware baseURL and X-Tenant header
+ */
+export const buildFetchAllFn = (pathBuilder) => async () => {
+    const path = pathBuilder();
     const response = await apiClient.get(path);
     return response.data;
 };

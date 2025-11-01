@@ -7,26 +7,73 @@
     hx-target="#customer-form-wrapper"
     hx-swap="outerHTML">
     {% csrf_token %}
+    {% if form.non_field_errors %}
+      <div class="mb-4 p-3 bg-red-50 border border-red-200 text-sm text-red-700 rounded">
+        {% for error in form.non_field_errors %}
+          <p>{{ error }}</p>
+        {% endfor %}
+      </div>
+    {% endif %}
     <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
       <div>
-        <label class="block font-medium" for="{{ form.phone_number.id_for_label }}">Phone Number</label>
+        <label class="block font-medium" for="{{ form.phone_number.id_for_label }}">
+          Phone Number
+          {% if form.phone_number.field.required %}
+            <span class="text-red-600">*</span>
+          {% endif %}
+        </label>
         {{ form.phone_number|add_class:"w-full border p-2 rounded" }}
+        {% if form.phone_number.errors %}
+          <p class="text-sm text-red-600 mt-1">{{ form.phone_number.errors.0 }}</p>
+        {% endif %}
       </div>
       <div>
-        <label class="block font-medium" for="{{ form.email.id_for_label }}">E-mail</label>
+        <label class="block font-medium" for="{{ form.email.id_for_label }}">
+          E-mail
+          {% if form.email.field.required %}
+            <span class="text-red-600">*</span>
+          {% endif %}
+        </label>
         {{ form.email|add_class:"w-full border p-2 rounded" }}
+        {% if form.email.errors %}
+          <p class="text-sm text-red-600 mt-1">{{ form.email.errors.0 }}</p>
+        {% endif %}
       </div>
       <div>
-        <label class="block font-medium" for="{{ form.first_name.id_for_label }}">First Name</label>
+        <label class="block font-medium" for="{{ form.first_name.id_for_label }}">
+          First Name
+          {% if form.first_name.field.required %}
+            <span class="text-red-600">*</span>
+          {% endif %}
+        </label>
         {{ form.first_name|add_class:"w-full border p-2 rounded" }}
+        {% if form.first_name.errors %}
+          <p class="text-sm text-red-600 mt-1">{{ form.first_name.errors.0 }}</p>
+        {% endif %}
       </div>
       <div>
-        <label class="block font-medium" for="{{ form.last_name.id_for_label }}">Last Name</label>
+        <label class="block font-medium" for="{{ form.last_name.id_for_label }}">
+          Last Name
+          {% if form.last_name.field.required %}
+            <span class="text-red-600">*</span>
+          {% endif %}
+        </label>
         {{ form.last_name|add_class:"w-full border p-2 rounded" }}
+        {% if form.last_name.errors %}
+          <p class="text-sm text-red-600 mt-1">{{ form.last_name.errors.0 }}</p>
+        {% endif %}
       </div>
       <div>
-        <label class="block font-medium" for="{{ form.referral_source.id_for_label }}">Referral Source</label>
+        <label class="block font-medium" for="{{ form.referral_source.id_for_label }}">
+          Referral Source
+          {% if form.referral_source.field.required %}
+            <span class="text-red-600">*</span>
+          {% endif %}
+        </label>
         {{ form.referral_source|add_class:"w-full border p-2 rounded" }}
+        {% if form.referral_source.errors %}
+          <p class="text-sm text-red-600 mt-1">{{ form.referral_source.errors.0 }}</p>
+        {% endif %}
       </div>
     </div>
     <button type="submit" class="bg-green-600 text-white mt-2 px-3 py-1 rounded">Create</button>

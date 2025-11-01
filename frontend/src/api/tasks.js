@@ -77,3 +77,38 @@ export async function fetchTask(id, include = "") {
         throw new Error("Failed to fetch task");
     }
 }
+
+// Task Type API functions
+export async function fetchTaskTypes(params = {}) {
+    try {
+        const response = await apiClient.get("/tasks/task-types/", { params });
+        return response.data;
+    } catch (error) {
+        console.error("Error fetching task types:", error);
+        if (error.response && error.response.data) {
+            throw new Error(error.response.data.detail || "Failed to fetch task types");
+        }
+        throw new Error("Failed to fetch task types");
+    }
+}
+
+export async function createTaskType(data) {
+    try {
+        const response = await apiClient.post(
+            "/tasks/task-types/",
+            data,
+            {
+                headers: {
+                    "X-CSRFToken": getCSRFToken()
+                }
+            }
+        );
+        return response.data;
+    } catch (error) {
+        console.error("Error creating task type:", error);
+        if (error.response && error.response.data) {
+            throw error.response.data;
+        }
+        throw new Error("Failed to create task type");
+    }
+}

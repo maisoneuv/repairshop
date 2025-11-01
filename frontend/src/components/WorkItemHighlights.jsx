@@ -11,19 +11,19 @@ export default function WorkItemHighlights({ workItem }) {
 
     const highlights = [
         {
-            label: 'Created',
+            label: 'Created Date',
             value: formatDate(workItem.created_date),
             subValue: `Last updated ${workItem.updated_date ? new Date(workItem.updated_date).toLocaleDateString() : 'Never'}`
         },
         {
-            label: 'Created By',
-            value: workItem.created_by?.name || workItem.created_by?.email || 'Unknown',
-            subValue: workItem.created_by?.email || ''
+            label: 'Owner',
+            value: workItem.owner?.name || 'Unknown',
+            subValue: workItem.owner?.email || ''
         },
         {
             label: 'Assigned Technician',
-            value: workItem.owner?.name || workItem.owner?.email || 'Unassigned',
-            subValue: workItem.owner?.email || ''
+            value: workItem.technician?.name || 'Unassigned',
+            subValue: workItem.technician?.email || ''
         },
         {
             label: 'Estimated Price',

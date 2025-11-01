@@ -17,6 +17,13 @@ work_item_statuses = [
     ('Resolved', 'Resolved')
 ]
 
+task_statuses = [
+    ('To do', 'To do'),
+    ('In progress', 'In progress'),
+    ('Done', 'Done'),
+    ('Reopened', 'Reopened')
+]
+
 work_item_types = [
     ('Chargeable Repair', 'Chargeable Repair'),
     ('Warranty Repair', 'Warranty Repair')
@@ -44,6 +51,45 @@ payment_methods = [
 ]
 
 
+class TaskType(models.Model):
+    """
+    Represents a type/category of task (e.g., Diagnosis, Repair, Testing, Customer Contact).
+    Can be tenant-specific or system-wide.
+    """
+    tenant = models.ForeignKey(Tenant, on_delete=models.CASCADE)
+    name = models.CharField(max_length=100)
+    estimated_duration = models.DurationField(null=True, blank=True, help_text="Estimated time to complete this type of task")
+    is_active = models.BooleanField(default=True)
+    created_date = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(fields=['tenant', 'name'], name='unique_task_type_per_tenant')
+        ]
+        ordering = ['name']
+
+    def __str__(self):
+        return self.name
+
+
+class TaskTypeValidationRule(models.Model):
+    """
+    Defines required fields for a specific task type.
+    These rules are checked when a task is marked as 'Done'.
+    """
+    task_type = models.ForeignKey(TaskType, on_delete=models.CASCADE, related_name='validation_rules')
+    field_name = models.CharField(max_length=100, help_text="Name of the field that should be validated (e.g., 'description')")
+    is_required = models.BooleanField(default=True, help_text="Whether this field must be filled before task completion")
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(fields=['task_type', 'field_name'], name='unique_validation_rule_per_field')
+        ]
+
+    def __str__(self):
+        return f"{self.task_type.name} - {self.field_name} ({'required' if self.is_required else 'optional'})"
+
+
 class WorkItem(models.Model):
     tenant = models.ForeignKey(Tenant, on_delete=models.CASCADE)
     reference_id = models.CharField(max_length=50, blank=True, null=True)
@@ -67,6 +113,7 @@ class WorkItem(models.Model):
     priority = models.CharField(choices=priority_choices, default='Standard')
     comments = models.TextField(blank=True, null=True)
     device_condition = models.TextField(blank=True, null=True)
+    accessories = models.TextField(blank=True, null=True)
     technician = models.ForeignKey(Employee, on_delete=models.PROTECT, null=True, blank=True, related_name="technician")
     prepaid_amount = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True,
                                          validators=[MinValueValidator(Decimal('0.01'))])
@@ -115,21 +162,44 @@ class WorkItem(models.Model):
 
 class Task(models.Model):
     tenant = models.ForeignKey(Tenant, on_delete=models.CASCADE)
-    summary = models.CharField(max_length=255, blank=False, null=False)
-    description = models.TextField()
+    summary = models.CharField(max_length=255, blank=True, null=False)
+    description = models.TextField(blank=True)
     work_item = models.ForeignKey(WorkItem, blank=True, null=True, on_delete=models.CASCADE, related_name="tasks")
-    status = models.CharField(choices=work_item_statuses, default='New')
+    status = models.CharField(choices=task_statuses, default='To do')
+    task_type = models.ForeignKey(TaskType, on_delete=models.PROTECT, null=True, blank=True, related_name='tasks')
     assigned_employee = models.ForeignKey(Employee, on_delete=models.CASCADE)
-    due_date = models.DateField(null=True)
+    due_date = models.DateField(null=True, blank=True)
     created_date = models.DateTimeField(auto_now_add=True)
+    completed_date = models.DateTimeField(null=True, blank=True)
+    actual_duration = models.DurationField(null=True, blank=True, help_text="Calculated duration from creation to completion")
 
     def __str__(self):
-        return self.summary
+        return self.summary or (f"Task #{self.pk}" if self.pk else "Task")
+
+    def save(self, *args, **kwargs):
+        """
+        Override save to calculate actual_duration when task is completed.
+        """
+        # If status is being changed to 'Done' and completed_date is not set
+        if self.status == 'Done' and not self.completed_date:
+            from django.utils import timezone
+            self.completed_date = timezone.now()
+            self.actual_duration = self.completed_date - self.created_date
+
+        # If status is being changed from 'Done' to something else, clear completion info
+        if self.pk:  # Only for existing tasks
+            try:
+                old_task = Task.objects.get(pk=self.pk)
+                if old_task.status == 'Done' and self.status != 'Done':
+                    self.completed_date = None
+                    self.actual_duration = None
+            except Task.DoesNotExist:
+                pass
+
+        super().save(*args, **kwargs)
 
     class Meta:
         permissions = [
             ("view_all_tasks", "Can view all tasks in tenant"),
             ("view_own_tasks", "Can view own assigned tasks"),
         ]
-
-

@@ -68,7 +68,7 @@ export default function TaskDetail() {
                         editable={true}
                         editMode={editMode}
                         formData={formData}
-                        onChange={handleChange}
+                        onFieldChange={handleChange}
                         onFieldSave={async (name, val) => {
                             const updated = await updateTaskField(task.id, { [name]: val });
                             setTask((prev) => ({ ...prev, ...updated }));

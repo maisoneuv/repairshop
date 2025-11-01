@@ -56,11 +56,15 @@ export async function createWorkItem(data) {
 
 export async function updateWorkItemField(id, patchData) {
   try {
-    const response = await apiClient.patch(`/tasks/work-items/${id}/`,{
+    const response = await apiClient.patch(
+      `/tasks/work-items/${id}/`,
       patchData,
-      headers: {'X-CSRFToken': getCSRFToken()
-      }
-    });
+      {
+        headers: {
+          "X-CSRFToken": getCSRFToken(),
+        },
+      },
+    );
     return response.data;
   } catch(error) {
     console.error("Error updating work item:", error);

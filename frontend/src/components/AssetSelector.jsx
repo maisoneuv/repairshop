@@ -51,7 +51,7 @@ export default function AssetSelector({ selectedCustomer, onAssetResolved }) {
             />
 
             <div>
-                <label className="block font-medium mb-1">Serial Number</label>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Serial Number</label>
                 <input
                     type="text"
                     value={serialNumber}
