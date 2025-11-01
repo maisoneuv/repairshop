@@ -27,6 +27,28 @@ class CustomerSerializer(serializers.ModelSerializer):
         address = Address.objects.create(**address_data) if address_data else None
         return Customer.objects.create(address=address, tenant=tenant, **validated_data)
 
+    def update(self, instance, validated_data):
+        address_data = validated_data.pop("address", serializers.empty)
+
+        for attr, value in validated_data.items():
+            setattr(instance, attr, value)
+
+        if address_data is not serializers.empty:
+            if address_data is None:
+                if instance.address_id:
+                    instance.address.delete()
+                instance.address = None
+            else:
+                if instance.address_id:
+                    for attr, value in address_data.items():
+                        setattr(instance.address, attr, value)
+                    instance.address.save()
+                else:
+                    instance.address = Address.objects.create(**address_data)
+
+        instance.save()
+        return instance
+
 
 class AssetSerializer(serializers.ModelSerializer):
     device = DeviceSerializer(read_only=True)

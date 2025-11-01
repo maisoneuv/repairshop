@@ -6,12 +6,19 @@ from core.models import User, Address
 
 
 class EmployeeSerializer(serializers.ModelSerializer):
-    name = serializers.CharField(source='user.name')
+    name = serializers.SerializerMethodField()
     email = serializers.EmailField(source='user.email')
 
     class Meta:
         model = Employee
         fields = ['id', 'name', 'email', 'role', 'tenant']
+
+    def get_name(self, obj):
+        user = obj.user
+        # Use first_name and last_name from AbstractUser
+        full_name = f"{user.first_name} {user.last_name}".strip()
+        # Fallback to the name field if first_name/last_name are empty
+        return full_name if full_name else user.name or user.email
 
 class UserMiniSerializer(serializers.ModelSerializer):
     class Meta:

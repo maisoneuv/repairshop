@@ -1,6 +1,7 @@
-import { useState } from 'react';
+import { useState } from "react";
+import CustomerForm from "./CustomerForm";
 
-export default function CustomerCard({ customer, onEdit }) {
+export default function CustomerCard({ customer, onEdit, onUpdated }) {
     const [isEditing, setIsEditing] = useState(false);
 
     if (!customer) {
@@ -16,6 +17,33 @@ export default function CustomerCard({ customer, onEdit }) {
         setIsEditing(true);
         if (onEdit) onEdit();
     };
+
+    if (isEditing) {
+        return (
+            <div className="bg-white rounded-xl shadow-lg border border-gray-200 p-6">
+                <div className="flex items-center justify-between mb-4">
+                    <h3 className="text-lg font-semibold text-gray-900">Customer</h3>
+                    <button
+                        type="button"
+                        onClick={() => setIsEditing(false)}
+                        className="text-sm px-3 py-1.5 border border-gray-300 rounded-lg text-gray-600 hover:bg-gray-50 transition-colors"
+                    >
+                        Cancel
+                    </button>
+                </div>
+
+                <CustomerForm
+                    initialData={customer}
+                    mode="edit"
+                    submitLabel="Save Changes"
+                    onSuccess={(updated) => {
+                        onUpdated?.(updated);
+                        setIsEditing(false);
+                    }}
+                />
+            </div>
+        );
+    }
 
     return (
         <div className="bg-white rounded-xl shadow-lg border border-gray-200 p-6">

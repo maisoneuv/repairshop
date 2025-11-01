@@ -9,6 +9,7 @@ router.register(r"shops", views.ShopViewSet, basename="shop")
 
 urlpatterns = [
     path('api/employee/search/', views.EmployeeSearchView.as_view(), name="employee-api-search"),
+    path('api/employee/list/', views.EmployeeListView.as_view(), name="employee-api-list"),
     path('api/employee/me/', views.CurrentEmployeeView.as_view(), name="employee-api-current"),
     path('api/locations/search/', views.LocationSearchView.as_view(), name="location-api-search"),
     path('api/locations/create-freeform/', views.create_freeform_location, name="location-api-create-freeform"),

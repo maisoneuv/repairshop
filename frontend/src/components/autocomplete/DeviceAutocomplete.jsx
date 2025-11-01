@@ -9,11 +9,11 @@ export default function DeviceAutocomplete({
                                                error,
                                                required,
                                                placeholder = 'Search device...',
-                                               ...props
+                                           ...props
                                            }) {
     return (
         <div>
-            <label className="block font-medium mb-1">
+            <label className="block text-sm font-medium text-gray-700 mb-2">
                 {label}
                 {required && <span className="text-red-500 ml-1">*</span>}
             </label>

@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import WorkItem, Task
+from .models import WorkItem, Task, TaskType, TaskTypeValidationRule
 from service.serializers import EmployeeSerializer, LocationSerializer, ShopSerializer
 from service.models import Employee, RepairShop, Location
 from inventory.models import Device
@@ -16,6 +16,18 @@ class WorkItemSerializer(serializers.ModelSerializer):
     fulfillment_shop_id = serializers.PrimaryKeyRelatedField(
         source="fulfillment_shop",
         queryset=RepairShop.objects.all(),
+        write_only=True, required=False, allow_null=True
+    )
+    owner = EmployeeSerializer(read_only=True)
+    owner_id = serializers.PrimaryKeyRelatedField(
+        source="owner",
+        queryset=Employee.objects.all(),
+        write_only=True, required=False, allow_null=True
+    )
+    technician = EmployeeSerializer(read_only=True)
+    technician_id = serializers.PrimaryKeyRelatedField(
+        source="technician",
+        queryset=Employee.objects.all(),
         write_only=True, required=False, allow_null=True
     )
     device_name = serializers.SerializerMethodField()
@@ -63,6 +75,13 @@ class WorkItemSerializer(serializers.ModelSerializer):
         req = self.context["request"]
         tenant = getattr(req, "tenant", None)
         if not tenant: raise serializers.ValidationError({"detail": "Tenant not resolved"})
+
+        # Set owner to current user's employee if not provided
+        if "owner" not in validated_data or validated_data["owner"] is None:
+            if hasattr(req.user, "employee") and req.user.employee:
+                validated_data["owner"] = req.user.employee
+            else:
+                raise serializers.ValidationError({"owner_id": "Owner is required and current user has no associated employee"})
 
         def resolve_location(payload, allow_null=False):
             if payload is None:
@@ -124,8 +143,21 @@ class WorkItemSerializer(serializers.ModelSerializer):
 
         return super().create(validated_data)
 
+
+class TaskTypeSerializer(serializers.ModelSerializer):
+    """Serializer for TaskType model"""
+
+    class Meta:
+        model = TaskType
+        fields = ['id', 'name', 'estimated_duration', 'is_active', 'created_date']
+        extra_kwargs = {
+            "tenant": {"read_only": True},
+        }
+
+
 class TaskSerializer(serializers.ModelSerializer):
     assigned_employee = EmployeeSerializer(read_only=True)
+    task_type = TaskTypeSerializer(read_only=True)
 
     assigned_employee_id = serializers.PrimaryKeyRelatedField(
         queryset=Employee.objects.all(),
@@ -133,11 +165,25 @@ class TaskSerializer(serializers.ModelSerializer):
         write_only=True,
     )
 
+    task_type_id = serializers.PrimaryKeyRelatedField(
+        queryset=TaskType.objects.all(),
+        source="task_type",
+        write_only=True,
+        required=False,
+        allow_null=True
+    )
+
+    # Allow creating a new task type by name
+    task_type_name = serializers.CharField(write_only=True, required=False, allow_null=True)
+
     class Meta:
         model = Task
         fields = "__all__"
         extra_kwargs = {
             "tenant": {"read_only": True},
+            "actual_duration": {"read_only": True},
+            "completed_date": {"read_only": True},
+            "summary": {"required": False, "allow_blank": True},
         }
 
     def __init__(self, *args, **kwargs):
@@ -147,3 +193,70 @@ class TaskSerializer(serializers.ModelSerializer):
             source="assigned_employee",
             write_only=True,
         )
+
+    def validate(self, attrs):
+        """
+        Validate task data, including task type validation rules when completing a task.
+        """
+        status = attrs.get('status', getattr(self.instance, 'status', None) if self.instance else None)
+        task_type = attrs.get('task_type', getattr(self.instance, 'task_type', None) if self.instance else None)
+
+        # If status is being changed to 'Done', validate required fields based on task type
+        if status == 'Done' and task_type:
+            validation_rules = TaskTypeValidationRule.objects.filter(
+                task_type=task_type,
+                is_required=True
+            )
+
+            errors = {}
+            for rule in validation_rules:
+                field_name = rule.field_name
+                # Check if field is in attrs (being updated) or in the instance (existing value)
+                field_value = attrs.get(field_name)
+                if field_value is None and self.instance:
+                    field_value = getattr(self.instance, field_name, None)
+
+                # Check if the field is empty
+                if not field_value or (isinstance(field_value, str) and not field_value.strip()):
+                    errors[field_name] = f"This field is required for task type '{task_type.name}' before completion."
+
+            if errors:
+                raise serializers.ValidationError(errors)
+
+        return attrs
+
+    def create(self, validated_data):
+        """
+        Handle creation of task, including creating new task type if task_type_name is provided.
+        """
+        task_type_name = validated_data.pop('task_type_name', None)
+        tenant = self.context.get('tenant') or getattr(self.context.get('request'), 'tenant', None)
+
+        # If task_type_name is provided, create or get the task type
+        if task_type_name and tenant:
+            task_type, created = TaskType.objects.get_or_create(
+                tenant=tenant,
+                name=task_type_name,
+                defaults={'is_active': True}
+            )
+            validated_data['task_type'] = task_type
+
+        return super().create(validated_data)
+
+    def update(self, instance, validated_data):
+        """
+        Handle updating task, including creating new task type if task_type_name is provided.
+        """
+        task_type_name = validated_data.pop('task_type_name', None)
+        tenant = self.context.get('tenant') or getattr(self.context.get('request'), 'tenant', None)
+
+        # If task_type_name is provided, create or get the task type
+        if task_type_name and tenant:
+            task_type, created = TaskType.objects.get_or_create(
+                tenant=tenant,
+                name=task_type_name,
+                defaults={'is_active': True}
+            )
+            validated_data['task_type'] = task_type
+
+        return super().update(instance, validated_data)

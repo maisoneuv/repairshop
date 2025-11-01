@@ -133,7 +133,7 @@ export default function LocationPicker({
     const hasResults = results.groups && results.groups.some(group => group.items && group.items.length > 0);
 
     return (
-        <div className="relative z-10 mb-6">
+        <div className="relative mb-6">
             <label className="block text-sm font-medium text-gray-700 mb-2">
                 {label}
                 {required && <span className="text-red-500 ml-1">*</span>}

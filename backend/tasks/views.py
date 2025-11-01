@@ -3,12 +3,12 @@ from django.shortcuts import render, redirect, reverse, get_object_or_404
 
 from customers.serializers import CustomerSerializer
 from service.serializers import EmployeeSerializer
-from .models import WorkItem, Task
+from .models import WorkItem, Task, TaskType
 from .forms import WorkItemForm, TaskForm
 from django.views.generic import TemplateView, ListView, DetailView, CreateView, UpdateView
 from django.db.models import Q
 from rest_framework import viewsets, filters
-from .serializers import WorkItemSerializer, TaskSerializer
+from .serializers import WorkItemSerializer, TaskSerializer, TaskTypeSerializer
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated  # or AllowAny for dev
@@ -354,9 +354,9 @@ class TaskSchemaView(APIView):
 
 class TaskViewSet(viewsets.ModelViewSet):
     serializer_class = TaskSerializer
-    filter_backends = [filters.OrderingFilter]
+    filter_backends = [DjangoFilterBackend, filters.OrderingFilter]
     filterset_fields = ['work_item', 'assigned_employee', 'status']
-    ordering_fields = ['created_date', 'summary', 'status', 'assigned_employee']
+    ordering_fields = ['created_date', 'summary', 'status', 'assigned_employee', 'task_type__name']
     ordering = ["-created_date"]
 
     def get_queryset(self):
@@ -462,3 +462,55 @@ class TaskViewSet(viewsets.ModelViewSet):
             data["assignedEmployee"] = EmployeeSerializer(instance.assigned_employee).data
 
         return Response(data)
+
+
+class TaskTypeViewSet(viewsets.ModelViewSet):
+    """
+    ViewSet for managing task types.
+    Allows listing, creating, updating, and deleting task types.
+    """
+    serializer_class = TaskTypeSerializer
+    filter_backends = [filters.SearchFilter, filters.OrderingFilter]
+    search_fields = ['name']
+    ordering_fields = ['name', 'created_date']
+    ordering = ['name']
+
+    def get_queryset(self):
+        """Filter task types by tenant and active status"""
+        user = self.request.user
+
+        if user.is_superuser:
+            return TaskType.objects.all()
+
+        if not self.request.tenant:
+            return TaskType.objects.none()
+
+        # Return only active task types for the current tenant
+        return TaskType.objects.filter(tenant=self.request.tenant, is_active=True)
+
+    def perform_create(self, serializer):
+        """Set tenant when creating a new task type"""
+        tenant = getattr(self.request, "tenant", None)
+
+        if tenant is None:
+            from rest_framework.exceptions import ValidationError
+            raise ValidationError({"detail": "X-Tenant header required"})
+
+        serializer.save(tenant=tenant)
+
+    def perform_update(self, serializer):
+        """Allow updating task types"""
+        user = self.request.user
+
+        if user.is_superuser:
+            serializer.save()
+            return
+
+        # Check if user has permission to change task types
+        # For now, allow any authenticated user to update task types
+        serializer.save()
+
+    def perform_destroy(self, instance):
+        """Soft delete by marking as inactive instead of hard delete"""
+        instance.is_active = False
+        instance.save()

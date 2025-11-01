@@ -11,6 +11,7 @@ const workItemLayout = [
         label: "Device Information",
         fields: [
             { name: "customer_asset", width: "full" },
+            { name: "accessories", width: "full" },
         ],
     },
     {
@@ -25,6 +26,7 @@ const workItemLayout = [
         label: "Logistics",
         fields: [
             { name: "technician", width: "1/2", label: "Assigned Technician" },
+            { name: "owner", width: "1/2", label: "Owner" },
             { name: "intake_method", width: "1/3" },
             { name: "dropoff_point", width: "1/3" },
             { name: "pickup_point", width: "1/3" },

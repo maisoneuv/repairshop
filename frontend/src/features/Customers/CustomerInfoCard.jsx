@@ -38,9 +38,23 @@ export default function CustomerInfoCard({ customer, onUpdated }) {
             <div className="p-6 space-y-4 text-sm text-gray-700">
                 <div>
                     <p className="font-semibold text-gray-900 text-sm mb-1">{fullName || "Unnamed"}</p>
-                    <p className="text-gray-500">{customer.email}</p>
+                    <p>
+                        <a
+                            href={`mailto:${customer.email}`}
+                            className="text-indigo-600 hover:text-indigo-800 transition-colors"
+                        >
+                            {customer.email}
+                        </a>
+                    </p>
                     {customer.phone_number && (
-                        <p className="text-gray-500">{customer.phone_number}</p>
+                        <p>
+                            <a
+                                href={`tel:${customer.phone_number}`}
+                                className="text-indigo-600 hover:text-indigo-800 transition-colors"
+                            >
+                                {customer.phone_number}
+                            </a>
+                        </p>
                     )}
                 </div>
 

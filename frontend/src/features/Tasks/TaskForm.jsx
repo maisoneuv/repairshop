@@ -20,10 +20,28 @@ export default function TaskForm({ initialContext = {}, onSuccess, hideTitle = f
     const handleSubmit = async (formData) => {
         try {
             const payload = { ...formData };
+            if (!payload.summary) {
+                delete payload.summary;
+            }
             if (Object.prototype.hasOwnProperty.call(payload, "assigned_employee")) {
                 payload.assigned_employee_id = payload.assigned_employee;
                 delete payload.assigned_employee;
             }
+
+            // Handle task type - could be an ID or a custom create object
+            if (Object.prototype.hasOwnProperty.call(payload, "task_type")) {
+                const taskTypeValue = payload.task_type;
+                if (taskTypeValue && typeof taskTypeValue === 'object' && taskTypeValue._customCreate) {
+                    // User typed a new task type name
+                    payload.task_type_name = taskTypeValue.name;
+                    delete payload.task_type;
+                } else if (typeof taskTypeValue === 'number') {
+                    // User selected an existing task type
+                    payload.task_type_id = taskTypeValue;
+                    delete payload.task_type;
+                }
+            }
+
             if (process.env.NODE_ENV !== "production") {
                 // eslint-disable-next-line no-console
                 console.debug("[TaskForm] submitting", payload);

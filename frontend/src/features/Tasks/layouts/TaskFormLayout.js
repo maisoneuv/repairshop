@@ -2,10 +2,10 @@ const taskLayout = [
     {
         section: "General Info",
         fields: [
-            { name: "summary", label: "Summary", width: "full" },
+            { name: "task_type", label: "Task Type", width: "1/2", type: "foreignkey" },
             { name: "description", label: "Description", width: "full" },
             { name: "status", label: "Status", width: "1/2" },
-            { name: "assigned_employee", label: "Assigned To", width: "1/2", type: "foreignkey" },
+            { name: "assigned_employee", label: "Assigned To", width: "full", type: "foreignkey" },
         ],
     },
     {

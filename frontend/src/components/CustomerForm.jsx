@@ -19,6 +19,8 @@ const emptyForm = {
     },
 };
 
+const CONTACT_ERROR_MESSAGE = "Please provide at least one contact method";
+
 export default function CustomerForm({ onSuccess, initialData = null, mode = "create", submitLabel = "Create Customer" }) {
     const initialState = useMemo(() => {
         if (!initialData) return JSON.parse(JSON.stringify(emptyForm));
@@ -44,12 +46,15 @@ export default function CustomerForm({ onSuccess, initialData = null, mode = "cr
     const [formData, setFormData] = useState(initialState);
 
     const [error, setError] = useState("");
+    const [fieldErrors, setFieldErrors] = useState({});
     const [referralChoices, setReferralChoices] = useState([]);
     const [showAddress, setShowAddress] = useState(Boolean(initialData?.address));
 
     useEffect(() => {
         setFormData(initialState);
         setShowAddress(Boolean(initialData?.address));
+        setFieldErrors({});
+        setError("");
     }, [initialState, initialData]);
 
     useEffect(() => {
@@ -76,9 +81,38 @@ export default function CustomerForm({ onSuccess, initialData = null, mode = "cr
 
     const handleSubmit = async (e) => {
         e.preventDefault();
+        setError("");
+        setFieldErrors({});
+
         const isEmpty = (v) => v == null || String(v).trim() === "";
+        const trimmedFirst = formData.first_name.trim();
+        const trimmedLast = formData.last_name.trim();
+        const trimmedEmail = formData.email.trim();
+        const trimmedPhone = formData.phone_number.trim();
+
+        const nextErrors = {};
+
+        if (!trimmedFirst) {
+            nextErrors.first_name = "First name is required.";
+        }
+
+        if (!trimmedEmail && !trimmedPhone) {
+            nextErrors.email = true;
+            nextErrors.phone_number = true;
+            nextErrors.contact = CONTACT_ERROR_MESSAGE;
+        }
+
+        if (Object.keys(nextErrors).length > 0) {
+            setFieldErrors(nextErrors);
+            return;
+        }
+
         const payload = {
             ...formData,
+            first_name: trimmedFirst,
+            last_name: trimmedLast,
+            email: trimmedEmail,
+            phone_number: trimmedPhone,
             address: formData.address ? { ...formData.address } : null,
         };
 
@@ -106,21 +140,38 @@ export default function CustomerForm({ onSuccess, initialData = null, mode = "cr
         }
     };
 
+    const renderLabel = (text, { required = false, helper = null } = {}) => (
+        <div className="flex items-center justify-between mb-1">
+            <span className="block text-sm font-medium text-gray-700">
+                {text}
+                {required && <span className="text-red-500 ml-1">*</span>}
+            </span>
+            {helper}
+        </div>
+    );
+
+    const inputClass = (field) =>
+        `w-full border rounded px-3 py-2 ${fieldErrors[field] ? "border-red-500 focus:ring-red-500" : ""}`;
+
     return (
         <form onSubmit={handleSubmit} className="space-y-4">
             <div className="flex gap-4">
                 <div className="w-1/2">
+                    {renderLabel("First Name", { required: true })}
                     <input
                         type="text"
                         name="first_name"
                         value={formData.first_name}
                         onChange={handleChange}
                         placeholder="First name"
-                        className="w-full border rounded px-3 py-2"
-                        required
+                        className={inputClass("first_name")}
                     />
+                    {fieldErrors.first_name && (
+                        <p className="text-sm text-red-600 mt-1">{fieldErrors.first_name}</p>
+                    )}
                 </div>
                 <div className="w-1/2">
+                    {renderLabel("Last Name")}
                     <input
                         type="text"
                         name="last_name"
@@ -128,29 +179,39 @@ export default function CustomerForm({ onSuccess, initialData = null, mode = "cr
                         onChange={handleChange}
                         placeholder="Last name"
                         className="w-full border rounded px-3 py-2"
-                        required
                     />
                 </div>
 
             </div>
 
-            <input
-                type="email"
-                name="email"
-                value={formData.email}
-                onChange={handleChange}
-                placeholder="Email"
-                className="w-full border rounded px-3 py-2"
-                required
-            />
-            <input
-                type="text"
-                name="phone_number"
-                value={formData.phone_number}
-                onChange={handleChange}
-                placeholder="Phone number"
-                className="w-full border rounded px-3 py-2"
-            />
+            <div>
+                {renderLabel("Email", {required: true})}
+                <input
+                    type="email"
+                    name="email"
+                    value={formData.email}
+                    onChange={handleChange}
+                    placeholder="Email"
+                    className={inputClass("email")}
+                />
+            </div>
+
+            <div>
+                {renderLabel("Phone Number", { required: true })}
+                <input
+                    type="text"
+                    name="phone_number"
+                    value={formData.phone_number}
+                    onChange={handleChange}
+                    placeholder="Phone number"
+                    className={inputClass("phone_number")}
+                />
+            </div>
+
+            {fieldErrors.contact && (
+                <p className="text-sm text-red-600">{fieldErrors.contact}</p>
+            )}
+
             <input
                 type="text"
                 name="tax_code"

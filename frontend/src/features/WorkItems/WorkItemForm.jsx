@@ -11,6 +11,7 @@ import { cleanFormData } from "../../utils/cleanFormData";
 import DeviceForm from "../../pages/DeviceForm";
 import CustomerAutocomplete from "../../components/autocomplete/CustomerAutocomplete";
 import DeviceAutocomplete from "../../components/autocomplete/DeviceAutocomplete";
+import EmployeeAutocomplete from "../../components/autocomplete/EmployeeAutocomplete";
 import CustomerAssetList from "../Customers/CustomerAssetList";
 import CustomerInfoCard from "../Customers/CustomerInfoCard";
 import LocationPicker from "../../components/LocationPicker";
@@ -33,6 +34,8 @@ export default function WorkItemForm({ onCreated }) {
     const [serialNumber, setSerialNumber] = useState("");
     const [showDeviceModal, setShowDeviceModal] = useState(false);
     const [selectedAsset, setSelectedAsset] = useState(null);
+    const [selectedTechnician, setSelectedTechnician] = useState(null);
+    const [selectedOwner, setSelectedOwner] = useState(null);
 
     const { employee, loading, currentTenant, user } = useUser();
 
@@ -53,16 +56,32 @@ export default function WorkItemForm({ onCreated }) {
             console.log(user);
             setFormData((prev) => ({
                 ...prev,
-                owner: employee.id,
+                owner: employee.id,        // For validation (schema expects this)
+                owner_id: employee.id,     // For API submission (serializer expects this)
                 dropoff_point: employee.location_id,
             }));
+
+            // Set the selected owner for display
+            // The employee object from UserContext has { id, location_id, location_name, role }
+            // and user has { id, email, name, first_name, last_name, ... } (UserSerializer fields)
+            // Match the logic from EmployeeSerializer.get_name()
+            const fullName = user?.first_name && user?.last_name
+                ? `${user.first_name} ${user.last_name}`.trim()
+                : '';
+            const displayName = fullName || user?.name || user?.email || 'Current User';
+
+            setSelectedOwner({
+                id: employee.id,
+                name: displayName,
+                email: user?.email || '',
+            });
 
             setSelectedDropoffPoint({
                 id: employee.location_id,
                 name: employee.location_name,
             });
         }
-    }, [employee, loading]);
+    }, [employee, loading, user]);
 
     const handleCreateLocation = async (addressData) => {
         try {
@@ -86,8 +105,36 @@ export default function WorkItemForm({ onCreated }) {
     const handleSubmit = async (e) => {
         e.preventDefault();
         console.log(formData);
-        formData.tenant = currentTenant.id;
-        const newErrors = validateRequiredFields(schema, formData);
+
+        const tenantId = currentTenant?.id || null;
+
+        const workingFormData = {
+            ...formData,
+            tenant: tenantId,
+        };
+
+        const resolvedOwnerId =
+            workingFormData.owner ??
+            workingFormData.owner_id ??
+            selectedOwner?.id ??
+            employee?.id ??
+            null;
+
+        if (!workingFormData.owner && resolvedOwnerId) {
+            workingFormData.owner = resolvedOwnerId;
+        }
+
+        const resolvedTechnicianId =
+            workingFormData.technician ??
+            workingFormData.technician_id ??
+            selectedTechnician?.id ??
+            null;
+
+        if (!workingFormData.technician && resolvedTechnicianId) {
+            workingFormData.technician = resolvedTechnicianId;
+        }
+
+        const newErrors = validateRequiredFields(schema, workingFormData);
         console.log("newErrors", newErrors);
         if (Object.keys(newErrors).length > 0) {
             setFieldErrors(newErrors);
@@ -103,8 +150,6 @@ export default function WorkItemForm({ onCreated }) {
         }
 
         try {
-            const workingFormData = { ...formData };
-
             const ensureLocationForField = async (selectedItem, fieldName) => {
                 if (!selectedItem) {
                     workingFormData[fieldName] = null;
@@ -182,8 +227,18 @@ export default function WorkItemForm({ onCreated }) {
                 ...cleanedForm,
                 device: deviceId,
                 serial_number: serialNumber || null,
-                tenant: currentTenant?.id || null,
+                tenant: tenantId,
             };
+
+            if (!fullData.owner_id && resolvedOwnerId) {
+                fullData.owner_id = resolvedOwnerId;
+            }
+            delete fullData.owner;
+
+            if (!fullData.technician_id && resolvedTechnicianId !== undefined) {
+                fullData.technician_id = resolvedTechnicianId;
+            }
+            delete fullData.technician;
 
             console.log(fullData);
             const newItem = await createWorkItem(fullData);
@@ -370,6 +425,46 @@ export default function WorkItemForm({ onCreated }) {
                                                             onCreateLocation={handleCreateLocation}
                                                             required={schema.pickup_point?.required}
                                                             error={fieldErrors?.pickup_point}
+                                                        />
+                                                    </div>
+                                                );
+                                            }
+
+                                            if (name === "technician") {
+                                                return (
+                                                    <div key={name} className={widthClass} ref={(el) => (fieldRefs.current[name] = el)}>
+                                                        <EmployeeAutocomplete
+                                                            value={selectedTechnician}
+                                                            onSelect={(employee) => {
+                                                                setSelectedTechnician(employee);
+                                                                // Set both fields: technician for validation, technician_id for API
+                                                                handleFieldChange("technician", employee?.id || null);
+                                                                handleFieldChange("technician_id", employee?.id || null);
+                                                            }}
+                                                            label={label || "Assigned Technician"}
+                                                            placeholder="Select technician..."
+                                                            required={schema.technician?.required}
+                                                            error={fieldErrors?.technician}
+                                                        />
+                                                    </div>
+                                                );
+                                            }
+
+                                            if (name === "owner") {
+                                                return (
+                                                    <div key={name} className={widthClass} ref={(el) => (fieldRefs.current[name] = el)}>
+                                                        <EmployeeAutocomplete
+                                                            value={selectedOwner}
+                                                            onSelect={(employee) => {
+                                                                setSelectedOwner(employee);
+                                                                // Set both fields: owner for validation, owner_id for API
+                                                                handleFieldChange("owner", employee.id);
+                                                                handleFieldChange("owner_id", employee.id);
+                                                            }}
+                                                            label={label || "Owner"}
+                                                            placeholder="Select owner..."
+                                                            required={schema.owner?.required}
+                                                            error={fieldErrors?.owner}
                                                         />
                                                     </div>
                                                 );

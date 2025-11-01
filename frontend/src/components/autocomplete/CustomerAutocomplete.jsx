@@ -13,7 +13,7 @@ export default function CustomerAutocomplete({
                                              }) {
     return (
         <div>
-            <label className="block font-medium mb-1 capitalize">
+            <label className="block text-sm font-medium text-gray-700 mb-2">
                 Customer
                 {required && <span className="text-red-500 ml-1">*</span>}
             </label>

@@ -1,3 +1,4 @@
+from django.core.exceptions import ValidationError
 from django.db import models
 from django.core.validators import RegexValidator
 from inventory.models import Device
@@ -18,8 +19,8 @@ referral_sources = [
 class Customer(models.Model):
     tenant = models.ForeignKey(Tenant, on_delete=models.CASCADE)
     first_name = models.CharField(max_length=255)
-    last_name = models.CharField(max_length=255, blank=False, null=False)
-    email = models.EmailField(unique=True, blank=False, null=False)
+    last_name = models.CharField(max_length=255, blank=True, null=True)
+    email = models.EmailField(blank=True, null=True)
     address = models.OneToOneField(Address, on_delete=models.CASCADE, blank=True, null=True)
     referral_source = models.CharField(choices=referral_sources, blank=True, null=True)
 
@@ -37,10 +38,16 @@ class Customer(models.Model):
     tax_code = models.CharField(max_length=10, null=True, blank=True, validators=[tax_code_regex])
 
     def full_name(self):
-        return f"{self.first_name} {self.last_name}"
+        parts = [self.first_name, self.last_name]
+        return " ".join(filter(None, parts)).strip()
 
     def __str__(self):
-        return self.full_name()
+        return self.full_name() or self.email or self.phone_number or f"Customer {self.pk}"
+
+    def clean(self):
+        super().clean()
+        if not self.email and not self.phone_number:
+            raise ValidationError("Please provide at least an email address or phone number.")
 
     class Meta:
         permissions = [
@@ -48,7 +55,23 @@ class Customer(models.Model):
         ]
 
         constraints = [
-            models.UniqueConstraint(fields=['tenant', 'email'], name='unique_customer_email_per_tenant')
+            models.UniqueConstraint(
+                fields=['tenant', 'email'],
+                condition=models.Q(email__isnull=False) & ~models.Q(email=""),
+                name='unique_customer_email_per_tenant'
+            ),
+            models.UniqueConstraint(
+                fields=['tenant', 'phone_number'],
+                condition=models.Q(phone_number__isnull=False) & ~models.Q(phone_number=""),
+                name='unique_customer_phone_per_tenant'
+            ),
+            models.CheckConstraint(
+                check=(
+                    (models.Q(email__isnull=False) & ~models.Q(email=""))
+                    | (models.Q(phone_number__isnull=False) & ~models.Q(phone_number=""))
+                ),
+                name='customer_requires_contact_method',
+            ),
         ]
 
 
