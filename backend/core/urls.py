@@ -21,4 +21,5 @@ urlpatterns += [
     path('me/permissions/', MyPermissionsView.as_view(), name='my-permissions'),
     path("login/", login_view, name="login"),
     path("logout/", logout_view, name="logout"),
+    path("search/", GlobalSearchView.as_view(), name="global-search"),
 ]
