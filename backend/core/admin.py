@@ -1,24 +1,19 @@
 from django.contrib import admin
-from django.contrib.auth.admin import UserAdmin as BaseUserAdmin
-from django.utils.translation import gettext_lazy as _
-from core import models
-from core.models import User, RolePermission, Role, UserRole
-from customers.models import Customer, Asset
-from tasks.models import WorkItem, Task
-from inventory.models import (Device, Category, InventoryItem, InventoryList, AttributeDefinition,
-                              PartAttributeValue,InventoryBalance, PurchaseOrderItem, PurchaseOrder, Supplier)
-from service.models import Employee, Location, RepairShop
-from tenants.models import Tenant
 from django.contrib.auth.admin import UserAdmin as DefaultUserAdmin
 from django.contrib.auth.models import Permission
+from django.utils.translation import gettext_lazy as _
+
+from core.admin_mixins import TenantAwareImportExportAdmin, TenantAwareImportExportMixin
+from core.models import Address, Note, Role, RolePermission, User, UserRole
 
 class UserRoleInline(admin.TabularInline):
     model = UserRole
     extra = 1
     autocomplete_fields = ['role']
 
+
 @admin.register(User)
-class UserAdmin(DefaultUserAdmin):
+class UserAdmin(TenantAwareImportExportMixin, DefaultUserAdmin):
     inlines = [UserRoleInline]
     readonly_fields = DefaultUserAdmin.readonly_fields + ('display_roles_and_permissions',)
     list_display = DefaultUserAdmin.list_display + ('tenant',)
@@ -53,25 +48,29 @@ class UserAdmin(DefaultUserAdmin):
 
     display_roles_and_permissions.short_description = "Roles and Permissions per Tenant"
 
-@admin.register(Device)
-class DeviceAdmin(admin.ModelAdmin):
-    list_display = ("manufacturer", "model",)
-    # filter_horizontal = ("categories",)
-
 class RolePermissionInline(admin.TabularInline):
     model = RolePermission
     extra = 1
     autocomplete_fields = ['permission']
 
+
 @admin.register(Role)
-class RoleAdmin(admin.ModelAdmin):
+class RoleAdmin(TenantAwareImportExportAdmin):
     list_display = ('name', 'tenant')
     list_filter = ('tenant',)
     search_fields = ('name',)
     inlines = [RolePermissionInline]
 
+
+@admin.register(RolePermission)
+class RolePermissionAdmin(TenantAwareImportExportAdmin):
+    list_display = ('role', 'permission')
+    search_fields = ('role__name', 'permission__codename')
+    autocomplete_fields = ['role', 'permission']
+
+
 @admin.register(UserRole)
-class UserRoleAdmin(admin.ModelAdmin):
+class UserRoleAdmin(TenantAwareImportExportAdmin):
     list_display = ('user', 'role', 'tenant')
     search_fields = ('user__email', 'role__name', 'role__tenant__name')
     autocomplete_fields = ['user', 'role']
@@ -79,24 +78,19 @@ class UserRoleAdmin(admin.ModelAdmin):
     def tenant(self, obj):
         return obj.role.tenant
 
+
 @admin.register(Permission)
-class CustomPermissionAdmin(admin.ModelAdmin):
+class CustomPermissionAdmin(TenantAwareImportExportAdmin):
     search_fields = ['codename', 'name']
 
-admin.site.register(models.Address)
-admin.site.register(Customer)
-admin.site.register(Asset)
-# WorkItem and Task are registered in tasks/admin.py with custom admin classes
-admin.site.register(Employee)
-admin.site.register(Location)
-admin.site.register(Category)
-admin.site.register(InventoryItem)
-admin.site.register(InventoryList)
-admin.site.register(AttributeDefinition)
-admin.site.register(PartAttributeValue)
-admin.site.register(InventoryBalance)
-admin.site.register(PurchaseOrder)
-admin.site.register(PurchaseOrderItem)
-admin.site.register(Supplier)
-admin.site.register(Tenant)
-admin.site.register(RepairShop)
+
+@admin.register(Address)
+class AddressAdmin(TenantAwareImportExportAdmin):
+    list_display = ('street', 'building_number', 'city', 'postal_code', 'country')
+    search_fields = ('street', 'city', 'postal_code', 'country')
+
+
+@admin.register(Note)
+class NoteAdmin(TenantAwareImportExportAdmin):
+    list_display = ('content', 'author', 'created_at')
+    search_fields = ('content', 'author__email')
