@@ -8,6 +8,7 @@ import TaskDetail from "./features/Tasks/TaskDetail";
 import TaskList from "./features/Tasks/TaskList";
 import TaskForm from "./features/Tasks/TaskForm";
 import LoginPage from "./pages/LoginPage";
+import SearchResults from "./pages/SearchResults";
 import { useUser } from "./context/UserContext";
 
 function App() {
@@ -34,6 +35,7 @@ function App() {
                 <Route path="/tasks/new" element={<TaskForm />} />
                 <Route path="/tasks/:id" element={<TaskDetail />} />
                 <Route path="/tasks" element={<TaskList />} />
+                <Route path="/search" element={<SearchResults />} />
 
             </Route>
             <Route path="/login" element={<Navigate to="/" replace />} />
