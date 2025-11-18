@@ -58,7 +58,8 @@ INSTALLED_APPS = [
     'tasks',
     'inventory',
     'tenants',
-    'django_extensions'
+    'django_extensions',
+    'import_export',
 ]
 
 MIDDLEWARE = [
