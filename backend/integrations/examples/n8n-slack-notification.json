@@ -1,0 +1,101 @@
+{
+  "name": "Django WorkItem → Slack Notification",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "workitem-updates",
+        "authentication": "headerAuth",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "name": "Webhook Trigger",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1.1,
+      "position": [240, 300],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "1",
+          "name": "Django Integration Auth"
+        }
+      },
+      "webhookId": "example-webhook-id"
+    },
+    {
+      "parameters": {
+        "functionCode": "// Extract data from Django webhook\nconst eventType = $json.event_type;\nconst workitem = $json.workitem;\nconst tenant = $json.tenant;\nconst customer = workitem.customer || {};\nconst technician = workitem.technician || {};\n\n// Determine emoji based on event type\nlet emoji = '📋';\nif (eventType === 'workitem_created') emoji = '🆕';\nif (eventType === 'workitem_status_changed') emoji = '📝';\nif (eventType === 'workitem_updated') emoji = '✏️';\n\n// Determine status emoji\nlet statusEmoji = '🔵';\nif (workitem.status === 'In Progress') statusEmoji = '⚙️';\nif (workitem.status === 'Resolved') statusEmoji = '✅';\n\n// Priority indicator\nlet priority = workitem.priority === 'Express' ? '🔴 URGENT' : '🔵 Standard';\n\n// Build message\nlet message = `${emoji} ${priority} - ${workitem.reference_id}\\n\\n`;\nmessage += `*Customer:* ${customer.name || 'N/A'}\\n`;\nmessage += `*Status:* ${statusEmoji} ${workitem.status}\\n`;\nmessage += `*Technician:* ${technician.name || 'Unassigned'}\\n`;\nmessage += `*Description:* ${workitem.description}\\n`;\n\n// Add status change info if available\nif ($json.changes && $json.changes.status) {\n  message += `\\n_Status changed: ${$json.changes.status.old} → ${$json.changes.status.new}_`;\n}\n\nreturn {\n  json: {\n    message: message,\n    workitem_id: workitem.reference_id,\n    tenant: tenant.name,\n    customer_email: customer.email\n  }\n};"
+      },
+      "name": "Format Message",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [460, 300]
+    },
+    {
+      "parameters": {
+        "channel": "#work-items",
+        "text": "={{ $json.message }}",
+        "otherOptions": {}
+      },
+      "name": "Send to Slack",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.1,
+      "position": [680, 300],
+      "credentials": {
+        "slackApi": {
+          "id": "2",
+          "name": "Slack API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={ \"status\": \"success\", \"workitem_id\": \"{{ $json.workitem_id }}\", \"tenant\": \"{{ $json.tenant }}\" }"
+      },
+      "name": "Respond to Webhook",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [900, 300]
+    }
+  ],
+  "connections": {
+    "Webhook Trigger": {
+      "main": [
+        [
+          {
+            "node": "Format Message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Message": {
+      "main": [
+        [
+          {
+            "node": "Send to Slack",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send to Slack": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "tags": []
+}

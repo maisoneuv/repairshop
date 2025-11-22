@@ -1,0 +1,126 @@
+{
+  "name": "FixedService - WorkItem Notifications",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "workitem-webhook",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [250, 300],
+      "webhookId": "your-webhook-id-here"
+    },
+    {
+      "parameters": {
+        "functionCode": "// Extract data from the webhook payload\nconst eventType = $json.event_type;\nconst workitem = $json.workitem;\nconst tenant = $json.tenant;\n\n// Format the message based on event type\nlet message = '';\nlet color = '#36a64f'; // Default green\n\nif (eventType === 'workitem_created') {\n  message = `🆕 New WorkItem Created: ${workitem.reference_id}`;\n  color = '#36a64f';\n} else if (eventType === 'workitem_status_changed') {\n  const changes = $json.changes;\n  message = `📝 WorkItem Status Updated: ${workitem.reference_id}`;\n  message += `\\nStatus: ${changes.status.old} → ${changes.status.new}`;\n  color = '#ffa500';\n}\n\n// Build a formatted notification\nreturn {\n  text: message,\n  tenant: tenant.name,\n  workitem_id: workitem.reference_id,\n  description: workitem.description,\n  customer: workitem.customer ? workitem.customer.name : 'N/A',\n  status: workitem.status,\n  priority: workitem.priority,\n  owner: workitem.owner ? workitem.owner.name : 'N/A',\n  technician: workitem.technician ? workitem.technician.name : 'Unassigned',\n  created_date: workitem.created_date,\n  color: color\n};"
+      },
+      "name": "Format Message",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [450, 300]
+    },
+    {
+      "parameters": {
+        "channel": "#work-items",
+        "text": "={{$json.text}}",
+        "attachments": [
+          {
+            "color": "={{$json.color}}",
+            "fields": {
+              "item": [
+                {
+                  "short": true,
+                  "title": "WorkItem",
+                  "value": "={{$json.workitem_id}}"
+                },
+                {
+                  "short": true,
+                  "title": "Status",
+                  "value": "={{$json.status}}"
+                },
+                {
+                  "short": true,
+                  "title": "Customer",
+                  "value": "={{$json.customer}}"
+                },
+                {
+                  "short": true,
+                  "title": "Technician",
+                  "value": "={{$json.technician}}"
+                },
+                {
+                  "short": false,
+                  "title": "Description",
+                  "value": "={{$json.description}}"
+                }
+              ]
+            }
+          }
+        ],
+        "otherOptions": {}
+      },
+      "name": "Slack",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 1,
+      "position": [650, 300],
+      "credentials": {
+        "slackApi": {
+          "id": "1",
+          "name": "Slack account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={\"status\": \"success\", \"workitem_id\": \"{{$node[\"Webhook\"].json[\"workitem\"][\"reference_id\"]}}\"}"
+      },
+      "name": "Response",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [850, 300]
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Format Message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Message": {
+      "main": [
+        [
+          {
+            "node": "Slack",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Slack": {
+      "main": [
+        [
+          {
+            "node": "Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {},
+  "id": "1"
+}

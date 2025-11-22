@@ -1,0 +1,16 @@
+Django==5.0.10
+psycopg2-binary
+djangorestframework
+django-cors-headers
+drf-spectacular
+django-crispy-forms
+crispy-tailwind
+django-htmx
+django-autocomplete-light
+django-filter
+django-extensions
+
+# Celery and Redis for async tasks
+celery==5.4.0
+redis==5.2.0
+requests==2.32.3

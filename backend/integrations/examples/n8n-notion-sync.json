@@ -1,0 +1,255 @@
+{
+  "name": "Django WorkItem → Notion Database Sync",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "workitem-notion-sync",
+        "authentication": "headerAuth",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "name": "Webhook Trigger",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1.1,
+      "position": [240, 300],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "1",
+          "name": "Django Integration Auth"
+        }
+      },
+      "webhookId": "example-notion-webhook"
+    },
+    {
+      "parameters": {
+        "resource": "databasePage",
+        "operation": "search",
+        "databaseId": "YOUR_NOTION_DATABASE_ID",
+        "filterType": "manual",
+        "matchType": "anyFilter",
+        "filters": {
+          "conditions": [
+            {
+              "key": "Reference ID",
+              "condition": "equals",
+              "returnType": "text",
+              "value": "={{ $json.workitem.reference_id }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "name": "Check if WorkItem Exists in Notion",
+      "type": "n8n-nodes-base.notion",
+      "typeVersion": 2,
+      "position": [460, 300],
+      "credentials": {
+        "notionApi": {
+          "id": "3",
+          "name": "Notion API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "condition1",
+              "leftValue": "={{ $json.results.length }}",
+              "rightValue": "0",
+              "operator": {
+                "type": "number",
+                "operation": "gt",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "name": "Exists in Notion?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [680, 300]
+    },
+    {
+      "parameters": {
+        "resource": "databasePage",
+        "operation": "update",
+        "pageId": "={{ $json.results[0].id }}",
+        "propertiesUi": {
+          "propertyValues": [
+            {
+              "key": "Status",
+              "textValue": "={{ $('Webhook Trigger').json.workitem.status }}"
+            },
+            {
+              "key": "Customer",
+              "textValue": "={{ $('Webhook Trigger').json.workitem.customer.name }}"
+            },
+            {
+              "key": "Description",
+              "textValue": "={{ $('Webhook Trigger').json.workitem.description }}"
+            },
+            {
+              "key": "Technician",
+              "textValue": "={{ $('Webhook Trigger').json.workitem.technician.name || 'Unassigned' }}"
+            },
+            {
+              "key": "Priority",
+              "selectValue": "={{ $('Webhook Trigger').json.workitem.priority }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "name": "Update Notion Page",
+      "type": "n8n-nodes-base.notion",
+      "typeVersion": 2,
+      "position": [900, 200],
+      "credentials": {
+        "notionApi": {
+          "id": "3",
+          "name": "Notion API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "resource": "databasePage",
+        "databaseId": "YOUR_NOTION_DATABASE_ID",
+        "title": "={{ $('Webhook Trigger').json.workitem.reference_id }}",
+        "propertiesUi": {
+          "propertyValues": [
+            {
+              "key": "Reference ID",
+              "textValue": "={{ $('Webhook Trigger').json.workitem.reference_id }}"
+            },
+            {
+              "key": "Status",
+              "selectValue": "={{ $('Webhook Trigger').json.workitem.status }}"
+            },
+            {
+              "key": "Customer",
+              "textValue": "={{ $('Webhook Trigger').json.workitem.customer.name }}"
+            },
+            {
+              "key": "Description",
+              "textValue": "={{ $('Webhook Trigger').json.workitem.description }}"
+            },
+            {
+              "key": "Technician",
+              "textValue": "={{ $('Webhook Trigger').json.workitem.technician.name || 'Unassigned' }}"
+            },
+            {
+              "key": "Priority",
+              "selectValue": "={{ $('Webhook Trigger').json.workitem.priority }}"
+            },
+            {
+              "key": "Created Date",
+              "date": "={{ $('Webhook Trigger').json.workitem.created_date }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "name": "Create Notion Page",
+      "type": "n8n-nodes-base.notion",
+      "typeVersion": 2,
+      "position": [900, 400],
+      "credentials": {
+        "notionApi": {
+          "id": "3",
+          "name": "Notion API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={ \"status\": \"success\", \"action\": \"{{ $json.action }}\", \"workitem_id\": \"{{ $('Webhook Trigger').json.workitem.reference_id }}\" }"
+      },
+      "name": "Respond to Webhook",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [1120, 300]
+    }
+  ],
+  "connections": {
+    "Webhook Trigger": {
+      "main": [
+        [
+          {
+            "node": "Check if WorkItem Exists in Notion",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check if WorkItem Exists in Notion": {
+      "main": [
+        [
+          {
+            "node": "Exists in Notion?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Exists in Notion?": {
+      "main": [
+        [
+          {
+            "node": "Update Notion Page",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Create Notion Page",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update Notion Page": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create Notion Page": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "tags": []
+}

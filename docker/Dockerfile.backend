@@ -5,13 +5,16 @@ RUN apt-get update && apt-get install -y build-essential libpq-dev && rm -rf /va
 
 WORKDIR /app
 
-# copy only dependency manifests first if/when you add them
-# (for now, we'll install by scanning; better to add requirements.txt later)
-COPY backend /app
+# Copy requirements.txt first for better layer caching
+COPY backend/requirements.txt /app/requirements.txt
 
-# install pip tools & freeze dependencies
-# NOTE: Consider writing a requirements.txt for repeatability.
+# Install Python dependencies
 RUN pip install --upgrade pip \
+ && pip install -r requirements.txt \
+ && pip install gunicorn django-widget-tweaks django-mptt
+
+# Copy the rest of the backend code
+COPY backend /app
  && pip install "Django==5.*" djangorestframework drf-spectacular django-cors-headers \
     django-crispy-forms crispy-tailwind django-htmx django-autocomplete-light django-extensions \
     django-filter psycopg2-binary gunicorn django-widget-tweaks django-mptt \
