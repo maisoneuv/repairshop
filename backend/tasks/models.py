@@ -140,7 +140,11 @@ class WorkItem(models.Model):
                 tenant=self.tenant,
                 reference_id__startswith="RMA-"
             ).annotate(
-                num=models.functions.Cast(models.F('reference_id')[4:], models.IntegerField())
+                # Extract numeric suffix from reference_id and cast to int for max computation
+                num=models.functions.Cast(
+                    models.functions.Substr(models.F('reference_id'), 5),
+                    models.IntegerField(),
+                )
             ).aggregate(
                 max_num=Max('num')
             )['max_num'] or 0
