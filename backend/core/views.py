@@ -230,3 +230,72 @@ def login_view(request):
 def logout_view(request):
     logout(request)
     return JsonResponse({"success": True})
+
+
+class GlobalSearchView(APIView):
+    """
+    Global search endpoint that searches across multiple models
+    (Customers and Work Items) using PostgreSQL Full-Text Search.
+    """
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        query = request.query_params.get('q', '').strip()
+        entity_types = request.query_params.get('entity_types', '').strip()
+
+        # Minimum query length
+        if len(query) < 2:
+            return Response({
+                'customers': [],
+                'work_items': [],
+                'total_count': 0,
+                'query': query
+            })
+
+        # Get tenant from request
+        tenant = getattr(request, 'tenant', None)
+        if not tenant:
+            return Response(
+                {'detail': 'Tenant not resolved'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # Parse entity types filter (comma-separated)
+        enabled_types = set()
+        if entity_types:
+            enabled_types = set(entity_types.lower().split(','))
+        else:
+            # Default: search all entity types
+            enabled_types = {'customers', 'work_items'}
+
+        results = {
+            'customers': [],
+            'work_items': [],
+            'total_count': 0,
+            'query': query
+        }
+
+        # Search customers
+        if 'customers' in enabled_types:
+            from customers.services import search_customers, serialize_customer_search_result
+
+            customers = search_customers(query, tenant, limit=5)
+            results['customers'] = [
+                serialize_customer_search_result(customer)
+                for customer in customers
+            ]
+
+        # Search work items
+        if 'work_items' in enabled_types:
+            from tasks.services import search_work_items, serialize_work_item_search_result
+
+            work_items = search_work_items(query, tenant, request.user, limit=5)
+            results['work_items'] = [
+                serialize_work_item_search_result(wi)
+                for wi in work_items
+            ]
+
+        # Calculate total count
+        results['total_count'] = len(results['customers']) + len(results['work_items'])
+
+        return Response(results)

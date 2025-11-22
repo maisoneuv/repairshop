@@ -60,6 +60,7 @@ INSTALLED_APPS = [
     'tenants',
     'django_extensions',
     'integrations',
+    'import_export',
 ]
 
 MIDDLEWARE = [

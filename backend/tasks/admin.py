@@ -1,5 +1,8 @@
 from django.contrib import admin
-from .models import WorkItem, Task, TaskType, TaskTypeValidationRule
+
+from core.admin_mixins import TenantAwareImportExportAdmin
+
+from .models import Task, TaskType, TaskTypeValidationRule, WorkItem
 
 
 class TaskTypeValidationRuleInline(admin.TabularInline):
@@ -10,7 +13,7 @@ class TaskTypeValidationRuleInline(admin.TabularInline):
 
 
 @admin.register(TaskType)
-class TaskTypeAdmin(admin.ModelAdmin):
+class TaskTypeAdmin(TenantAwareImportExportAdmin):
     """Admin interface for TaskType model"""
     list_display = ['name', 'tenant', 'estimated_duration', 'is_active', 'created_date']
     list_filter = ['tenant', 'is_active', 'created_date']
@@ -33,7 +36,7 @@ class TaskTypeAdmin(admin.ModelAdmin):
 
 
 @admin.register(TaskTypeValidationRule)
-class TaskTypeValidationRuleAdmin(admin.ModelAdmin):
+class TaskTypeValidationRuleAdmin(TenantAwareImportExportAdmin):
     """Admin interface for TaskTypeValidationRule model"""
     list_display = ['task_type', 'field_name', 'is_required']
     list_filter = ['task_type', 'is_required']
@@ -41,7 +44,7 @@ class TaskTypeValidationRuleAdmin(admin.ModelAdmin):
 
 
 @admin.register(Task)
-class TaskAdmin(admin.ModelAdmin):
+class TaskAdmin(TenantAwareImportExportAdmin):
     """Admin interface for Task model"""
     list_display = ['summary', 'task_type', 'status', 'assigned_employee', 'work_item', 'created_date']
     list_filter = ['status', 'task_type', 'created_date']
@@ -63,7 +66,7 @@ class TaskAdmin(admin.ModelAdmin):
 
 
 @admin.register(WorkItem)
-class WorkItemAdmin(admin.ModelAdmin):
+class WorkItemAdmin(TenantAwareImportExportAdmin):
     """Admin interface for WorkItem model"""
     list_display = ['reference_id', 'customer', 'status', 'type', 'created_date']
     list_filter = ['status', 'type', 'priority', 'created_date']

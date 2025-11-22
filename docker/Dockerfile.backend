@@ -15,6 +15,10 @@ RUN pip install --upgrade pip \
 
 # Copy the rest of the backend code
 COPY backend /app
+ && pip install "Django==5.*" djangorestframework drf-spectacular django-cors-headers \
+    django-crispy-forms crispy-tailwind django-htmx django-autocomplete-light django-extensions \
+    django-filter psycopg2-binary gunicorn django-widget-tweaks django-mptt \
+    django-import-export "tablib[xls,xlsx]"
 
 ENV DJANGO_SETTINGS_MODULE=app.settings \
     PYTHONDONTWRITEBYTECODE=1 \
