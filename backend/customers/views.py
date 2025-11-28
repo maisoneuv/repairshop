@@ -210,11 +210,14 @@ class CustomerAPISearchView(generics.ListAPIView):
 
             qs = Customer.objects.select_related("address").filter(tenant=self.request.tenant)
 
-        query = self.request.query_params.get('q', '')
-        return qs.filter(
-            Q(first_name__icontains=query) |
-            Q(last_name__icontains=query)
-        )[:10]
+        query = self.request.query_params.get('q', '').strip()
+        filters = Q(first_name__icontains=query) | Q(last_name__icontains=query)
+
+        phone_query = ''.join(filter(str.isdigit, query))
+        if phone_query:
+            filters |= Q(phone_number__startswith=phone_query)
+
+        return qs.filter(filters)[:10]
 
 # class CustomerCreateListView(generics.ListCreateAPIView):
 #     queryset = Customer.objects.all()
