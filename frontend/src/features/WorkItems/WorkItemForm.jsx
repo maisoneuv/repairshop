@@ -338,9 +338,11 @@ export default function WorkItemForm({ onCreated }) {
                                                                 setSerialNumber("");
                                                                 handleFieldChange("customer_asset", null);
                                                             }}
-                                                            displayField={(item) =>
-                                                                `${item.first_name} ${item.last_name} (${item.email})`
-                                                            }
+                                                            displayField={(item) => {
+                                                                const name = `${item.first_name ?? ""} ${item.last_name ?? ""}`.trim();
+                                                                const contacts = [item.phone_number, item.email].filter(Boolean).join(" • ");
+                                                                return [name, contacts].filter(Boolean).join(" - ");
+                                                            }}
                                                             onCreateNewClick={() => setShowCustomerModal(true)}
                                                             required={schema.customer.required}
                                                             error={fieldErrors?.customer}

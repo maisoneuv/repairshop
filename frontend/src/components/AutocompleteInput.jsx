@@ -152,9 +152,9 @@ export default function AutocompleteInput({
                     setHighlightedIndex(-1);
                 }}
                 onFocus={() => {
+                    setShowResults(true);
                     // Show all items on focus if fetchAllFn is provided (picklist behavior)
                     if (fetchAllFn && allItems) {
-                        setShowResults(true);
                         if (query.length === 0) {
                             setResults(allItems);
                             setHighlightedIndex(allItems.length ? 0 : -1);
@@ -205,7 +205,7 @@ export default function AutocompleteInput({
                             key={item.id}
                             onMouseDown={() => handleSelect(item)}
                             onMouseEnter={() => setHighlightedIndex(index)}
-                            className={`px-4 py-2 cursor-pointer transition-colors border-b border-gray-100 last:border-none ${
+                            className={`px-4 py-2 cursor-pointer transition-colors border-b border-gray-100 ${
                                 highlightedIndex === index
                                     ? 'bg-blue-100 text-blue-800'
                                     : 'bg-white hover:bg-blue-50'
@@ -215,18 +215,9 @@ export default function AutocompleteInput({
                         </div>
                     ))}
 
-                    {!loading && results.length === 0 && (
+                    {!loading && results.length === 0 && !onCreateNewClick && (
                         <div className="px-4 py-2 text-gray-500">
                             No results found.
-                            {onCreateNewClick && (
-                                <button
-                                    type="button"
-                                    onMouseDown={onCreateNewClick}
-                                    className="ml-2 text-blue-600 underline hover:text-blue-800"
-                                >
-                                    Create new
-                                </button>
-                            )}
                             {allowCustomCreate && query && (
                                 <div
                                     onMouseDown={() => onCreateNewItem(query)}
@@ -235,6 +226,15 @@ export default function AutocompleteInput({
                                     Create "{query}"
                                 </div>
                             )}
+                        </div>
+                    )}
+
+                    {!loading && onCreateNewClick && (
+                        <div
+                            onMouseDown={onCreateNewClick}
+                            className="px-4 py-2 cursor-pointer transition-colors bg-blue-50 hover:bg-blue-100 text-blue-800 font-medium border-t border-gray-200"
+                        >
+                            + Add new
                         </div>
                     )}
                 </div>
