@@ -300,7 +300,7 @@ export default function WorkItemDetail() {
                         <div className="bg-white rounded-xl shadow-lg border border-gray-200 p-6">
                             <RelatedList
                                 title="Related Tasks"
-                                relatedUrl={`/tasks/tasks/?work_item=${workItem.id}`}
+                                relatedUrl={`/api/tasks/tasks/?work_item=${workItem.id}`}
                                 renderAsTable={false}
                                 sortableFields={[
                                     { label: "Task Type", field: "task_type__name" },

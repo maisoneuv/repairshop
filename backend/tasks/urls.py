@@ -41,4 +41,5 @@ urlpatterns = [
     path('api/schema/task/', TaskSchemaView.as_view(), name="task_schema"),
 ]
 
+# Router URLs come first so they take precedence
 urlpatterns = router.urls + urlpatterns

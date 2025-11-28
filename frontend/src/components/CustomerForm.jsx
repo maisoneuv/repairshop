@@ -60,7 +60,7 @@ export default function CustomerForm({ onSuccess, initialData = null, mode = "cr
     useEffect(() => {
         async function fetchChoices() {
             try {
-                const { data } = await apiClient.get("/customers/api/referral-sources/");
+                const { data } = await apiClient.get("/api/customers/api/referral-sources/");
                 setReferralChoices(data);
             } catch (err) {
                 console.error("Failed to fetch referral sources", err);
@@ -124,12 +124,12 @@ export default function CustomerForm({ onSuccess, initialData = null, mode = "cr
             let response;
             if (mode === "edit" && initialData?.id) {
                 response = await apiClient.patch(
-                    `/customers/api/customers/${initialData.id}/`,
+                    `/api/customers/api/customers/${initialData.id}/`,
                     payload
                 );
             } else {
                 response = await apiClient.post(
-                    "/customers/api/customers/",
+                    "/api/customers/api/customers/",
                     payload
                 );
             }

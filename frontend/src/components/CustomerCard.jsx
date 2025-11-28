@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Link } from "react-router-dom";
 import CustomerForm from "./CustomerForm";
 
 export default function CustomerCard({ customer, onEdit, onUpdated }) {
@@ -48,7 +49,12 @@ export default function CustomerCard({ customer, onEdit, onUpdated }) {
     return (
         <div className="bg-white rounded-xl shadow-lg border border-gray-200 p-6">
             <div className="flex items-center justify-between mb-4">
-                <h3 className="text-lg font-semibold text-gray-900">Customer</h3>
+                <Link
+                    to={`/customers/${customer.id}`}
+                    className="text-lg font-semibold text-gray-900 hover:text-indigo-600 transition-colors"
+                >
+                    Customer
+                </Link>
                 <button
                     onClick={handleEdit}
                     className="text-indigo-600 hover:text-indigo-800 font-medium text-sm transition-colors"
@@ -61,9 +67,12 @@ export default function CustomerCard({ customer, onEdit, onUpdated }) {
                 {/* Customer Name */}
                 <div>
                     <label className="block text-sm font-medium text-gray-600 mb-1">Name</label>
-                    <p className="text-gray-900 font-medium">
+                    <Link
+                        to={`/customers/${customer.id}`}
+                        className="text-gray-900 font-medium hover:text-indigo-600 transition-colors inline-block"
+                    >
                         {customer.first_name} {customer.last_name}
-                    </p>
+                    </Link>
                 </div>
 
                 {/* Contact Information */}

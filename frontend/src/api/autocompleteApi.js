@@ -5,31 +5,31 @@ import apiClient from './apiClient';
  */
 
 export function getCustomerSearchPath(query) {
-    return `/customers/api/customers/search/?q=${encodeURIComponent(query)}`;
+    return `/api/customers/api/customers/search/?q=${encodeURIComponent(query)}`;
 }
 
 export function getEmployeeSearchPath(query) {
-    return `/service/api/employee/search/?q=${encodeURIComponent(query)}`;
+    return `/api/service/api/employee/search/?q=${encodeURIComponent(query)}`;
 }
 
 export function getEmployeeListPath() {
-    return `/service/api/employee/list/`;
+    return `/api/service/api/employee/list/`;
 }
 
 export function getDeviceSearchPath(query) {
-    return `/inventory/api/devices/search/?q=${encodeURIComponent(query)}`;
+    return `/api/inventory/api/devices/search/?q=${encodeURIComponent(query)}`;
 }
 
 export function getManufacturerSearchPath(query) {
-    return `/inventory/api/devices/manufacturers/?q=${encodeURIComponent(query)}`;
+    return `/api/inventory/api/devices/manufacturers/?q=${encodeURIComponent(query)}`;
 }
 
 export function getCategorySearchPath(query) {
-    return `/inventory/api/category/search/?q=${encodeURIComponent(query)}`;
+    return `/api/inventory/api/category/search/?q=${encodeURIComponent(query)}`;
 }
 
 export function getLocationSearchPath(query) {
-    return `/service/api/locations/search/?q=${encodeURIComponent(query)}`;
+    return `/api/service/api/locations/search/?q=${encodeURIComponent(query)}`;
 }
 
 export function getObjectDetailPath(app, id) {

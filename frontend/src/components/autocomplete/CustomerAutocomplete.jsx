@@ -22,7 +22,7 @@ export default function CustomerAutocomplete({
                 value={value}
                 onSelect={onSelect}
                 searchFn={buildSearchFn(getCustomerSearchPath)}
-                getDetailFn={buildDetailFn('customers/api/customers')}
+                getDetailFn={buildDetailFn('api/customers/api/customers')}
                 displayField={displayField}
                 onCreateNewClick={onCreateNewClick}
                 placeholder={placeholder}

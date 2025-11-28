@@ -96,7 +96,7 @@ export const useGlobalSearch = (debounceDelay = 300) => {
         params.append('entity_types', entityTypes);
       }
 
-      const response = await axios.get(`/core/search/?${params.toString()}`, {
+      const response = await axios.get(`/api/core/search/?${params.toString()}`, {
         signal: abortControllerRef.current.signal
       });
 

@@ -74,7 +74,7 @@ export function normalizeApiPath(urlOrPath) {
 const TENANT_OPTIONAL_PATHS = new Set([
     "/auth/login", "/auth/logout", "/auth/session", "/auth/csrf",
     "/accounts/login", "/accounts/logout",
-    "/core/login/", "/core/logout/",              // your endpoints
+    "/api/core/login/", "/api/core/logout/",              // your endpoints
     "/dj-rest-auth/login/", "/dj-rest-auth/logout/",
 ]);
 

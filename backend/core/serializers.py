@@ -6,10 +6,20 @@ from django.contrib.auth.models import Permission
 
 class NoteSerializer(serializers.ModelSerializer):
     author_name = serializers.CharField(source="author.name", read_only=True)
+    source_model = serializers.SerializerMethodField()
+    source_id = serializers.SerializerMethodField()
 
     class Meta:
         model = Note
-        fields = ["id", "content", "created_at", "author_name"]
+        fields = ["id", "content", "created_at", "author_name", "source_model", "source_id"]
+
+    def get_source_model(self, obj):
+        """Return the model name of the object this note is attached to"""
+        return obj.content_type.model if obj.content_type else None
+
+    def get_source_id(self, obj):
+        """Return the ID of the object this note is attached to"""
+        return obj.object_id
 
 class AddressSerializer(serializers.ModelSerializer):
     class Meta:

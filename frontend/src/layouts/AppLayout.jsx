@@ -1,4 +1,4 @@
-import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
+import { Outlet, useLocation, useNavigate } from "react-router-dom";
 import LogoutButton from "../components/LogoutButton";
 import { useUser } from "../context/UserContext";
 import { useEffect, useState } from "react";
@@ -9,9 +9,11 @@ export default function AppLayout() {
     const navigate = useNavigate();
     const location = useLocation();
     const [workItemMenuOpen, setWorkItemMenuOpen] = useState(false);
+    const [taskMenuOpen, setTaskMenuOpen] = useState(false);
 
     useEffect(() => {
         setWorkItemMenuOpen(false);
+        setTaskMenuOpen(false);
     }, [location.pathname, location.search]);
 
     return (
@@ -64,14 +66,45 @@ export default function AppLayout() {
                                         </div>
                                     )}
                                 </div>
-                                <NavLink
-                                    to="/tasks"
-                                    className={({ isActive }) =>
-                                        isActive ? "font-semibold text-blue-600" : "text-gray-600 hover:text-blue-600 font-medium"
-                                    }
-                                >
-                                    Tasks
-                                </NavLink>
+                                <div className="relative">
+                                    <button
+                                        type="button"
+                                        onClick={() => setTaskMenuOpen((prev) => !prev)}
+                                        className="flex items-center gap-1 text-gray-600 hover:text-blue-600 font-medium"
+                                    >
+                                        Tasks
+                                        <svg className={`w-4 h-4 transition-transform ${taskMenuOpen ? "rotate-180" : ""}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" />
+                                        </svg>
+                                    </button>
+
+                                    {taskMenuOpen && (
+                                        <div className="absolute left-0 mt-2 w-48 bg-white border border-gray-200 rounded-lg shadow-lg z-30 overflow-hidden">
+                                            <button
+                                                type="button"
+                                                onClick={() => navigate("/tasks/all")}
+                                                className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-blue-50"
+                                            >
+                                                All Tasks
+                                            </button>
+                                            <button
+                                                type="button"
+                                                onClick={() => navigate("/tasks/my")}
+                                                className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-blue-50"
+                                            >
+                                                My Tasks
+                                            </button>
+                                            <div className="border-t border-gray-100" />
+                                            <button
+                                                type="button"
+                                                onClick={() => navigate("/tasks/new")}
+                                                className="w-full text-left px-4 py-2 text-sm font-medium text-blue-600 hover:bg-blue-50"
+                                            >
+                                                Create New
+                                            </button>
+                                        </div>
+                                    )}
+                                </div>
                             </div>
 
                             {/* Center search */}

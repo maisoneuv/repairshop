@@ -32,6 +32,9 @@ if not SECRET_KEY:
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = os.environ.get('DJANGO_DEBUG', 'False').lower() == 'true'
 
+# Flag to indicate if running in Docker (nginx handles frontend routing)
+IN_DOCKER = os.environ.get('IN_DOCKER', 'False').lower() == 'true'
+
 ALLOWED_HOSTS = _csv_env('DJANGO_ALLOWED_HOSTS')
 
 
