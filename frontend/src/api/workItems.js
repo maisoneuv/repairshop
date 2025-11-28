@@ -6,9 +6,9 @@ function deriveTenantFromHost() {
   return maybeTenant || null;
 }
 
-export async function fetchWorkItems(){
+export async function fetchWorkItems(params = {}){
   try {
-    const response = await apiClient.get('/tasks/work-items/');
+    const response = await apiClient.get('/api/tasks/work-items/', { params });
     return response.data;
   } catch(error) {
     console.error("Error fetching work items:", error);
@@ -18,7 +18,7 @@ export async function fetchWorkItems(){
 
 export async function fetchWorkItemSchema(){
   try {
-    const response = await apiClient.get("/tasks/api/schema/work-item/");
+    const response = await apiClient.get("/api/tasks/api/schema/work-item/");
     console.log('schema',response);
     return response.data;
   } catch (error) {
@@ -32,7 +32,7 @@ export async function createWorkItem(data) {
   try {
     console.log(data);
     const response = await apiClient.post(
-        '/tasks/work-items/',
+        '/api/tasks/work-items/',
         data,
         {
           headers: {
@@ -57,7 +57,7 @@ export async function createWorkItem(data) {
 export async function updateWorkItemField(id, patchData) {
   try {
     const response = await apiClient.patch(
-      `/tasks/work-items/${id}/`,
+      `/api/tasks/work-items/${id}/`,
       patchData,
       {
         headers: {
@@ -84,7 +84,7 @@ export async function fetchWorkItem(id, include = "") {
       params.include = include;
     }
 
-    const response = await apiClient.get(`/tasks/work-items/${id}/`, { params });
+    const response = await apiClient.get(`/api/tasks/work-items/${id}/`, { params });
     return response.data;
   } catch (error) {
     console.error("Error fetching work item:", error);

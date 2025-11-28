@@ -27,7 +27,7 @@ export async function fetchWithTenant(url, tenantSlug, options = {}) {
 
 
 export async function fetchUserProfile(tenantSlug) {
-    const response = await apiClient.get('/service/api/employee/me/');
+    const response = await apiClient.get('/api/service/api/employee/me/');
     return response.data;
 }
 
@@ -35,7 +35,7 @@ export async function login(username, password) {
     const csrfToken = getCSRFToken();
 
     const res = await apiClient.post(
-        '/core/login/',
+        '/api/core/login/',
         { username, password },
         {
             headers: {

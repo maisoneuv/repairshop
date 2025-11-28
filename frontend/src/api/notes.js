@@ -2,7 +2,7 @@ import apiClient from './apiClient';
 
 export async function fetchNotes(model, id) {
     try {
-        const response = await apiClient.get(`/core/notes/${model}/${id}/`);
+        const response = await apiClient.get(`/api/core/notes/${model}/${id}/`);
         return response.data;
     } catch (error) {
         console.error("Error fetching notes:", error);
@@ -12,7 +12,7 @@ export async function fetchNotes(model, id) {
 
 export async function createNote(model, id, content) {
     try {
-        const response = await apiClient.post(`/core/notes/${model}/${id}/`, {
+        const response = await apiClient.post(`/api/core/notes/${model}/${id}/`, {
             content
         });
         return response.data;

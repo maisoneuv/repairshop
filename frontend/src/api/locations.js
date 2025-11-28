@@ -1,7 +1,7 @@
 import apiClient from './apiClient';
 
 export const createFreeformLocation = async (addressData) => {
-    const response = await apiClient.post('/service/api/locations/create-freeform/', {
+    const response = await apiClient.post('/api/service/api/locations/create-freeform/', {
         street: addressData.street,
         building_number: addressData.building_number,
         apartment_number: addressData.apartment_number || null,
@@ -21,7 +21,7 @@ export const searchLocations = async (query, customerId = null) => {
         params.append('customer_id', customerId);
     }
 
-    const response = await apiClient.get(`/service/api/locations/search/?${params}`);
+    const response = await apiClient.get(`/api/service/api/locations/search/?${params}`);
     return response.data;
 };
 
@@ -35,6 +35,6 @@ export const ensureCustomerAddressLocation = async ({ customerId, addressId, lab
         payload.label = label;
     }
 
-    const response = await apiClient.post('/service/api/locations/customer-address/', payload);
+    const response = await apiClient.post('/api/service/api/locations/customer-address/', payload);
     return response.data;
 };

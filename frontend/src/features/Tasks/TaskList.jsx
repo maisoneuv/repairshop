@@ -8,7 +8,7 @@ export default function TaskList() {
     useEffect(() => {
         let isMounted = true;
 
-        apiClient.get("/tasks/tasks/")
+        apiClient.get("/api/tasks/tasks/")
             .then((res) => {
                 if (isMounted) setTasks(res.data);
             })

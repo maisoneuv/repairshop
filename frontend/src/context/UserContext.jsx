@@ -143,7 +143,7 @@ export function UserProvider({ children }) {
         const extraHeaders = firstHeader ? { "X-Tenant": firstHeader } : {};
 
         try {
-            const { data } = await apiClient.get("/service/api/employee/me/", {
+            const { data } = await apiClient.get("/api/service/api/employee/me/", {
                 headers: extraHeaders,
             });
 
@@ -198,7 +198,7 @@ export function UserProvider({ children }) {
     const logout = useCallback(async () => {
         try {
             const csrfToken = getCSRFToken();
-            await apiClient.post("/core/logout/",
+            await apiClient.post("/api/core/logout/",
                 {},
                 {
                     headers: {
@@ -219,7 +219,7 @@ export function UserProvider({ children }) {
 
     const login = useCallback(async (email, password) => {
         const csrfToken = getCSRFToken();
-        await apiClient.post("/core/login/",
+        await apiClient.post("/api/core/login/",
             { email, password },
             {
                 headers: {

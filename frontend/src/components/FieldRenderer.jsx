@@ -91,9 +91,9 @@ export default function FieldRenderer({ name, label, config, value, onChange, er
         const getSearchConfig = (app, model) => {
             if (app === "service" && model === "Employee") {
                 return {
-                    path: "/service/api/employee/search/",
+                    path: "/api/service/api/employee/search/",
                     param: "q",
-                    listPath: "/service/api/employee/list/",
+                    listPath: "/api/service/api/employee/list/",
                     display: (item) => {
                         if (!item) return "";
                         const name = item.name || item.email || `#${item.id}`;
@@ -103,23 +103,23 @@ export default function FieldRenderer({ name, label, config, value, onChange, er
                 };
             }
             if (app === "service" && model === "Location") {
-                return { path: "/service/api/locations/search/", param: "q" };
+                return { path: "/api/service/api/locations/search/", param: "q" };
             }
             if (app === "inventory" && model === "Device") {
-                return { path: "/inventory/api/devices/search/", param: "q" };
+                return { path: "/api/inventory/api/devices/search/", param: "q" };
             }
             if (app === "customers" && model === "Customer") {
-                return { path: "/customers/api/customers/search/", param: "q" };
+                return { path: "/api/customers/api/customers/search/", param: "q" };
             }
             if (app === "inventory" && model === "Category") {
-                return { path: "/inventory/api/category/search/", param: "q" };
+                return { path: "/api/inventory/api/category/search/", param: "q" };
             }
             if (app === "tasks" && model === "WorkItem") {
                 return {
-                    path: "/tasks/work-items/",
+                    path: "/api/tasks/work-items/",
                     param: "search",
                     map: (data) => data?.results ?? [],
-                    detailPath: (id) => `/tasks/work-items/${id}/`,
+                    detailPath: (id) => `/api/tasks/work-items/${id}/`,
                     display: (item) => {
                         if (!item) return "";
                         const ref = item.reference_id || `#${item.id}`;
@@ -130,19 +130,19 @@ export default function FieldRenderer({ name, label, config, value, onChange, er
             }
             if (app === "tasks" && model === "TaskType") {
                 return {
-                    path: "/tasks/task-types/",
+                    path: "/api/tasks/task-types/",
                     param: "search",
-                    listPath: "/tasks/task-types/",
+                    listPath: "/api/tasks/task-types/",
                     // TaskType API returns plain array, not paginated response
                     map: (data) => Array.isArray(data) ? data : (data?.results ?? []),
-                    detailPath: (id) => `/tasks/task-types/${id}/`,
+                    detailPath: (id) => `/api/tasks/task-types/${id}/`,
                     display: (item) => item?.name || `#${item.id}`,
                     allowCustomCreate: true,
                 };
             }
 
             return {
-                path: `/${app}/${model.toLowerCase()}s/search/`,
+                path: `/api/${app}/${model.toLowerCase()}s/search/`,
                 param: "q",
             };
         };

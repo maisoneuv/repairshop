@@ -24,6 +24,10 @@ from .permissions import TenantUserMatchesRequestTenant
 def home_view(request):
     return render(request, 'home.html')
 
+def react_app_view(request):
+    """Serve the React SPA for client-side routing"""
+    return render(request, 'react_app.html')
+
 class BaseListView(ListView):
     template_name = "layouts/generic_list.html"
 
@@ -105,7 +109,28 @@ class NoteViewSet(viewsets.ModelViewSet):
         model = self.kwargs["model"]
         obj_id = self.kwargs["obj_id"]
         content_type = ContentType.objects.get(model=model)
-        return Note.objects.filter(content_type=content_type, object_id=obj_id)
+
+        # Get notes for the current object
+        notes = Note.objects.filter(content_type=content_type, object_id=obj_id)
+
+        # If this is a work item, also include notes from related tasks
+        if model == "workitem":
+            from tasks.models import Task
+            task_content_type = ContentType.objects.get_for_model(Task)
+
+            # Get all tasks related to this work item
+            task_ids = Task.objects.filter(work_item_id=obj_id).values_list('id', flat=True)
+
+            # Get notes from those tasks
+            task_notes = Note.objects.filter(
+                content_type=task_content_type,
+                object_id__in=task_ids
+            )
+
+            # Combine both querysets
+            notes = notes | task_notes
+
+        return notes.distinct()
 
     def perform_create(self, serializer):
         model = self.kwargs["model"]

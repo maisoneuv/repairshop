@@ -1,9 +1,22 @@
 import {getCSRFToken} from "../utils/csrf";
 import apiClient from "./apiClient";
 
+export async function fetchTasks(params = {}) {
+    try {
+        const response = await apiClient.get("/api/tasks/tasks/", { params });
+        return response.data;
+    } catch (error) {
+        console.error("Error fetching tasks:", error);
+        if (error.response && error.response.data) {
+            throw new Error(error.response.data.detail || "Failed to fetch tasks");
+        }
+        throw new Error("Failed to fetch tasks");
+    }
+}
+
 export async function fetchTaskSchema() {
     try {
-        const response = await apiClient.get("/tasks/api/schema/task");
+        const response = await apiClient.get("/api/tasks/api/schema/task");
         return response.data;
     } catch (error) {
         console.error("Error fetching task schema:", error);
@@ -18,10 +31,10 @@ export async function createTask(data) {
     try {
         if (process.env.NODE_ENV !== "production") {
             // eslint-disable-next-line no-console
-            console.debug("[api/tasks] POST /tasks/tasks/", data);
+            console.debug("[api/tasks] POST /api/tasks/tasks/", data);
         }
         const response = await apiClient.post(
-            "/tasks/tasks/",
+            "/api/tasks/tasks/",
             data,
             {
                 headers: {
@@ -46,7 +59,7 @@ export async function createTask(data) {
 export async function updateTaskField(id, patchData) {
     try {
         const response = await apiClient.patch(
-            `/tasks/tasks/${id}/`,
+            `/api/tasks/tasks/${id}/`,
             patchData,
             {
                 headers: {
@@ -67,7 +80,7 @@ export async function updateTaskField(id, patchData) {
 export async function fetchTask(id, include = "") {
     try {
         const params = include ? { include } : {};
-        const response = await apiClient.get(`/tasks/tasks/${id}/`, { params });
+        const response = await apiClient.get(`/api/tasks/tasks/${id}/`, { params });
         return response.data;
     } catch (error) {
         console.error(`Error fetching task ${id}:`, error);
@@ -81,7 +94,7 @@ export async function fetchTask(id, include = "") {
 // Task Type API functions
 export async function fetchTaskTypes(params = {}) {
     try {
-        const response = await apiClient.get("/tasks/task-types/", { params });
+        const response = await apiClient.get("/api/tasks/task-types/", { params });
         return response.data;
     } catch (error) {
         console.error("Error fetching task types:", error);
@@ -95,7 +108,7 @@ export async function fetchTaskTypes(params = {}) {
 export async function createTaskType(data) {
     try {
         const response = await apiClient.post(
-            "/tasks/task-types/",
+            "/api/tasks/task-types/",
             data,
             {
                 headers: {

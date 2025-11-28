@@ -1,5 +1,6 @@
 import InlineField from "../components/InlineField";
 import EmployeeAutocomplete from "./autocomplete/EmployeeAutocomplete";
+import TaskTypeSelect from "./TaskTypeSelect";
 
 export default function ModelDetailLayout({
                                               data,
@@ -11,6 +12,27 @@ export default function ModelDetailLayout({
                                               onFieldChange,
                                               onFieldSave,
                                           }) {
+
+    const formatDateTime = (dateString) => {
+        if (!dateString) return '—';
+        const date = new Date(dateString);
+        const day = String(date.getDate()).padStart(2, '0');
+        const month = String(date.getMonth() + 1).padStart(2, '0');
+        const year = date.getFullYear();
+        const hours = String(date.getHours()).padStart(2, '0');
+        const minutes = String(date.getMinutes()).padStart(2, '0');
+        return `${day}.${month}.${year} ${hours}:${minutes}`;
+    };
+
+    const formatValue = (value, fieldType) => {
+        if (fieldType === 'datetime') {
+            return formatDateTime(value);
+        }
+        if (typeof value === "object" && value !== null) {
+            return value.name || value.id || JSON.stringify(value);
+        }
+        return value || "—";
+    };
 
     return (
         <div className="space-y-6">
@@ -38,6 +60,9 @@ export default function ModelDetailLayout({
                             const isEmployeeForeignKey =
                                 schema[name]?.type === "foreignkey" &&
                                 schema[name]?.related_model === "Employee";
+                            const isTaskTypeForeignKey =
+                                schema[name]?.type === "foreignkey" &&
+                                schema[name]?.related_model === "TaskType";
 
                             return (
                                 <div key={name} className={widthClass}>
@@ -47,19 +72,32 @@ export default function ModelDetailLayout({
                                             value={value}
                                             type={isTextArea ? "textarea" : fieldType}
                                             options={options}
-                                            renderEditor={isEmployeeForeignKey
-                                                ? ({ value: current, onChange }) => (
-                                                    <EmployeeAutocomplete
-                                                        value={current}
-                                                        onSelect={(employee) => {
-                                                            onChange(employee);
-                                                        }}
-                                                        required={schema[name]?.required}
-                                                        placeholder="Select employee..."
-                                                        showLabel={false}
-                                                    />
-                                                )
-                                                : undefined}
+                                            renderEditor={
+                                                isEmployeeForeignKey
+                                                    ? ({ value: current, onChange }) => (
+                                                        <EmployeeAutocomplete
+                                                            value={current}
+                                                            onSelect={(employee) => {
+                                                                onChange(employee);
+                                                            }}
+                                                            required={schema[name]?.required}
+                                                            placeholder="Select employee..."
+                                                            showLabel={false}
+                                                        />
+                                                    )
+                                                    : isTaskTypeForeignKey
+                                                    ? ({ value: current, onChange }) => (
+                                                        <TaskTypeSelect
+                                                            value={current}
+                                                            onSelect={(taskType) => {
+                                                                onChange(taskType);
+                                                            }}
+                                                            showLabel={false}
+                                                            placeholder="Select task type..."
+                                                        />
+                                                    )
+                                                    : undefined
+                                            }
                                             onSave={(val) =>
                                                 editMode
                                                     ? onFieldChange(name, val)
@@ -89,9 +127,7 @@ export default function ModelDetailLayout({
                                                 </a>
                                             ) : (
                                                 <p className="text-gray-800 whitespace-pre-wrap">
-                                                    {typeof value === "object" && value !== null
-                                                        ? value.name || value.id || JSON.stringify(value)
-                                                        : value || "—"}
+                                                    {formatValue(value, fieldType)}
                                                 </p>
                                             )}
                                         </div>

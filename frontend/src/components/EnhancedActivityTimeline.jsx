@@ -85,6 +85,7 @@ export default function EnhancedActivityTimeline({ model, objectId }) {
                     notes.map((note, index) => {
                         const isSystem = !note.author_name;
                         const isFirst = index === 0;
+                        const isFromDifferentSource = note.source_model && note.source_model !== model;
 
                         return (
                             <div key={note.id} className="relative">
@@ -98,6 +99,8 @@ export default function EnhancedActivityTimeline({ model, objectId }) {
                                     <div className={`flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center ${
                                         isSystem
                                             ? 'bg-gray-100 border-2 border-gray-300'
+                                            : isFromDifferentSource
+                                            ? 'bg-purple-100 border-2 border-purple-300'
                                             : 'bg-indigo-100 border-2 border-indigo-300'
                                     }`}>
                                         <span className="text-xs">
@@ -114,10 +117,17 @@ export default function EnhancedActivityTimeline({ model, objectId }) {
                                             <span className="text-xs text-gray-500">
                                                 {formatTime(note.created_at)}
                                             </span>
+                                            {isFromDifferentSource && (
+                                                <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-purple-100 text-purple-800">
+                                                    From Task #{note.source_id}
+                                                </span>
+                                            )}
                                         </div>
                                         <div className={`text-sm p-3 rounded-lg ${
                                             isSystem
                                                 ? 'bg-gray-50 text-gray-700'
+                                                : isFromDifferentSource
+                                                ? 'bg-purple-50 text-gray-800'
                                                 : 'bg-indigo-50 text-gray-800'
                                         }`}>
                                             {note.content}

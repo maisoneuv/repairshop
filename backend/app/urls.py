@@ -15,20 +15,35 @@ Including another URLconf
     2. Add a URL to urlpatterns:  path('blog/', include('blog.urls'))
 """
 from django.contrib import admin
-from django.urls import path, include
+from django.urls import path, include, re_path
+from django.conf import settings
 from drf_spectacular.views import (
     SpectacularSwaggerView,
     SpectacularAPIView,
 )
+from core.views import react_app_view
 
 
 urlpatterns = [
     path('admin/', admin.site.urls),
-    path('core/', include('core.urls')),
-    path('tasks/', include('tasks.urls'), name='tasks'),
-    path('customers/', include('customers.urls'), name='customers'),
-    path('inventory/', include('inventory.urls'), name='inventory'),
+    # API routes - all under /api/ prefix
+    path('api/core/', include('core.urls')),
+    path('api/tasks/', include('tasks.urls'), name='tasks'),
+    path('api/customers/', include('customers.urls'), name='customers'),
+    path('api/inventory/', include('inventory.urls'), name='inventory'),
+    path('api/service/', include('service.urls'), name='service'),
     path('api/schema/', SpectacularAPIView.as_view(), name='api-schema'),
     path('api/docs/', SpectacularSwaggerView.as_view(url_name='api-schema'), name='api-docs'),
-    path('service/', include('service.urls'), name='service'),
 ]
+
+# Only serve React app via Django in local development
+# In Docker, nginx handles all frontend routes
+if settings.DEBUG and not getattr(settings, 'IN_DOCKER', False):
+    urlpatterns += [
+        # Serve React app for root
+        path('', react_app_view, name='react-app-root'),
+
+        # Catch-all pattern for React SPA client-side routes - MUST BE LAST
+        # This catches any URL that doesn't match the API patterns above
+        re_path(r'^(?!admin/|api/).*$', react_app_view, name='react-app'),
+    ]

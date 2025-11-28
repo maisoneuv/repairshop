@@ -9,7 +9,7 @@ import apiClient from './apiClient';
 
 export async function fetchSchema(appName, modelName) {
     try {
-        const response = await apiClient.get(`/${appName}/api/schema/${modelName}/`);
+        const response = await apiClient.get(`/api/${appName}/api/schema/${modelName}/`);
         return response.data;
     } catch(error) {
         console.error('Error fetching schema: ',error);

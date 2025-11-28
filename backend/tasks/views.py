@@ -8,6 +8,7 @@ from .forms import WorkItemForm, TaskForm
 from django.views.generic import TemplateView, ListView, DetailView, CreateView, UpdateView
 from django.db.models import Q
 from rest_framework import viewsets, filters
+import django_filters
 from .serializers import WorkItemSerializer, TaskSerializer, TaskTypeSerializer
 from rest_framework.views import APIView
 from rest_framework.response import Response
@@ -233,9 +234,28 @@ def device_search(request):
 
 #serializers
 
+class WorkItemFilter(django_filters.FilterSet):
+    """Custom filter to support filtering work items by customer (direct or via asset)"""
+    customer = django_filters.NumberFilter(method='filter_by_customer')
+
+    def filter_by_customer(self, queryset, name, value):
+        """Filter work items by customer ID - includes items where customer is direct or via asset"""
+        print(f"[WorkItemFilter] Filtering by customer ID: {value}")
+        print(f"[WorkItemFilter] Initial queryset count: {queryset.count()}")
+        filtered = queryset.filter(
+            Q(customer_id=value) | Q(customer_asset__customer_id=value)
+        ).distinct()
+        print(f"[WorkItemFilter] Filtered queryset count: {filtered.count()}")
+        return filtered
+
+    class Meta:
+        model = WorkItem
+        fields = ['customer', 'customer_asset', 'status', 'type', 'owner', 'technician']
+
 class WorkItemViewSet(viewsets.ModelViewSet):
     serializer_class = WorkItemSerializer
     filter_backends = [filters.SearchFilter, DjangoFilterBackend]
+    filterset_class = WorkItemFilter
     search_fields = [
         "reference_id",
         "customer__first_name",
@@ -447,13 +467,35 @@ class TaskViewSet(viewsets.ModelViewSet):
             work_item = instance.work_item
 
             if user.is_superuser:
-                data["workItemDetails"] = WorkItemSerializer(work_item).data
+                work_item_data = WorkItemSerializer(work_item).data
+
+                # Add customerDetails and deviceDetails to work item
+                if work_item.customer_id:
+                    from customers.serializers import CustomerSerializer
+                    work_item_data["customerDetails"] = CustomerSerializer(work_item.customer).data
+
+                if work_item.customer_asset_id:
+                    from customers.serializers import AssetSerializer
+                    work_item_data["deviceDetails"] = AssetSerializer(work_item.customer_asset).data
+
+                data["workItemDetails"] = work_item_data
 
             elif (
                     user.has_permission('view_all_workitems', request.tenant) or
                     (user.has_permission('view_own_workitems', request.tenant) and work_item.technician == user)
             ):
-                data["workItemDetails"] = WorkItemSerializer(work_item).data
+                work_item_data = WorkItemSerializer(work_item).data
+
+                # Add customerDetails and deviceDetails to work item
+                if work_item.customer_id:
+                    from customers.serializers import CustomerSerializer
+                    work_item_data["customerDetails"] = CustomerSerializer(work_item.customer).data
+
+                if work_item.customer_asset_id:
+                    from customers.serializers import AssetSerializer
+                    work_item_data["deviceDetails"] = AssetSerializer(work_item.customer_asset).data
+
+                data["workItemDetails"] = work_item_data
 
             else:
                 data["workItemDetails"] = None

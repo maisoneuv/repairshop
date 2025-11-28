@@ -4,11 +4,14 @@ import AppLayout from "./layouts/AppLayout";
 import Home from "./pages/Home";
 import WorkItemDetail from "./pages/WorkItemDetail";
 import WorkItemPage from "./pages/WorkItemPage";
+import CustomerDetail from "./pages/CustomerDetail";
 import TaskDetail from "./features/Tasks/TaskDetail";
 import TaskList from "./features/Tasks/TaskList";
 import TaskForm from "./features/Tasks/TaskForm";
 import LoginPage from "./pages/LoginPage";
 import SearchResults from "./pages/SearchResults";
+import AllTasks from "./pages/AllTasks";
+import MyTasks from "./pages/MyTasks";
 import { useUser } from "./context/UserContext";
 
 function App() {
@@ -32,8 +35,11 @@ function App() {
                 <Route path="/work-items" element={<WorkItemList />} />
                 <Route path="/work-items/new" element={<WorkItemPage />} />
                 <Route path="/work-items/:id" element={<WorkItemDetail />} />
+                <Route path="/customers/:id" element={<CustomerDetail />} />
                 <Route path="/tasks/new" element={<TaskForm />} />
                 <Route path="/tasks/:id" element={<TaskDetail />} />
+                <Route path="/tasks/all" element={<AllTasks />} />
+                <Route path="/tasks/my" element={<MyTasks />} />
                 <Route path="/tasks" element={<TaskList />} />
                 <Route path="/search" element={<SearchResults />} />
 

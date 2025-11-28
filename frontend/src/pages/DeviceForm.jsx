@@ -43,7 +43,7 @@ export default function DeviceForm({ onSuccess }) {
         };
 
         try {
-            const { data: newDevice } = await apiClient.post("/inventory/api/devices/", payload);
+            const { data: newDevice } = await apiClient.post("/api/inventory/api/devices/", payload);
             onSuccess(newDevice);
         } catch (err) {
             setError("Could not create device: " + err.message);

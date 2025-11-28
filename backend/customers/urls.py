@@ -1,5 +1,6 @@
-from django.urls import path, include
+from django.urls import path, include, re_path
 from rest_framework.routers import DefaultRouter
+from core.views import react_app_view
 from .views import (CustomerListView,
                     CustomerCreateView,
                     CustomerUpdateView,
@@ -47,6 +48,11 @@ urlpatterns = [
     path('api/referral-sources/', get_referral_sources, name='referral-sources'),
     path('api/customers/<int:pk>/assets/', customer_assets_api, name='customer-assets-api'),
     path("api/", include(router.urls)),
+]
 
-
+# Catch-all for non-API routes - serve React app
+# This allows frontend routes like /customers/16 to work
+# Exclude static files, media files, and API routes
+urlpatterns += [
+    re_path(r'^(?!customers/|all|detail/|create|assets|asset/|customer-autocomplete/|customer-phone-autocomplete/|customer-search/|select-customer/|load-new-customer-fields/|create-inline/|asset-create-inline/|customer-assets/|api/|static/|media/).*$', react_app_view, name='customers-react-catchall'),
 ]

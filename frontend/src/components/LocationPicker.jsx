@@ -41,7 +41,7 @@ export default function LocationPicker({
                 params.append('customer_id', customerId);
             }
 
-            const response = await apiClient.get(`/service/api/locations/search/?${params.toString()}`);
+            const response = await apiClient.get(`/api/service/api/locations/search/?${params.toString()}`);
             setResults(response.data);
             const groups = response.data?.groups || [];
             const hasItems = groups.some((group) => group.items && group.items.length > 0);

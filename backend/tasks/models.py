@@ -162,7 +162,7 @@ class WorkItem(models.Model):
 
 class Task(models.Model):
     tenant = models.ForeignKey(Tenant, on_delete=models.CASCADE)
-    summary = models.CharField(max_length=255, blank=True, null=False)
+    summary = models.TextField(blank=True, null=True)
     description = models.TextField(blank=True)
     work_item = models.ForeignKey(WorkItem, blank=True, null=True, on_delete=models.CASCADE, related_name="tasks")
     status = models.CharField(choices=task_statuses, default='To do')

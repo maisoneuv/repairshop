@@ -18,6 +18,8 @@ services:
       context: .
       dockerfile: docker/Dockerfile.backend
     env_file: .env
+    environment:
+      - IN_DOCKER=true
     depends_on:
       db:
         condition: service_healthy
