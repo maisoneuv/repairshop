@@ -13,6 +13,16 @@ services:
       timeout: 5s
       retries: 10
 
+  redis:
+    image: redis:7-alpine
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    volumes:
+      - redisdata:/data
+
   web:
     build:
       context: .
@@ -22,6 +32,8 @@ services:
       - IN_DOCKER=true
     depends_on:
       db:
+        condition: service_healthy
+      redis:
         condition: service_healthy
     working_dir: /app
     command: >
@@ -34,6 +46,32 @@ services:
       - "8000"
     volumes:
       - staticfiles:/app/staticfiles
+
+  celery_worker:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.backend
+    env_file: .env
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    working_dir: /app
+    command: celery -A app worker --loglevel=info
+    restart: unless-stopped
+
+  celery_beat:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.backend
+    env_file: .env
+    depends_on:
+      redis:
+        condition: service_healthy
+    working_dir: /app
+    command: celery -A app beat --loglevel=info
+    restart: unless-stopped
 
   frontend:
     build:
@@ -57,5 +95,6 @@ services:
 
 volumes:
   dbdata:
+  redisdata:
   frontend_dist:
   staticfiles:
