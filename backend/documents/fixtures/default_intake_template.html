@@ -1,0 +1,357 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+    <meta charset="UTF-8" />
+    <title>Formularz przyjęcia sprzętu – Serwis FIXED</title>
+    <style>
+        :root {
+            --fixed-primary: #800020;
+            --fixed-border: #e2e4ea;
+            --fixed-border-strong: #c4c7d0;
+            --fixed-muted: #6b7280;
+            --fixed-bg: #f3f4f6;
+        }
+
+        body {
+            font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+            font-size: 13px;
+            line-height: 1.5;
+            color: #111827;
+            margin: 20px;
+            background: var(--fixed-bg);
+        }
+
+        .doc {
+            background: #ffffff;
+            border-radius: 12px;
+            padding: 22mm 18mm 18mm 18mm;
+            box-shadow: 0 18px 45px rgba(15, 23, 42, 0.16);
+            border: 1px solid rgba(148, 163, 184, 0.45);
+            position: relative;
+            overflow: hidden;
+            max-width: 188mm;
+            margin: 0 auto;
+        }
+
+        .doc-bar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 6px 18mm;
+            margin: -22mm -18mm 18px -18mm;
+            background: var(--fixed-primary);
+            color: #f9fafb;
+            font-size: 11px;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+        }
+
+        .doc-bar-right {
+            font-weight: 500;
+            text-align: right;
+        }
+
+        .doc-bar-rma {
+            font-size: 12px;
+            letter-spacing: 0.16em;
+            text-transform: uppercase;
+            font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+        }
+
+        .doc-bar-date {
+            font-size: 10px;
+            opacity: 0.9;
+            margin-top: 2px;
+        }
+
+        .doc-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            border-bottom: 1px solid var(--fixed-border);
+            padding-bottom: 10px;
+            margin-bottom: 18px;
+        }
+
+        .brand-block {
+            text-align: left;
+        }
+
+        .brand-name {
+            font-size: 26px;
+            font-weight: 700;
+            letter-spacing: 0.16em;
+            text-transform: uppercase;
+            color: var(--fixed-primary);
+        }
+
+        .brand-tagline {
+            font-size: 11px;
+            margin-top: 2px;
+            color: var(--fixed-muted);
+        }
+
+        .brand-contact {
+            font-size: 11px;
+            margin-top: 3px;
+            color: #4b5563;
+        }
+
+        .company-meta {
+            text-align: right;
+            font-size: 11px;
+            color: #4b5563;
+        }
+
+        .doc-title {
+            text-align: center;
+            margin-bottom: 18px;
+        }
+
+        .doc-title-main {
+            font-size: 19px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.12em;
+        }
+
+        .doc-title-sub {
+            font-size: 13px;
+            margin-top: 6px;
+        }
+
+        .section-label {
+            font-weight: 600;
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            margin-bottom: 6px;
+            color: #374151;
+        }
+
+        .section-label::before {
+            content: "▸ ";
+            color: var(--fixed-primary);
+            font-size: 10px;
+        }
+
+        .card {
+            border: 1px solid var(--fixed-border);
+            border-radius: 10px;
+            padding: 10px 14px;
+            background: linear-gradient(to bottom right, #ffffff, #f9fafb);
+            line-height: 1.45;
+        }
+
+        .card + .card {
+            margin-top: 16px;
+        }
+
+        .spec-row {
+            display: flex;
+            justify-content: space-between;
+            gap: 12px;
+            margin-bottom: 3px;
+        }
+
+        .spec-label {
+            width: 35%;
+            font-size: 11px;
+            color: var(--fixed-muted);
+        }
+
+        .spec-value {
+            width: 65%;
+        }
+
+        .terms-title {
+            margin-top: 22px;
+            font-weight: 600;
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+        }
+
+        .terms-block {
+            margin-top: 8px;
+            padding: 10px 12px;
+            border-radius: 10px;
+            border: 1px solid var(--fixed-border);
+            background: #f9fafb;
+        }
+
+        .terms-list {
+            font-size: 10px;
+            margin: 0 0 0 18px;
+            line-height: 1.55;
+        }
+
+        .place-date {
+            margin-top: 24px;
+            font-size: 11px;
+        }
+
+        .signatures {
+            display: flex;
+            justify-content: space-between;
+            margin-top: 26px;
+            gap: 24px;
+        }
+
+        .signature-block {
+            width: 50%;
+            text-align: center;
+            font-size: 11px;
+        }
+
+        .signature-line {
+            border-top: 1px solid #000;
+            height: 0;
+            margin-top: 24px;
+        }
+
+        .signature-label {
+            margin-top: 4px;
+            font-size: 11px;
+        }
+
+        .signature-hint {
+            font-size: 9px;
+            color: var(--fixed-muted);
+        }
+
+        .signature-name {
+            margin-top: 3px;
+            font-size: 11px;
+        }
+
+        .footer-legal {
+            margin-top: 22px;
+            font-size: 9px;
+            color: #6b7280;
+        }
+
+        @media print {
+            body {
+                margin: 5mm;
+                background: #ffffff;
+            }
+            .doc {
+                box-shadow: none;
+                border-radius: 0;
+                border: none;
+                padding: 10mm 5mm;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="doc">
+        <div class="doc-bar">
+            <div class="doc-bar-left">Protokół przyjęcia sprzętu – FIXED</div>
+            <div class="doc-bar-right">
+                <div class="doc-bar-rma">RMA: {{workitem.reference_id}}</div>
+                <div class="doc-bar-date">{{workitem.created_date}}</div>
+            </div>
+        </div>
+
+        <header class="doc-header">
+            <div class="brand-block">
+                <div class="brand-name">FIXED</div>
+                <div class="brand-tagline">AudioLove – Serwis elektroniki</div>
+                <div class="brand-contact">Zamieniecka 55, 04-158 Warszawa</div>
+                <div class="brand-contact">tel. 789 088 887 • info@serwisfixed.pl</div>
+            </div>
+            <div class="company-meta">
+                <div><strong>FIXED sp. z o.o.</strong></div>
+                <div>NIP: 7011256310</div>
+            </div>
+        </header>
+
+        <section class="doc-title">
+            <div class="doc-title-main">Protokół przyjęcia sprzętu</div>
+            <div class="doc-title-sub">Data przyjęcia: {{workitem.created_date}}</div>
+            <div style="margin-top:14px; font-size:26px; font-weight:700; letter-spacing:0.06em; color:var(--fixed-primary);">
+                RMA: <span style="font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace;">{{workitem.reference_id}}</span>
+            </div>
+        </section>
+
+        <section style="margin-bottom: 18px;">
+            <div class="section-label">Dane zamawiającego</div>
+            <div class="card">
+                <div><strong>{{customer.full_name}}</strong></div>
+                <div style="margin-top:4px;">tel.: <strong>{{customer.phone}}</strong></div>
+                <div>e-mail: <strong>{{customer.email}}</strong></div>
+                <div style="margin-top:6px; font-style:italic; font-size:11px;">Osoba przyjmująca: {{owner.full_name}}</div>
+            </div>
+        </section>
+
+        <section style="margin-bottom: 18px;">
+            <div class="section-label">Dane zlecenia</div>
+            <div class="card">
+                <div>Data złożenia zamówienia: <strong>{{workitem.created_date}}</strong></div>
+                <div>Planowana diagnoza: w ciągu 3 dni roboczych</div>
+                <div>Przedpłata: <strong>{{workitem.prepaid_amount}} PLN</strong></div>
+            </div>
+        </section>
+
+        <section style="margin-bottom: 18px;">
+            <div class="section-label">Dane sprzętu</div>
+            <div class="card">
+                <div class="spec-row">
+                    <div class="spec-label">Urządzenie</div>
+                    <div class="spec-value"><strong>{{asset.device_name}}</strong></div>
+                </div>
+                <div class="spec-row">
+                    <div class="spec-label">Numer seryjny / IMEI</div>
+                    <div class="spec-value"><strong>{{asset.serial_number}}</strong></div>
+                </div>
+                <div class="spec-row">
+                    <div class="spec-label">Stan wizualny</div>
+                    <div class="spec-value">{{workitem.device_condition}}</div>
+                </div>
+                <div class="spec-row">
+                    <div class="spec-label">Kompletacja</div>
+                    <div class="spec-value">{{workitem.accessories}}</div>
+                </div>
+                <div class="spec-row">
+                    <div class="spec-label">Zgłoszona nieprawidłowość</div>
+                    <div class="spec-value"><strong>{{workitem.description}}</strong></div>
+                </div>
+            </div>
+        </section>
+
+        <section>
+            <div class="terms-title">Warunki świadczenia usług serwisowych</div>
+            <div class="terms-block">
+                <ol class="terms-list">
+                    <li>Serwis nie odpowiada za dane zapisane w urządzeniu. Klient został poinformowany o konieczności wykonania kopii zapasowej.</li>
+                    <li>Standardowa diagnoza (do 3 dni roboczych) – bezpłatna. Diagnoza ekspresowa 24h – 190 zł (płatne z góry, niezależnie od wyniku).</li>
+                    <li>Sprzęt po zalaniu może ulec dalszym uszkodzeniom podczas otwarcia lub czyszczenia.</li>
+                    <li>Naprawa wykonywana jest w możliwie najkrótszym terminie; w razie przeszkód serwis kontaktuje się z klientem.</li>
+                    <li>Po naprawie sprzęt przechowywany jest bezpłatnie 30 dni; później opłata 50 zł za każdy rozpoczęty miesiąc.</li>
+                </ol>
+            </div>
+        </section>
+
+        <div class="place-date">Miejscowość, data: Warszawa, dnia {{workitem.created_date}}</div>
+
+        <div class="signatures">
+            <div class="signature-block">
+                <div class="signature-line"></div>
+                <div class="signature-label">Przyjmujący zlecenie</div>
+                <div class="signature-hint">czytelny podpis</div>
+                <div class="signature-name">{{owner.full_name}}</div>
+            </div>
+            <div class="signature-block">
+                <div class="signature-line"></div>
+                <div class="signature-label">Zamawiający</div>
+                <div class="signature-hint">czytelny podpis</div>
+                <div class="signature-name">{{customer.full_name}}</div>
+            </div>
+        </div>
+
+        <div class="footer-legal">Administrator danych osobowych: FIXED sp. z o.o., Zamieniecka 55, 04-158 Warszawa. Dane są wykorzystywane wyłącznie na potrzeby obsługi zlecenia serwisowego, kontaktu z klientem oraz rozliczeń księgowych.</div>
+    </div>
+</body>
+</html>

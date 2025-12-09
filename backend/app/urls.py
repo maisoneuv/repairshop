@@ -17,6 +17,7 @@ Including another URLconf
 from django.contrib import admin
 from django.urls import path, include, re_path
 from django.conf import settings
+from django.conf.urls.static import static
 from drf_spectacular.views import (
     SpectacularSwaggerView,
     SpectacularAPIView,
@@ -32,9 +33,14 @@ urlpatterns = [
     path('api/customers/', include('customers.urls'), name='customers'),
     path('api/inventory/', include('inventory.urls'), name='inventory'),
     path('api/service/', include('service.urls'), name='service'),
+    path('api/documents/', include('documents.urls'), name='documents'),
     path('api/schema/', SpectacularAPIView.as_view(), name='api-schema'),
     path('api/docs/', SpectacularSwaggerView.as_view(url_name='api-schema'), name='api-docs'),
 ]
+
+# Serve media files in development
+if settings.DEBUG:
+    urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
 
 # Only serve React app via Django in local development
 # In Docker, nginx handles all frontend routes

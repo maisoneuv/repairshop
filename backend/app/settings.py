@@ -64,6 +64,8 @@ INSTALLED_APPS = [
     'django_extensions',
     'integrations',
     'import_export',
+    'documents',
+    'ckeditor',
 ]
 
 MIDDLEWARE = [
@@ -162,6 +164,14 @@ STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
 STATIC_URL = '/static/'
 STATICFILES_DIRS = []
 
+# Media files (User uploads, Generated PDFs)
+# https://docs.djangoproject.com/en/5.0/topics/files/
+MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
+MEDIA_URL = '/media/'
+
+# Form documents storage path pattern
+FORM_DOCUMENTS_PATH = 'documents/{tenant_id}/{form_type}/{work_item_ref}/'
+
 # Default primary key field type
 # https://docs.djangoproject.com/en/5.0/ref/settings/#default-auto-field
 
@@ -217,3 +227,16 @@ CELERY_TIMEZONE = TIME_ZONE
 CELERY_TASK_TRACK_STARTED = True
 CELERY_TASK_TIME_LIMIT = 30 * 60  # 30 minutes
 CELERY_BROKER_CONNECTION_RETRY_ON_STARTUP = True
+
+# ============================================================================
+# CKEditor Configuration (for HTML template editing)
+# ============================================================================
+CKEDITOR_CONFIGS = {
+    'default': {
+        'toolbar': 'full',
+        'height': 600,
+        'width': '100%',
+        'allowedContent': True,  # Allow all HTML/CSS
+        'extraAllowedContent': 'style(*);*(*);*{*}',  # Allow inline styles
+    },
+}
