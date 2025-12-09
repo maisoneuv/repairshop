@@ -12,6 +12,7 @@ import EnhancedActivityTimeline from "../components/EnhancedActivityTimeline";
 import TaskForm from "../features/Tasks/TaskForm";
 import ModelDetailLayout from "../components/ModelDetailLayout";
 import WorkitemDetailLayout from "../features/WorkItems/WorkitemDetailLayout";
+import FormDocumentsSection from "../components/FormDocumentsSection";
 
 export default function WorkItemDetail() {
     const { id } = useParams();
@@ -358,6 +359,9 @@ export default function WorkItemDetail() {
                                 )}
                             />
                         </div>
+
+                        {/* Intake Forms */}
+                        <FormDocumentsSection workItemId={workItem.id} />
 
                         {/* Activity Timeline */}
                         <EnhancedActivityTimeline model="workitem" objectId={workItem.id} />

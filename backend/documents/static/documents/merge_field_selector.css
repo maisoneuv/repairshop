@@ -1,0 +1,198 @@
+/**
+ * Merge Field Selector Styles
+ * Styled to match Django admin theme
+ */
+
+.merge-field-selector {
+    background: #f8f8f8;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    margin-bottom: 15px;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+}
+
+.merge-field-header {
+    display: flex;
+    align-items: center;
+    padding: 10px 15px;
+    background: #417690;
+    color: #fff;
+    cursor: pointer;
+    border-radius: 4px 4px 0 0;
+    user-select: none;
+}
+
+.merge-field-header:hover {
+    background: #4a8aaa;
+}
+
+.merge-field-icon {
+    font-size: 18px;
+    margin-right: 8px;
+}
+
+.merge-field-title {
+    flex: 1;
+    font-weight: 600;
+    font-size: 14px;
+}
+
+.merge-field-toggle {
+    font-size: 12px;
+    margin-left: 10px;
+    transition: transform 0.2s;
+}
+
+.merge-field-content {
+    padding: 15px;
+    background: #fff;
+    border-top: 1px solid #ddd;
+}
+
+.merge-field-instructions {
+    font-size: 13px;
+    color: #666;
+    margin-bottom: 15px;
+    padding: 10px;
+    background: #fef8e7;
+    border-left: 3px solid #f39c12;
+    border-radius: 3px;
+}
+
+.merge-field-controls {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.merge-field-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.merge-field-row label {
+    min-width: 80px;
+    font-weight: 600;
+    font-size: 13px;
+    color: #333;
+}
+
+.merge-category-select,
+.merge-field-select {
+    flex: 1;
+    padding: 6px 10px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    font-size: 13px;
+    background: #fff;
+    max-width: 300px;
+}
+
+.merge-category-select:focus,
+.merge-field-select:focus {
+    outline: none;
+    border-color: #417690;
+    box-shadow: 0 0 0 2px rgba(65, 118, 144, 0.1);
+}
+
+.merge-category-select:disabled,
+.merge-field-select:disabled {
+    background: #f5f5f5;
+    color: #999;
+    cursor: not-allowed;
+}
+
+.merge-variable-display {
+    background: #f0f7fb;
+    padding: 10px;
+    border-radius: 4px;
+    border: 1px solid #c3dce8;
+}
+
+.merge-variable-code {
+    flex: 1;
+    font-family: 'Courier New', Courier, monospace;
+    font-size: 14px;
+    font-weight: 600;
+    color: #2c3e50;
+    background: #fff;
+    padding: 6px 10px;
+    border-radius: 3px;
+    border: 1px solid #c3dce8;
+}
+
+.merge-field-actions {
+    display: flex;
+    gap: 10px;
+    padding-top: 5px;
+}
+
+.merge-field-actions button {
+    padding: 8px 16px;
+    font-size: 13px;
+    border-radius: 4px;
+    border: 1px solid #ccc;
+    background: #fff;
+    cursor: pointer;
+    transition: all 0.2s;
+    font-weight: 500;
+}
+
+.merge-field-actions button:hover {
+    background: #f5f5f5;
+    border-color: #999;
+}
+
+.merge-field-actions button.button-primary {
+    background: #417690;
+    color: #fff;
+    border-color: #417690;
+}
+
+.merge-field-actions button.button-primary:hover {
+    background: #4a8aaa;
+    border-color: #4a8aaa;
+}
+
+/* Responsive design */
+@media (max-width: 768px) {
+    .merge-field-row {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+
+    .merge-field-row label {
+        min-width: auto;
+    }
+
+    .merge-category-select,
+    .merge-field-select {
+        max-width: 100%;
+        width: 100%;
+    }
+
+    .merge-field-actions {
+        flex-direction: column;
+    }
+
+    .merge-field-actions button {
+        width: 100%;
+    }
+}
+
+/* Animation for expand/collapse */
+@keyframes slideDown {
+    from {
+        opacity: 0;
+        max-height: 0;
+    }
+    to {
+        opacity: 1;
+        max-height: 500px;
+    }
+}
+
+.merge-field-content[style*="display: block"] {
+    animation: slideDown 0.3s ease-in-out;
+}
