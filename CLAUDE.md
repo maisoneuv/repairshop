@@ -12,6 +12,12 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - `cd backend && python manage.py shell` - Django shell
 - `cd backend && python manage.py test` - Run tests
 
+### API Keys (External Integrations)
+- `cd backend && python manage.py generate_api_key --tenant=<subdomain> --role=<role_id> --name="Integration Name"` - Generate API key for external systems
+- API keys use `Authorization: Bearer <key>` header format
+- Manage API keys via Django admin: **Core > API Keys**
+- See [backend/docs/API_KEYS.md](backend/docs/API_KEYS.md) for complete usage guide
+
 ### Celery (Background Tasks & Integrations)
 - `cd backend && celery -A app worker --loglevel=info` - Start Celery worker for background tasks
 - `cd backend && celery -A app beat --loglevel=info` - Start Celery Beat for periodic tasks
@@ -54,19 +60,22 @@ This is a multi-tenant service management application with Django REST Framework
 **Integration System** (`backend/integrations/`):
 - `TenantIntegration`: Per-tenant configuration for external integrations (n8n, Notion, Slack)
 - `IntegrationSync`: Audit trail and idempotency for integration webhooks
+- `APIKey`: Secure authentication for external systems to call our API
 - Event-driven architecture using Django signals with transaction safety
 - Background processing via Celery tasks with automatic retries
-- See [docs/INTEGRATION_SETUP.md](docs/INTEGRATION_SETUP.md) for setup guide
+- See [backend/docs/INTEGRATION_SETUP.md](backend/docs/INTEGRATION_SETUP.md) for outbound webhooks
+- See [backend/docs/API_KEYS.md](backend/docs/API_KEYS.md) for inbound API authentication
 
 ## Documentation
 
-All integration and deployment documentation is in the [`docs/`](docs/) directory:
-- **[docs/INTEGRATION_SETUP.md](docs/INTEGRATION_SETUP.md)** - Quick start guide for integrations
-- **[docs/N8N_WEBHOOK_SETUP.md](docs/N8N_WEBHOOK_SETUP.md)** - Complete n8n configuration guide
-- **[docs/N8N_AUTHENTICATION.md](docs/N8N_AUTHENTICATION.md)** - Authentication methods and security
-- **[docs/DOCKER_DEPLOYMENT.md](docs/DOCKER_DEPLOYMENT.md)** - Docker deployment guide
-- **[docs/MONITORING_INTEGRATIONS.md](docs/MONITORING_INTEGRATIONS.md)** - Debugging and monitoring
-- See [docs/README.md](docs/README.md) for complete index
+All integration and deployment documentation is in the [`backend/docs/`](backend/docs/) directory:
+- **[backend/docs/API_KEYS.md](backend/docs/API_KEYS.md)** - API key authentication for external systems
+- **[backend/docs/INTEGRATION_SETUP.md](backend/docs/INTEGRATION_SETUP.md)** - Quick start guide for integrations
+- **[backend/docs/N8N_WEBHOOK_SETUP.md](backend/docs/N8N_WEBHOOK_SETUP.md)** - Complete n8n configuration guide
+- **[backend/docs/N8N_AUTHENTICATION.md](backend/docs/N8N_AUTHENTICATION.md)** - Authentication methods and security
+- **[backend/docs/DOCKER_DEPLOYMENT.md](backend/docs/DOCKER_DEPLOYMENT.md)** - Docker deployment guide
+- **[backend/docs/MONITORING_INTEGRATIONS.md](backend/docs/MONITORING_INTEGRATIONS.md)** - Debugging and monitoring
+- See [backend/docs/README.md](backend/docs/README.md) for complete index
 
 ### Key Architectural Patterns
 
@@ -76,7 +85,11 @@ All integration and deployment documentation is in the [`docs/`](docs/) director
 
 **API Communication**:
 - Backend serves REST API on port 8000
-- Frontend consumes API with session-based authentication
+- **Frontend**: Uses session-based authentication (cookies)
+- **External Systems**: Use API key authentication (`Authorization: Bearer <key>`)
+  - API keys are tenant-scoped with role-based permissions
+  - Managed via Django admin or CLI (`generate_api_key` command)
+  - See [backend/docs/API_KEYS.md](backend/docs/API_KEYS.md) for details
 - CORS configured for `localhost:5173` and `*.localhost:5173` patterns
 
 **Database**: PostgreSQL with connection details in `backend/app/settings.py`
@@ -90,4 +103,7 @@ All integration and deployment documentation is in the [`docs/`](docs/) director
 ### Development Notes
 - Multi-tenant hosts use `.localhost` domains (e.g., `repairhero.localhost:5173`)
 - Django admin available for data management
-- Uses session authentication between frontend/backend
+- **Authentication**:
+  - Frontend → Backend: Session-based (cookies)
+  - External Systems → Backend: API keys (`Authorization: Bearer <key>`)
+  - Both methods work simultaneously without conflicts
