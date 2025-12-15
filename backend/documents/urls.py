@@ -18,13 +18,11 @@ router.register(r'documents', FormDocumentViewSet, basename='formdocument')
 app_name = 'documents'
 
 urlpatterns = [
-    path('', include(router.urls)),
-
     # Work item document endpoints (nested under work items)
+    # IMPORTANT: This must come BEFORE router.urls to avoid routing conflicts
     path('work-items/<int:work_item_pk>/documents/',
          WorkItemFormDocumentViewSet.as_view({'get': 'list', 'post': 'create'}),
          name='work-item-documents'),
-    path('work-items/<int:work_item_pk>/documents/available-form-types/',
-         WorkItemFormDocumentViewSet.as_view({'get': 'available_form_types'}),
-         name='work-item-documents-available-form-types'),
+
+    path('', include(router.urls)),
 ]
