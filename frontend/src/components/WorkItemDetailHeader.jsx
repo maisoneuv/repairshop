@@ -1,3 +1,5 @@
+import { useState, useRef, useEffect, useMemo } from 'react';
+
 const STATUS_STYLES = {
     new: { label: "New", className: "bg-sky-50 text-sky-700 border-sky-200" },
     in_progress: { label: "In Progress", className: "bg-amber-50 text-amber-700 border-amber-200" },
@@ -41,7 +43,56 @@ const getStatusBadge = (status) => {
     };
 };
 
-export default function WorkItemDetailHeader({ workItem, onEdit }) {
+export default function WorkItemDetailHeader({ workItem, schema, onEdit, onStatusChange }) {
+    const [isStatusDropdownOpen, setIsStatusDropdownOpen] = useState(false);
+    const dropdownRef = useRef(null);
+
+    // Build STATUS_OPTIONS dynamically from schema
+    const STATUS_OPTIONS = useMemo(() => {
+        if (!schema?.status?.choices) {
+            // Fallback to empty array if schema is not available
+            return [];
+        }
+        // Schema choices come as [['New', 'New'], ['In Progress', 'In Progress'], ...]
+        return schema.status.choices.map(([value, label]) => ({
+            value: value,  // The actual backend value (e.g., "In Progress")
+            label: label
+        }));
+    }, [schema]);
+
+    useEffect(() => {
+        const handleClickOutside = (event) => {
+            if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
+                setIsStatusDropdownOpen(false);
+            }
+        };
+
+        if (isStatusDropdownOpen) {
+            document.addEventListener('mousedown', handleClickOutside);
+        }
+
+        return () => {
+            document.removeEventListener('mousedown', handleClickOutside);
+        };
+    }, [isStatusDropdownOpen]);
+
+    const handleStatusClick = () => {
+        if (onStatusChange) {
+            setIsStatusDropdownOpen(!isStatusDropdownOpen);
+        }
+    };
+
+    const handleStatusSelect = async (newStatus) => {
+        setIsStatusDropdownOpen(false);
+        if (onStatusChange) {
+            try {
+                await onStatusChange(newStatus);
+            } catch (err) {
+                console.error('Failed to update status:', err);
+            }
+        }
+    };
+
     const formatDate = (dateString) => {
         if (!dateString) return 'Not set';
         const date = new Date(dateString);
@@ -100,9 +151,43 @@ export default function WorkItemDetailHeader({ workItem, onEdit }) {
                                 Work Item #{workItem.reference_id || workItem.id}
                             </h1>
                             <div className="flex flex-wrap gap-2">
-                                <span className={statusBadge.className}>
-                                    {statusBadge.label}
-                                </span>
+                                <div className="relative" ref={dropdownRef}>
+                                    <button
+                                        type="button"
+                                        onClick={handleStatusClick}
+                                        disabled={!onStatusChange}
+                                        className={`${statusBadge.className} ${onStatusChange ? 'cursor-pointer hover:opacity-80 transition-opacity' : 'cursor-default'} flex items-center gap-1`}
+                                    >
+                                        {statusBadge.label}
+                                        {onStatusChange && (
+                                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                                            </svg>
+                                        )}
+                                    </button>
+
+                                    {isStatusDropdownOpen && (
+                                        <div className="absolute top-full left-0 mt-1 bg-white rounded-lg shadow-lg border border-gray-200 py-1 z-50 min-w-[150px]">
+                                            {STATUS_OPTIONS.map((option) => {
+                                                const optionBadge = getStatusBadge(option.value);
+                                                // Compare backend values directly
+                                                const isCurrentStatus = workItem.status === option.value;
+                                                return (
+                                                    <button
+                                                        type="button"
+                                                        key={option.value}
+                                                        onClick={() => handleStatusSelect(option.value)}
+                                                        className={`w-full text-left px-4 py-2 hover:bg-gray-50 transition-colors ${isCurrentStatus ? 'bg-gray-50' : ''}`}
+                                                    >
+                                                        <span className={`${optionBadge.className} text-xs`}>
+                                                            {option.label}
+                                                        </span>
+                                                    </button>
+                                                );
+                                            })}
+                                        </div>
+                                    )}
+                                </div>
                                 {isExpressPriority && (
                                     <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-semibold border border-red-200 bg-red-50 text-red-600">
                                         Express

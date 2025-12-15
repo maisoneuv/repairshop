@@ -20,6 +20,16 @@ export async function fetchFormDocuments(workItemId, formType = null) {
 }
 
 /**
+ * Get available form types for a work item (types with active templates)
+ * @param {number} workItemId - Work item ID
+ * @returns {Promise<Array>} List of available form types with value and label
+ */
+export async function fetchAvailableFormTypes(workItemId) {
+    const response = await apiClient.get(`/api/documents/work-items/${workItemId}/documents/available-form-types/`);
+    return response.data;
+}
+
+/**
  * Generate a new form document for a work item
  * @param {number} workItemId - Work item ID
  * @param {string} formType - Form type to generate (default: 'intake')

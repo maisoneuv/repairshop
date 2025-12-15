@@ -114,7 +114,11 @@ export default function AppLayout() {
 
                             {/* Right side actions */}
                             <div className="flex items-center space-x-4">
-                                <button className="p-2 text-gray-600 hover:text-blue-600 border border-gray-200 rounded-lg hover:border-blue-200">
+                                <button
+                                    type="button"
+                                    onClick={() => navigate("/work-items/new")}
+                                    className="p-2 text-gray-600 hover:text-blue-600 border border-gray-200 rounded-lg hover:border-blue-200"
+                                >
                                     <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
                                     </svg>
