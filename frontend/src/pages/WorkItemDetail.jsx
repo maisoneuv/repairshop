@@ -105,6 +105,20 @@ export default function WorkItemDetail() {
         }
     };
 
+    const handleStatusChange = async (newStatus) => {
+        if (!workItem) return;
+        console.log('Updating status to:', newStatus);
+        try {
+            const updated = await updateWorkItemField(workItem.id, { status: newStatus });
+            console.log('Status updated successfully:', updated);
+            setWorkItem((prev) => ({ ...prev, ...updated }));
+            setFormData((prev) => ({ ...prev, ...updated }));
+        } catch (err) {
+            console.error("Failed to update status:", err);
+            alert('Failed to update status. Please check the console for details.');
+        }
+    };
+
     const handleCustomerUpdated = (updatedCustomer) => {
         setWorkItem((prev) => {
             if (!prev) return prev;
@@ -173,7 +187,9 @@ export default function WorkItemDetail() {
                 {/* Header */}
                 <WorkItemDetailHeader
                     workItem={workItem}
+                    schema={schema}
                     onEdit={handleEdit}
+                    onStatusChange={handleStatusChange}
                 />
 
                 {/* Main Content Area */}
