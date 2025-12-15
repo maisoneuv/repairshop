@@ -24,4 +24,7 @@ urlpatterns = [
     path('work-items/<int:work_item_pk>/documents/',
          WorkItemFormDocumentViewSet.as_view({'get': 'list', 'post': 'create'}),
          name='work-item-documents'),
+    path('work-items/<int:work_item_pk>/documents/available-form-types/',
+         WorkItemFormDocumentViewSet.as_view({'get': 'available_form_types'}),
+         name='work-item-documents-available-form-types'),
 ]

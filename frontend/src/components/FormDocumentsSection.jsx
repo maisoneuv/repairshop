@@ -1,16 +1,19 @@
 import { useState, useEffect, useRef } from 'react';
-import { fetchFormDocuments, generateFormDocument, downloadFormDocument } from '../api/documents';
+import { fetchFormDocuments, generateFormDocument, downloadFormDocument, fetchAvailableFormTypes } from '../api/documents';
 
 export default function FormDocumentsSection({ workItemId }) {
     const [documents, setDocuments] = useState([]);
     const [isLoading, setIsLoading] = useState(true);
     const [isGenerating, setIsGenerating] = useState(false);
     const [error, setError] = useState(null);
+    const [availableFormTypes, setAvailableFormTypes] = useState([]);
+    const [selectedFormType, setSelectedFormType] = useState('');
     const pollingIntervalRef = useRef(null);
 
     useEffect(() => {
         if (workItemId) {
             loadDocuments();
+            loadAvailableFormTypes();
         }
 
         // Cleanup polling interval on unmount
@@ -53,7 +56,8 @@ export default function FormDocumentsSection({ workItemId }) {
                 setIsLoading(true);
             }
             setError(null);
-            const data = await fetchFormDocuments(workItemId, 'intake');
+            // Fetch all document types (not filtered by form type)
+            const data = await fetchFormDocuments(workItemId);
             setDocuments(data);
         } catch (err) {
             console.error('Failed to load form documents:', err);
@@ -67,11 +71,30 @@ export default function FormDocumentsSection({ workItemId }) {
         }
     };
 
+    const loadAvailableFormTypes = async () => {
+        try {
+            const types = await fetchAvailableFormTypes(workItemId);
+            setAvailableFormTypes(types);
+            // Set default selection to first available type
+            if (types.length > 0) {
+                setSelectedFormType(types[0].value);
+            }
+        } catch (err) {
+            console.error('Failed to load available form types:', err);
+            // Don't set error state here, just log it
+        }
+    };
+
     const handleGenerate = async () => {
+        if (!selectedFormType) {
+            setError('Please select a document type');
+            return;
+        }
+
         try {
             setIsGenerating(true);
             setError(null);
-            await generateFormDocument(workItemId, 'intake');
+            await generateFormDocument(workItemId, selectedFormType);
 
             // Wait a moment then reload to show the pending document
             setTimeout(() => {
@@ -168,13 +191,32 @@ export default function FormDocumentsSection({ workItemId }) {
 
     return (
         <div className="bg-white rounded-xl shadow-lg border border-gray-200 p-6">
-            <div className="flex items-center justify-between mb-4">
-                <h3 className="text-lg font-semibold text-gray-900">Intake Forms</h3>
+            {/* Card Title */}
+            <h3 className="text-lg font-semibold text-gray-900 mb-6">Form Documents</h3>
+
+            {/* Generate Controls */}
+            <div className="flex items-center gap-2 mb-6">
+                <select
+                    value={selectedFormType}
+                    onChange={(e) => setSelectedFormType(e.target.value)}
+                    disabled={availableFormTypes.length === 0 || isGenerating}
+                    className="block rounded-lg border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 text-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                    {availableFormTypes.length === 0 ? (
+                        <option value="">No templates available</option>
+                    ) : (
+                        availableFormTypes.map((type) => (
+                            <option key={type.value} value={type.value}>
+                                {type.label}
+                            </option>
+                        ))
+                    )}
+                </select>
                 <button
                     onClick={handleGenerate}
-                    disabled={isGenerating}
+                    disabled={isGenerating || availableFormTypes.length === 0}
                     className={`inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-lg shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 ${
-                        isGenerating ? 'opacity-50 cursor-not-allowed' : ''
+                        isGenerating || availableFormTypes.length === 0 ? 'opacity-50 cursor-not-allowed' : ''
                     }`}
                 >
                     {isGenerating ? (
@@ -190,7 +232,7 @@ export default function FormDocumentsSection({ workItemId }) {
                             <svg className="-ml-1 mr-2 h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
                             </svg>
-                            Generate Intake Form
+                            Generate
                         </>
                     )}
                 </button>
@@ -218,9 +260,11 @@ export default function FormDocumentsSection({ workItemId }) {
                             d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
                         />
                     </svg>
-                    <h3 className="mt-2 text-sm font-medium text-gray-900">No intake forms</h3>
+                    <h3 className="mt-2 text-sm font-medium text-gray-900">No documents yet</h3>
                     <p className="mt-1 text-sm text-gray-500">
-                        Get started by generating an intake form for this work item.
+                        {availableFormTypes.length > 0
+                            ? 'Get started by generating a document for this work item.'
+                            : 'No form templates are configured. Please contact your administrator.'}
                     </p>
                 </div>
             ) : (
@@ -249,10 +293,10 @@ export default function FormDocumentsSection({ workItemId }) {
                                         </svg>
                                         <div className="flex-1 min-w-0">
                                             <p className="text-sm font-medium text-gray-900 truncate">
-                                                {document.file_path ? document.file_path.split('/').pop() : 'Intake Form'}
+                                                {document.file_path ? document.file_path.split('/').pop() : document.form_type_display}
                                             </p>
                                             <p className="text-xs text-gray-500">
-                                                Generated {formatDate(document.generated_at)} • {document.generated_by_name}
+                                                {document.form_type_display} • Generated {formatDate(document.generated_at)} • {document.generated_by_name}
                                             </p>
                                         </div>
                                     </div>

@@ -439,6 +439,32 @@ class WorkItemFormDocumentViewSet(viewsets.ViewSet):
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
 
+    @action(detail=False, methods=['get'], url_path='available-form-types')
+    def available_form_types(self, request, work_item_pk=None):
+        """
+        Get available form types (that have active templates) for this tenant.
+
+        GET /api/work-items/{work_item_id}/documents/available-form-types/
+        """
+        work_item = self._get_work_item(request, work_item_pk)
+
+        # Get all active templates for this tenant
+        active_templates = FormTemplate.objects.filter(
+            tenant=work_item.tenant,
+            is_active=True
+        ).values_list('form_type', flat=True).distinct()
+
+        # Build response with form type codes and display names
+        available_types = [
+            {
+                'value': form_type,
+                'label': dict(FormTemplate.FORM_TYPES).get(form_type, form_type)
+            }
+            for form_type in active_templates
+        ]
+
+        return Response(available_types)
+
     def _get_work_item(self, request, work_item_pk):
         """Get work item and verify tenant access"""
         work_item = get_object_or_404(WorkItem, pk=work_item_pk)
