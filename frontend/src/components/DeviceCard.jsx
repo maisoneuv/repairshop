@@ -27,9 +27,9 @@ export default function DeviceCard({ device, serialNumber, onEdit }) {
 
     if (!deviceInfo) {
         return (
-            <div className="bg-white rounded-xl shadow-lg border border-gray-200 p-6">
-                <h3 className="text-lg font-semibold text-gray-900 mb-4">Device</h3>
-                <p className="text-gray-500">No device information available</p>
+            <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
+                <h3 className="text-base font-semibold text-gray-900 mb-2">Device</h3>
+                <p className="text-gray-500 text-sm">No device information available</p>
             </div>
         );
     }
@@ -37,9 +37,9 @@ export default function DeviceCard({ device, serialNumber, onEdit }) {
     const warranty = getWarrantyStatus(deviceInfo.warranty);
 
     return (
-        <div className="bg-white rounded-xl shadow-lg border border-gray-200 p-6">
-            <div className="flex items-center justify-between mb-4">
-                <h3 className="text-lg font-semibold text-gray-900">Device</h3>
+        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
+            <div className="flex items-center justify-between mb-3">
+                <h3 className="text-base font-semibold text-gray-900">Device</h3>
                 <button
                     onClick={handleEdit}
                     className="text-indigo-600 hover:text-indigo-800 font-medium text-sm transition-colors"
@@ -48,20 +48,20 @@ export default function DeviceCard({ device, serialNumber, onEdit }) {
                 </button>
             </div>
 
-            <div className="space-y-4">
+            <div className="space-y-2">
                 {/* Device Model */}
                 <div>
                     <label className="block text-sm font-medium text-gray-600 mb-1">Model</label>
-                    <p className="text-gray-900 font-medium text-lg">
+                    <p className="text-sm text-gray-900 font-medium">
                         {deviceInfo.manufacturer} {deviceInfo.model}
                     </p>
                 </div>
 
                 {/* Device Details */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                     <div>
                         <label className="block text-sm font-medium text-gray-600 mb-1">Serial Number</label>
-                        <p className="text-gray-900 font-mono">
+                        <p className="text-sm text-gray-900 font-mono">
                             {assetSerialNumber || 'Not provided'}
                         </p>
                     </div>
@@ -82,21 +82,21 @@ export default function DeviceCard({ device, serialNumber, onEdit }) {
                 {deviceInfo.storage && (
                     <div>
                         <label className="block text-sm font-medium text-gray-600 mb-1">Storage</label>
-                        <p className="text-gray-900">{deviceInfo.storage}</p>
+                        <p className="text-sm text-gray-900">{deviceInfo.storage}</p>
                     </div>
                 )}
 
                 {deviceInfo.color && (
                     <div>
                         <label className="block text-sm font-medium text-gray-600 mb-1">Color</label>
-                        <p className="text-gray-900">{deviceInfo.color}</p>
+                        <p className="text-sm text-gray-900">{deviceInfo.color}</p>
                     </div>
                 )}
 
                 {deviceInfo.imei && (
                     <div>
                         <label className="block text-sm font-medium text-gray-600 mb-1">IMEI</label>
-                        <p className="text-gray-900 font-mono">{deviceInfo.imei}</p>
+                        <p className="text-sm text-gray-900 font-mono">{deviceInfo.imei}</p>
                     </div>
                 )}
 
@@ -104,7 +104,7 @@ export default function DeviceCard({ device, serialNumber, onEdit }) {
                 {deviceInfo.category_name && (
                     <div>
                         <label className="block text-sm font-medium text-gray-600 mb-1">Category</label>
-                        <p className="text-gray-900">{deviceInfo.category_name}</p>
+                        <p className="text-sm text-gray-900">{deviceInfo.category_name}</p>
                     </div>
                 )}
             </div>

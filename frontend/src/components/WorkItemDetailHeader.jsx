@@ -141,13 +141,13 @@ export default function WorkItemDetailHeader({ workItem, schema, onEdit, onStatu
     const isExpressPriority = normalizeKey(workItem.priority) === "express";
 
     return (
-        <div className="bg-white text-gray-900 px-4 sm:px-6 py-4 sm:py-6 rounded-xl border border-gray-200 shadow-lg mb-6">
+        <div className="bg-white text-gray-900 px-4 py-3 rounded-lg border border-gray-200 shadow-sm mb-3">
             {/* Header Section */}
-            <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between lg:gap-10 mb-6">
+            <div className="flex flex-col gap-2 lg:flex-row lg:items-start lg:justify-between lg:gap-6 mb-3">
                 <div className="flex-1">
-                    <div className="flex flex-col gap-3">
-                        <div className="flex flex-col sm:flex-row sm:items-center sm:gap-3">
-                            <h1 className="text-xl sm:text-2xl font-bold mb-1 sm:mb-0 leading-tight">
+                    <div className="flex flex-col gap-2">
+                        <div className="flex flex-col sm:flex-row sm:items-center sm:gap-2">
+                            <h1 className="text-lg sm:text-xl font-bold mb-1 sm:mb-0 leading-tight">
                                 Work Item #{workItem.reference_id || workItem.id}
                             </h1>
                             <div className="flex flex-wrap gap-2">
@@ -198,7 +198,7 @@ export default function WorkItemDetailHeader({ workItem, schema, onEdit, onStatu
                     </div>
                 </div>
 
-                <div className="flex justify-end mt-6 lg:mt-0 lg:ml-10">
+                <div className="flex justify-end mt-2 lg:mt-0 lg:ml-6">
                     <button
                         onClick={onEdit}
                         type="button"
@@ -210,20 +210,20 @@ export default function WorkItemDetailHeader({ workItem, schema, onEdit, onStatu
             </div>
 
             {/* Highlights Section */}
-            <div className="border-t border-gray-200 pt-6">
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4 sm:gap-6">
+            <div className="border-t border-gray-200 pt-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-3">
                     {highlights.map((item, index) => (
-                        <div key={index} className="text-center sm:text-left bg-gray-50 sm:bg-transparent p-4 sm:p-0 rounded-lg">
-                            <div className="flex items-center justify-center sm:justify-start gap-2 mb-2">
-                                <span className="text-xs sm:text-sm font-medium text-gray-600 uppercase tracking-wide">
+                        <div key={index} className="text-center sm:text-left">
+                            <div className="flex items-center justify-center sm:justify-start gap-1 mb-1">
+                                <span className="text-xs font-medium text-gray-500 uppercase tracking-wide">
                                     {item.label}
                                 </span>
                             </div>
-                            <div className="text-base sm:text-lg font-semibold text-gray-900 mb-1">
+                            <div className="text-sm font-semibold text-gray-900">
                                 {item.value}
                             </div>
                             {item.subValue && (
-                                <div className="text-xs sm:text-sm text-gray-500 leading-tight">
+                                <div className="text-xs text-gray-500 leading-tight">
                                     {item.subValue}
                                 </div>
                             )}

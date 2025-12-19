@@ -43,8 +43,9 @@ export default function WorkItemDetail() {
     }, [id]);
 
     const normalizeFieldValue = (name, value) => {
-        if (value === undefined) return null;
-        if (value === null) return null;
+        // Handle empty strings as null for the backend
+        if (value === undefined || value === null || value === "") return null;
+
         if (name === "owner" || name === "technician") {
             if (typeof value === "object") {
                 return value.id ?? value.pk ?? null;
@@ -63,18 +64,34 @@ export default function WorkItemDetail() {
 
     const buildPatchPayload = (name, value) => {
         const normalized = normalizeFieldValue(name, value);
-        if (name === "owner") {
-            return { owner_id: normalized };
+
+        // Handle special foreign key field mappings
+        const foreignKeyMappings = {
+            'owner': 'owner_id',
+            'technician': 'technician_id',
+            'fulfillment_shop': 'fulfillment_shop_id',
+            'pickup_point': 'pickup_point_id',
+            'dropoff_point': 'dropoff_point_id',
+        };
+
+        if (foreignKeyMappings[name]) {
+            return { [foreignKeyMappings[name]]: normalized };
         }
-        if (name === "technician") {
-            return { technician_id: normalized };
-        }
+
         return { [name]: normalized };
     };
 
-    const editableFieldNames = WorkitemDetailLayout.flatMap((section) =>
-        section.fields.filter((field) => field.editable).map((field) => field.name)
-    );
+    const editableFieldNames = WorkitemDetailLayout.flatMap((section) => {
+        if (section.groups) {
+            // Handle grouped sections (new format)
+            return section.groups.flatMap((group) =>
+                group.fields.filter((field) => field.editable).map((field) => field.name)
+            );
+        } else {
+            // Handle ungrouped sections (legacy format)
+            return section.fields.filter((field) => field.editable).map((field) => field.name);
+        }
+    });
 
     const handleEdit = () => {
         if (!workItem || editMode) return;
@@ -142,8 +159,9 @@ export default function WorkItemDetail() {
         try {
             setIsSaving(true);
             const updated = await updateWorkItemField(workItem.id, payload);
-            setWorkItem(updated);
-            setFormData(updated);
+            // Merge updated fields with existing workItem to preserve customerDetails and deviceDetails
+            setWorkItem(prev => ({ ...prev, ...updated }));
+            setFormData(prev => ({ ...prev, ...updated }));
             setEditMode(false);
         } catch (err) {
             console.error("Failed to save work item changes:", err);
@@ -169,21 +187,8 @@ export default function WorkItemDetail() {
     }
 
     return (
-        <div className="min-h-screen bg-gray-50">
-            <div className="max-w-7xl mx-auto px-3 sm:px-4 lg:px-6 xl:px-8 py-4 sm:py-6">
-                {/* Back Link */}
-                <div className="mb-4">
-                    <Link
-                        to="/work-items"
-                        className="text-gray-600 hover:text-gray-900 transition-colors text-sm sm:text-base flex items-center gap-1"
-                    >
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-                        </svg>
-                        Back to Work Items
-                    </Link>
-                </div>
-
+        <div className="min-h-screen">
+            <div className={`max-w-[1600px] mx-auto px-3 sm:px-4 lg:px-6 xl:px-8 py-3 ${editMode ? 'pb-24' : ''}`}>
                 {/* Header */}
                 <WorkItemDetailHeader
                     workItem={workItem}
@@ -193,25 +198,42 @@ export default function WorkItemDetail() {
                 />
 
                 {/* Main Content Area */}
-                <div className="flex flex-col xl:flex-row gap-4 sm:gap-6 mt-4 sm:mt-6">
+                <div className="flex flex-col xl:flex-row gap-3 sm:gap-4 mt-3">
                     {/* Left Column - Main Content */}
-                    <div className="flex-1 space-y-4 sm:space-y-6">
+                    <div className="flex-1 space-y-3 sm:space-y-4">
+
+                        {/* Customer and Device Cards Row */}
+                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 sm:gap-4">
+                            <CustomerCard
+                                customer={workItem.customerDetails}
+                                onUpdated={handleCustomerUpdated}
+                            />
+                            <DeviceCard
+                                device={workItem.deviceDetails}
+                                onEdit={() => console.log('Edit device')}
+                            />
+                        </div>
 
                         {/* Tabs Section */}
                         <WorkItemTabs defaultTab="details">
                             {({ activeTab }) => (
                                 <div>
                                     {activeTab === 'details' && (
-                                        <div className="space-y-4 sm:space-y-6">
+                                        <div className="space-y-3 sm:space-y-4">
                                             {/* Work Item Details */}
-                                            <div className="bg-white rounded-xl shadow-lg border border-gray-200 p-6">
-                                                <div className="flex items-center justify-between mb-4">
-                                                    {editMode && (
-                                                        <span className="text-sm text-gray-500">
-                                                            Edit mode enabled
-                                                        </span>
-                                                    )}
-                                                </div>
+                                            <div className="bg-white rounded-xl p-3">
+                                                {editMode && (
+                                                    <div className="mb-4 px-4 py-3 bg-blue-50 border border-blue-200 rounded-lg">
+                                                        <div className="flex items-center gap-2">
+                                                            <svg className="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                                                            </svg>
+                                                            <span className="text-sm font-medium text-blue-900">
+                                                                Edit mode
+                                                            </span>
+                                                        </div>
+                                                    </div>
+                                                )}
                                                 <ModelDetailLayout
                                                     data={workItem}
                                                     schema={schema}
@@ -221,75 +243,9 @@ export default function WorkItemDetail() {
                                                     formData={formData}
                                                     onFieldChange={handleFieldChange}
                                                     onFieldSave={handleFieldSave}
-                                                />
-                                                {editMode && (
-                                                    <div className="flex justify-end gap-2 mt-6">
-                                                        <button
-                                                            type="button"
-                                                            onClick={handleCancelEdit}
-                                                            className="px-4 py-2 rounded-lg border border-gray-300 text-gray-600 hover:bg-gray-50 transition-colors"
-                                                        >
-                                                            Cancel
-                                                        </button>
-                                                        <button
-                                                            type="button"
-                                                            onClick={handleSaveAll}
-                                                            disabled={isSaving}
-                                                            className="px-4 py-2 rounded-lg bg-indigo-600 text-white font-medium hover:bg-indigo-700 transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
-                                                        >
-                                                            {isSaving ? "Saving..." : "Save Changes"}
-                                                        </button>
-                                                    </div>
-                                                )}
-                                            </div>
-
-                                            {/* Customer and Device Cards Row */}
-                                            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
-                                                <CustomerCard
-                                                    customer={workItem.customerDetails}
-                                                    onUpdated={handleCustomerUpdated}
-                                                />
-                                                <DeviceCard
-                                                    device={workItem.deviceDetails}
-                                                    onEdit={() => console.log('Edit device')}
+                                                    onEditRequest={handleEdit}
                                                 />
                                             </div>
-
-                                            {/* Comments */}
-                                            {workItem.description && (
-                                                <div className="bg-white rounded-xl shadow-lg border border-gray-200 p-6">
-                                                    <h3 className="text-lg font-semibold text-gray-900 mb-3">
-                                                        Comments
-                                                    </h3>
-                                                    <div className="text-gray-700 whitespace-pre-wrap bg-gray-50 p-4 rounded-lg">
-                                                        {workItem.comments}
-                                                    </div>
-                                                </div>
-                                            )}
-
-                                            {/* Device Condition */}
-                                            {workItem.device_condition && (
-                                                <div className="bg-white rounded-xl shadow-lg border border-gray-200 p-6">
-                                                    <h3 className="text-lg font-semibold text-gray-900 mb-3">
-                                                        Device Condition
-                                                    </h3>
-                                                    <div className="text-gray-700 whitespace-pre-wrap bg-gray-50 p-4 rounded-lg">
-                                                        {workItem.device_condition}
-                                                    </div>
-                                                </div>
-                                            )}
-
-                                            {/* Accessories */}
-                                            {workItem.accessories && (
-                                                <div className="bg-white rounded-xl shadow-lg border border-gray-200 p-6">
-                                                    <h3 className="text-lg font-semibold text-gray-900 mb-3">
-                                                        Accessories
-                                                    </h3>
-                                                    <div className="text-gray-700 whitespace-pre-wrap bg-gray-50 p-4 rounded-lg">
-                                                        {workItem.accessories}
-                                                    </div>
-                                                </div>
-                                            )}
                                         </div>
                                     )}
 
@@ -343,11 +299,6 @@ export default function WorkItemDetail() {
                                             </span>
                                         </div>
                                         <div className="mt-2 space-y-1">
-                                            {task.task_type && (
-                                                <p className="text-gray-600 text-xs">
-                                                    <span className="font-medium">Type:</span> {task.task_type.name}
-                                                </p>
-                                            )}
                                             {task.summary && (
                                                 <p className="text-gray-600 text-xs">
                                                     <span className="font-medium">Summary:</span> {task.summary}
@@ -384,6 +335,31 @@ export default function WorkItemDetail() {
                     </div>
                 </div>
             </div>
+
+            {/* Sticky Footer Bar - only visible in edit mode */}
+            {editMode && (
+                <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 shadow-lg z-50">
+                    <div className="max-w-[1600px] mx-auto px-6 py-4">
+                        <div className="flex items-center justify-end gap-3">
+                            <button
+                                type="button"
+                                onClick={handleCancelEdit}
+                                className="px-5 py-2.5 rounded-lg border border-gray-300 text-gray-700 font-medium hover:bg-gray-50 transition-colors"
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                type="button"
+                                onClick={handleSaveAll}
+                                disabled={isSaving}
+                                className="px-5 py-2.5 rounded-lg bg-blue-600 text-white font-medium hover:bg-blue-700 transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+                            >
+                                {isSaving ? "Saving..." : "Save"}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 }

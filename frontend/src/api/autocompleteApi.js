@@ -32,6 +32,10 @@ export function getLocationSearchPath(query) {
     return `/api/service/api/locations/search/?q=${encodeURIComponent(query)}`;
 }
 
+export function getShopSearchPath(query) {
+    return `/api/service/api/shops/search/?q=${encodeURIComponent(query)}`;
+}
+
 export function getObjectDetailPath(app, id) {
     return `/${app}/${id}/`;
 }
