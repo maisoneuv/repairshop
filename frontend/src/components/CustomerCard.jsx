@@ -7,9 +7,9 @@ export default function CustomerCard({ customer, onEdit, onUpdated }) {
 
     if (!customer) {
         return (
-            <div className="bg-white rounded-xl shadow-lg border border-gray-200 p-6">
-                <h3 className="text-lg font-semibold text-gray-900 mb-4">Customer</h3>
-                <p className="text-gray-500">No customer information available</p>
+            <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
+                <h3 className="text-base font-semibold text-gray-900 mb-2">Customer</h3>
+                <p className="text-gray-500 text-sm">No customer information available</p>
             </div>
         );
     }
@@ -21,9 +21,9 @@ export default function CustomerCard({ customer, onEdit, onUpdated }) {
 
     if (isEditing) {
         return (
-            <div className="bg-white rounded-xl shadow-lg border border-gray-200 p-6">
-                <div className="flex items-center justify-between mb-4">
-                    <h3 className="text-lg font-semibold text-gray-900">Customer</h3>
+            <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
+                <div className="flex items-center justify-between mb-3">
+                    <h3 className="text-base font-semibold text-gray-900">Customer</h3>
                     <button
                         type="button"
                         onClick={() => setIsEditing(false)}
@@ -47,11 +47,11 @@ export default function CustomerCard({ customer, onEdit, onUpdated }) {
     }
 
     return (
-        <div className="bg-white rounded-xl shadow-lg border border-gray-200 p-6">
-            <div className="flex items-center justify-between mb-4">
+        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
+            <div className="flex items-center justify-between mb-3">
                 <Link
                     to={`/customers/${customer.id}`}
-                    className="text-lg font-semibold text-gray-900 hover:text-indigo-600 transition-colors"
+                    className="text-base font-semibold text-gray-900 hover:text-indigo-600 transition-colors"
                 >
                     Customer
                 </Link>
@@ -63,23 +63,23 @@ export default function CustomerCard({ customer, onEdit, onUpdated }) {
                 </button>
             </div>
 
-            <div className="space-y-4">
+            <div className="space-y-2">
                 {/* Customer Name */}
                 <div>
                     <label className="block text-sm font-medium text-gray-600 mb-1">Name</label>
                     <Link
                         to={`/customers/${customer.id}`}
-                        className="text-gray-900 font-medium hover:text-indigo-600 transition-colors inline-block"
+                        className="text-sm text-gray-900 font-medium hover:text-indigo-600 transition-colors inline-block"
                     >
                         {customer.first_name} {customer.last_name}
                     </Link>
                 </div>
 
                 {/* Contact Information */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                     <div>
                         <label className="block text-sm font-medium text-gray-600 mb-1">Email</label>
-                        <div className="text-gray-900">
+                        <div className="text-sm text-gray-900">
                             <a
                                 href={`mailto:${customer.email}`}
                                 className="text-indigo-600 hover:text-indigo-800 transition-colors"
@@ -91,7 +91,7 @@ export default function CustomerCard({ customer, onEdit, onUpdated }) {
 
                     <div>
                         <label className="block text-sm font-medium text-gray-600 mb-1">Phone</label>
-                        <div className="text-gray-900">
+                        <div className="text-sm text-gray-900">
                             {customer.phone_number ? (
                                 <a
                                     href={`tel:${customer.phone_number}`}
@@ -109,7 +109,7 @@ export default function CustomerCard({ customer, onEdit, onUpdated }) {
                 {/* Address */}
                 <div>
                     <label className="block text-sm font-medium text-gray-600 mb-1">Address</label>
-                    <div className="text-gray-900">
+                    <div className="text-sm text-gray-900">
                         {customer.address ? (
                             <div className="space-y-1">
                                 <p>{customer.address.street} {customer.address.building_number}</p>

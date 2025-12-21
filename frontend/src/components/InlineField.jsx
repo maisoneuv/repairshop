@@ -1,5 +1,4 @@
 import { useEffect, useState } from "react";
-import {PencilLine} from "lucide-react";
 
 export default function InlineField({
                                         label,
@@ -10,6 +9,7 @@ export default function InlineField({
                                         onSave,
                                         linkToRecord = null,
                                         renderEditor,
+                                        onEditRequest,
                                     }) {
     const [editing, setEditing] = useState(false);
     const [inputValue, setInputValue] = useState(value);
@@ -28,6 +28,17 @@ export default function InlineField({
     const handleSave = (nextValue = inputValue) => {
         setEditing(false);
         onSave(nextValue);
+    };
+
+    const handleDoubleClick = () => {
+        // If onEditRequest is provided, trigger form-wide edit mode
+        if (onEditRequest) {
+            onEditRequest();
+        } else {
+            // Fallback to per-field editing
+            setEditing(true);
+            setInputValue(value);
+        }
     };
 
     const renderDisplayValue = () => {
@@ -88,7 +99,11 @@ export default function InlineField({
                     )}
                 </div>
             ) : (
-                <div className="flex justify-between items-start">
+                <div
+                    onDoubleClick={handleDoubleClick}
+                    className={onEditRequest ? "cursor-pointer hover:bg-gray-50 px-2 py-1 rounded transition-colors" : "px-2 py-1"}
+                    title={onEditRequest ? "Double-click to edit" : undefined}
+                >
                     {linkToRecord ? (
                         <a
                             href={`/${linkToRecord.app}/${linkToRecord.id}/`}
@@ -99,15 +114,6 @@ export default function InlineField({
                     ) : (
                         <span className="text-gray-800">{renderDisplayValue()}</span>
                     )}
-                    <button
-                        onClick={() => {
-                            setEditing(true);
-                            setInputValue(value);
-                        }}
-                        className="text-gray-400 hover:text-gray-600 ml-2"
-                    >
-                    <PencilLine className="w-4 h-4" />
-                    </button>
                 </div>
             )}
         </div>

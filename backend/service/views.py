@@ -42,6 +42,18 @@ class EmployeeSearchView(GenericSearchView):
         return Employee.objects.select_related('user').filter(tenant=self.request.tenant)
 
 
+class ShopSearchView(GenericSearchView):
+    serializer_class = ShopSerializer
+    permission_classes = [IsAuthenticated]
+    search_fields = ['name', 'contact_email', 'contact_phone']
+
+    def get_queryset(self):
+        if not self.request.tenant:
+            return RepairShop.objects.none()
+
+        return RepairShop.objects.filter(tenant=self.request.tenant).select_related('address')
+
+
 class EmployeeListView(APIView):
     """Returns all employees for the tenant (for picklist dropdown)."""
     permission_classes = [IsAuthenticated]

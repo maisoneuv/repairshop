@@ -30,7 +30,7 @@ export default function WorkItemTabs({ children, defaultTab = 'details' }) {
             </div>
 
             {/* Tab Content */}
-            <div className="p-6">
+            <div className="p-3">
                 {children({ activeTab })}
             </div>
         </div>

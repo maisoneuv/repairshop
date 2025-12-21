@@ -11,13 +11,16 @@ export default function AppLayout() {
     const [workItemMenuOpen, setWorkItemMenuOpen] = useState(false);
     const [taskMenuOpen, setTaskMenuOpen] = useState(false);
 
+    // Get background color from environment variable (defaults to light grey)
+    const appBgColor = import.meta.env.VITE_APP_BG_COLOR || '#f3f4f6';
+
     useEffect(() => {
         setWorkItemMenuOpen(false);
         setTaskMenuOpen(false);
     }, [location.pathname, location.search]);
 
     return (
-        <div className="min-h-screen text-gray-900" style={{background: 'linear-gradient(135deg, #DFE9FF 0%, #D9D9D9 100%)'}}>
+        <div className="min-h-screen text-gray-900" style={{backgroundColor: appBgColor}}>
             {user && (
                 <nav className="bg-white shadow-sm mb-6">
                     <div className="max-w-7xl mx-auto px-6 py-4">
