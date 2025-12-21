@@ -41,6 +41,31 @@ export default function EnhancedActivityTimeline({ model, objectId }) {
         }
     };
 
+    const linkifyText = (text) => {
+        // Regular expression to detect URLs
+        const urlRegex = /(https?:\/\/[^\s]+)/g;
+
+        // Split text by URLs and create elements
+        const parts = text.split(urlRegex);
+
+        return parts.map((part, index) => {
+            if (part.match(urlRegex)) {
+                return (
+                    <a
+                        key={index}
+                        href={part}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-blue-600 hover:text-blue-800 underline break-all"
+                    >
+                        {part}
+                    </a>
+                );
+            }
+            return <span key={index}>{part}</span>;
+        });
+    };
+
     return (
         <div className="bg-white rounded-xl shadow-lg border border-gray-200 p-6">
             <h3 className="text-lg font-semibold text-gray-900 mb-4">Activity Timeline</h3>
@@ -130,7 +155,7 @@ export default function EnhancedActivityTimeline({ model, objectId }) {
                                                 ? 'bg-purple-50 text-gray-800'
                                                 : 'bg-indigo-50 text-gray-800'
                                         }`}>
-                                            {note.content}
+                                            {linkifyText(note.content)}
                                         </div>
                                     </div>
                                 </div>

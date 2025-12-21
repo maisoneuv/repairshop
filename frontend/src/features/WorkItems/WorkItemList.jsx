@@ -7,6 +7,7 @@ const COLUMNS = [
     { key: "reference_id", label: "RMA #" },
     { key: "status", label: "Status" },
     { key: "device_name", label: "Device" },
+    { key: "device_category_name", label: "Device Category"},
     { key: "created_date", label: "Created" },
 ];
 
@@ -182,6 +183,7 @@ export default function WorkItemList() {
                                         </td>
                                         <td className="px-4 py-3 text-sm text-gray-700">{item.status || "-"}</td>
                                         <td className="px-4 py-3 text-sm text-gray-700">{item.device_name || "-"}</td>
+                                        <td className="px-4 py-3 text-sm text-gray-700">{item.device_category_name || "-"}</td>
                                         <td className="px-4 py-3 text-sm text-gray-600">
                                             {formatDate(item.created_date)}
                                         </td>
