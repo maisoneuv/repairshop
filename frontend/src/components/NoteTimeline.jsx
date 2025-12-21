@@ -24,6 +24,31 @@ export default function NoteTimeline({ model, objectId }) {
         }
     };
 
+    const linkifyText = (text) => {
+        // Regular expression to detect URLs
+        const urlRegex = /(https?:\/\/[^\s]+)/g;
+
+        // Split text by URLs and create elements
+        const parts = text.split(urlRegex);
+
+        return parts.map((part, index) => {
+            if (part.match(urlRegex)) {
+                return (
+                    <a
+                        key={index}
+                        href={part}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-blue-600 hover:text-blue-800 underline break-all"
+                    >
+                        {part}
+                    </a>
+                );
+            }
+            return <span key={index}>{part}</span>;
+        });
+    };
+
     return (
         <div className="mt-6">
             <h2 className="text-lg font-semibold mb-2">Activity Timeline</h2>
@@ -66,7 +91,7 @@ export default function NoteTimeline({ model, objectId }) {
                                     {isSystem ? "🛠️ System" : `👤 ${note.author_name}`} •{" "}
                                     {new Date(note.created_at).toLocaleString()}
                                 </div>
-                                <div className="text-gray-800">{note.content}</div>
+                                <div className="text-gray-800">{linkifyText(note.content)}</div>
                             </div>
                         </li>
                     );

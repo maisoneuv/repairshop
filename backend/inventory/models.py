@@ -27,6 +27,12 @@ class Category(MPTTModel):
     class MPTTMeta:
         order_insertion_by = ['name']
 
+    def save(self, *args, **kwargs):
+        # Convert name to lowercase before saving
+        if self.name:
+            self.name = self.name.lower()
+        super().save(*args, **kwargs)
+
     def __str__(self):
         return self.name
 

@@ -266,13 +266,25 @@ class WorkItemViewSet(viewsets.ModelViewSet):
     def get_queryset(self):
         user = self.request.user
 
+        # Optimize queries by selecting related objects
+        base_qs = WorkItem.objects.select_related(
+            'customer_asset__device__category',
+            'customer_asset__device',
+            'customer',
+            'owner',
+            'technician',
+            'pickup_point',
+            'dropoff_point',
+            'fulfillment_shop'
+        )
+
         if user.is_superuser:
-            return WorkItem.objects.all()
+            return base_qs.all()
 
         if not self.request.tenant:
             return WorkItem.objects.none()
 
-        qs = WorkItem.objects.filter(tenant=self.request.tenant)
+        qs = base_qs.filter(tenant=self.request.tenant)
 
         if user.has_permission('view_all_workitems', self.request.tenant):
             return qs

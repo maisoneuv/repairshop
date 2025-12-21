@@ -31,6 +31,7 @@ class WorkItemSerializer(serializers.ModelSerializer):
         write_only=True, required=False, allow_null=True
     )
     device_name = serializers.SerializerMethodField()
+    device_category_name = serializers.SerializerMethodField()
 
     class Meta:
         model = WorkItem
@@ -70,6 +71,14 @@ class WorkItemSerializer(serializers.ModelSerializer):
         if manufacturer and model:
             return f"{manufacturer} {model}".strip()
         return model or manufacturer or None
+
+    def get_device_category_name(self, obj):
+        asset = getattr(obj, "customer_asset", None)
+        device = getattr(asset, "device", None)
+        category = getattr(device, "category", None)
+        if not category:
+            return None
+        return getattr(category, "name", None)
 
     def create(self, validated_data):
         req = self.context["request"]
