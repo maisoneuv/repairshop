@@ -25,7 +25,7 @@ sk_test_<32-character-random-string>
 - **`live`/`test`**: Environment identifier
 - **32-character string**: Cryptographically secure random identifier
 
-**Example:** `sk_live_a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6`
+**Example:** `test_api_key`
 
 ## Generating API Keys
 
@@ -74,7 +74,7 @@ API KEY GENERATED SUCCESSFULLY!
 IMPORTANT: Copy this key now. It will NEVER be shown again!
 
 ┌────────────────────────────────────────────────────────────────────┐
-│ sk_live_a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6                          │
+│ test_api_key                          │
 └────────────────────────────────────────────────────────────────────┘
 
 Name:        n8n Production
@@ -92,7 +92,7 @@ Created:     2025-01-15 10:30:45
 Include the API key in the `Authorization` header with the `Bearer` scheme:
 
 ```bash
-curl -H "Authorization: Bearer sk_live_a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6" \
+curl -H "Authorization: Bearer test_api_key" \
      https://your-domain.com/api/work-items/
 ```
 
@@ -161,7 +161,7 @@ curl -X PATCH \
 
 #### JavaScript/TypeScript
 ```javascript
-const API_KEY = 'sk_live_a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6';
+const API_KEY = 'test_api_key';
 const API_BASE = 'https://your-domain.com/api';
 
 const fetchWorkItems = async () => {
@@ -184,7 +184,7 @@ const fetchWorkItems = async () => {
 ```python
 import requests
 
-API_KEY = 'sk_live_a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6'
+API_KEY = 'test_api_key'
 API_BASE = 'https://your-domain.com/api'
 
 headers = {
