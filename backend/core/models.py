@@ -101,6 +101,37 @@ class Note(models.Model):
         ordering = ["-created_at"]
 
 
+class PicklistValue(models.Model):
+    """
+    Tenant-specific customizable picklist values for dropdown fields.
+    Allows admins to define custom status values, currencies, and other dropdown options.
+    This is a generic model that can be used by any app for customizable dropdown fields.
+    """
+    tenant = models.ForeignKey(Tenant, on_delete=models.CASCADE)
+    category = models.CharField(max_length=50, help_text="Type of picklist (e.g., 'workitem_status', 'task_status', 'currency')")
+    name = models.CharField(max_length=100, help_text="Display label shown to users")
+    value = models.CharField(max_length=100, help_text="Internal value stored in database")
+    sort_order = models.IntegerField(default=0, help_text="Controls display order in dropdowns (lower numbers appear first)")
+    is_active = models.BooleanField(default=True, help_text="Only active values can be selected by users")
+    is_system = models.BooleanField(default=False, help_text="System-protected values that should not be deleted")
+    created_date = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['category', 'sort_order', 'name']
+        constraints = [
+            models.UniqueConstraint(
+                fields=['tenant', 'category', 'value'],
+                name='unique_picklist_value_per_tenant_category'
+            )
+        ]
+        indexes = [
+            models.Index(fields=['tenant', 'category', 'is_active'], name='idx_picklist_tenant_cat_active'),
+        ]
+
+    def __str__(self):
+        return f"{self.category}: {self.name} ({self.tenant})"
+
+
 class Role(models.Model):
     tenant = models.ForeignKey(Tenant, on_delete=models.CASCADE, related_name='roles')
     name = models.CharField(max_length=100)

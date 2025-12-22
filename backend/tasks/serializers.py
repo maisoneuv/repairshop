@@ -1,9 +1,47 @@
 from rest_framework import serializers
 from .models import WorkItem, Task, TaskType, TaskTypeValidationRule
+from core.models import PicklistValue
 from service.serializers import EmployeeSerializer, LocationSerializer, ShopSerializer
 from service.models import Employee, RepairShop, Location
 from inventory.models import Device
 from customers.models import Asset
+
+
+def validate_picklist_value(tenant, category, value):
+    """
+    Validate that a value exists in the active picklist for a given tenant and category.
+
+    Args:
+        tenant: The tenant instance
+        category: The picklist category (e.g., 'workitem_status', 'task_status', 'currency')
+        value: The value to validate
+
+    Raises:
+        serializers.ValidationError: If the value is not in the active picklist
+    """
+    if not value:
+        return  # Allow empty if field is not required
+
+    exists = PicklistValue.objects.filter(
+        tenant=tenant,
+        category=category,
+        value=value,
+        is_active=True
+    ).exists()
+
+    if not exists:
+        # Fetch available options for helpful error message
+        available = PicklistValue.objects.filter(
+            tenant=tenant,
+            category=category,
+            is_active=True
+        ).order_by('sort_order').values_list('value', flat=True)
+
+        available_str = ', '.join(available) if available else 'None'
+        raise serializers.ValidationError(
+            f"Invalid value '{value}'. Available options: {available_str}"
+        )
+
 
 class WorkItemSerializer(serializers.ModelSerializer):
     device = serializers.PrimaryKeyRelatedField(
@@ -59,6 +97,26 @@ class WorkItemSerializer(serializers.ModelSerializer):
         if tenant and shop and shop.tenant_id != tenant.id:
             raise serializers.ValidationError({"fulfillment_shop_id": "Unknown for this tenant."})
         return attrs
+
+    def validate_status(self, value):
+        """Validate status against active picklist values"""
+        tenant = self.context.get('tenant') or getattr(
+            self.context.get('request'), 'tenant', None
+        )
+        if tenant:
+            validate_picklist_value(tenant, 'workitem_status', value)
+        return value
+
+    def validate_currency(self, value):
+        """Validate currency against active picklist values"""
+        if not value:
+            return value
+        tenant = self.context.get('tenant') or getattr(
+            self.context.get('request'), 'tenant', None
+        )
+        if tenant:
+            validate_picklist_value(tenant, 'currency', value)
+        return value
 
     def get_device_name(self, obj):
         asset = getattr(obj, "customer_asset", None)
@@ -224,6 +282,15 @@ class TaskSerializer(serializers.ModelSerializer):
                 raise serializers.ValidationError(errors)
 
         return attrs
+
+    def validate_status(self, value):
+        """Validate status against active picklist values"""
+        tenant = self.context.get('tenant') or getattr(
+            self.context.get('request'), 'tenant', None
+        )
+        if tenant:
+            validate_picklist_value(tenant, 'task_status', value)
+        return value
 
     def create(self, validated_data):
         """

@@ -99,11 +99,17 @@ class Opportunity(models.Model):
 
 class Asset(models.Model):
     customer = models.ForeignKey(Customer, on_delete=models.CASCADE, null=False, blank=False)
-    serial_number = models.CharField(max_length=255, null=False, blank=False)
+    serial_number = models.CharField(max_length=255, null=True, blank=True)
     device = models.ForeignKey(Device, on_delete=models.CASCADE, related_name='assets', null=True)
 
     class Meta:
-        unique_together = ('customer', 'serial_number')
+        constraints = [
+            models.UniqueConstraint(
+                fields=['customer', 'device', 'serial_number'],
+                condition=models.Q(serial_number__isnull=False) & ~models.Q(serial_number=""),
+                name='unique_asset_serial_per_customer_device'
+            ),
+        ]
 
     def __str__(self):
         return self.device.model
