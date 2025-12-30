@@ -5,6 +5,7 @@ const WorkItemDetailLayout = [
             {
                 groupLabel: "Basic Information",
                 fields: [
+                    { name: "summary", label: "Summary", type: "textarea", editable: true },
                     { name: "type", label: "Type", type: "select", editable: true },
                     { name: "priority", label: "Priority", type: "select", editable: true },
                 ]
