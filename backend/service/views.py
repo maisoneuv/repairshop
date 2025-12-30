@@ -377,7 +377,8 @@ class CurrentEmployeeView(APIView):
             .distinct()
 
         availableTenants = [
-            {"subdomain": subdomain, "name": name} for subdomain, name in user_tenants
+            {"id": tenant_id, "subdomain": subdomain, "name": name}
+            for tenant_id, subdomain, name in user_tenants
         ]
 
         # Find all permissions for this user in this tenant
@@ -394,10 +395,7 @@ class CurrentEmployeeView(APIView):
                 "location_name": employee.location.name if employee.location else None,
                 "role": employee.get_role_display() if hasattr(employee, 'role') else None,
             },
-            "availableTenants": [
-                {"id": t["role__tenant__id"], "subdomain": t["role__tenant__subdomain"], "name": t["role__tenant__name"]}
-                for t in availableTenants
-            ],
+            "availableTenants": availableTenants,
             "currentTenant": {
                 "id": tenant.id,
                 "subdomain": tenant.subdomain,

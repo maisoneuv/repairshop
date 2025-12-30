@@ -54,8 +54,31 @@ def build_table_data(queryset, columns):
 
     return all_rows
 
-def get_model_schema(model_class):
+def get_model_schema(model_class, tenant=None):
+    """
+    Generate schema information for a Django model.
+
+    Args:
+        model_class: The Django model class to introspect
+        tenant: Optional tenant instance for fetching tenant-specific picklist values
+
+    Returns:
+        Dictionary containing field information including types, defaults, and choices
+    """
     schema = {}
+
+    # Define which fields use dynamic picklists (mapped to PicklistValue category)
+    PICKLIST_FIELDS = {
+        'WorkItem': {
+            'status': 'workitem_status',
+            'currency': 'currency',
+        },
+        'Task': {
+            'status': 'task_status',
+        }
+    }
+
+    model_name = model_class.__name__
 
     for field in model_class._meta.get_fields():
         if not isinstance(field, models.Field):
@@ -71,9 +94,31 @@ def get_model_schema(model_class):
             "default": field.default if field.default is not models.NOT_PROVIDED else None,
         }
 
-        if field.choices:
+        # Check if this field uses dynamic picklists
+        if (model_name in PICKLIST_FIELDS and
+            field.name in PICKLIST_FIELDS[model_name]):
+
+            category = PICKLIST_FIELDS[model_name][field.name]
+
+            # Fetch active picklist values for this tenant and category
+            if tenant:
+                # Import here to avoid circular dependency
+                from .models import PicklistValue
+                choices = PicklistValue.objects.filter(
+                    tenant=tenant,
+                    category=category,
+                    is_active=True
+                ).order_by('sort_order', 'name').values_list('value', 'name')
+
+                field_info["choices"] = list(choices)
+            else:
+                field_info["choices"] = []
+
+        # Handle traditional hardcoded choices (for backwards compatibility)
+        elif field.choices:
             field_info["choices"] = list(field.choices)
 
+        # Handle foreign keys
         if isinstance(field, (models.ForeignKey, models.OneToOneField)):
             field_info["related_model"] = field.related_model.__name__
             field_info["related_app"] = field.related_model._meta.app_label

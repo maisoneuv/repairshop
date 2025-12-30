@@ -32,6 +32,7 @@ export default function WorkItemForm({ onCreated }) {
     const [selectedPickupPoint, setSelectedPickupPoint] = useState(null);
     const [selectedDevice, setSelectedDevice] = useState(null);
     const [serialNumber, setSerialNumber] = useState("");
+    const [noSerialNumber, setNoSerialNumber] = useState(false);
     const [showDeviceModal, setShowDeviceModal] = useState(false);
     const [selectedAsset, setSelectedAsset] = useState(null);
     const [selectedTechnician, setSelectedTechnician] = useState(null);
@@ -135,6 +136,12 @@ export default function WorkItemForm({ onCreated }) {
         }
 
         const newErrors = validateRequiredFields(schema, workingFormData);
+
+        // Custom validation: Serial number is required unless "no serial number" is checked
+        if (!serialNumber && !noSerialNumber && selectedDevice) {
+            newErrors.serial_number = "Please enter a serial number or check 'Device has no serial number'";
+        }
+
         console.log("newErrors", newErrors);
         if (Object.keys(newErrors).length > 0) {
             setFieldErrors(newErrors);
@@ -336,6 +343,7 @@ export default function WorkItemForm({ onCreated }) {
                                                                 setSelectedAsset(null);
                                                                 setSelectedDevice(null);
                                                                 setSerialNumber("");
+                                                                setNoSerialNumber(false);
                                                                 handleFieldChange("customer_asset", null);
                                                             }}
                                                             displayField={(item) => {
@@ -373,11 +381,13 @@ export default function WorkItemForm({ onCreated }) {
                                                             </div>
                                                             <div>
                                                                 <label className="block text-sm font-medium text-gray-700 mb-2">
-                                                                    Serial Number
+                                                                    Serial Number {!noSerialNumber && <span className="text-red-500">*</span>}
                                                                 </label>
                                                                 <input
                                                                     type="text"
-                                                                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                                                    className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
+                                                                        noSerialNumber ? 'bg-gray-100 cursor-not-allowed' : 'border-gray-300'
+                                                                    } ${fieldErrors?.serial_number ? 'border-red-500' : ''}`}
                                                                     value={serialNumber}
                                                                     onChange={(e) =>
                                                                         setSerialNumber(
@@ -385,7 +395,33 @@ export default function WorkItemForm({ onCreated }) {
                                                                         )
                                                                     }
                                                                     placeholder="Enter serial number"
+                                                                    disabled={noSerialNumber}
                                                                 />
+                                                                <div className="mt-2">
+                                                                    <label className="flex items-center space-x-2 cursor-pointer">
+                                                                        <input
+                                                                            type="checkbox"
+                                                                            checked={noSerialNumber}
+                                                                            onChange={(e) => {
+                                                                                setNoSerialNumber(e.target.checked);
+                                                                                if (e.target.checked) {
+                                                                                    setSerialNumber("");
+                                                                                    setFieldErrors(prev => {
+                                                                                        const { serial_number, ...rest } = prev;
+                                                                                        return rest;
+                                                                                    });
+                                                                                }
+                                                                            }}
+                                                                            className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                                                                        />
+                                                                        <span className="text-sm text-gray-600">
+                                                                            Device has no serial number
+                                                                        </span>
+                                                                    </label>
+                                                                </div>
+                                                                {fieldErrors?.serial_number && (
+                                                                    <p className="mt-1 text-sm text-red-600">{fieldErrors.serial_number}</p>
+                                                                )}
                                                             </div>
                                                         </div>
                                                     </div>
@@ -527,7 +563,8 @@ export default function WorkItemForm({ onCreated }) {
                             onSelect={(asset) => {
                                 setSelectedAsset(asset);
                                 setSelectedDevice(asset.device);
-                                setSerialNumber(asset.serial_number);
+                                setSerialNumber(asset.serial_number || "");
+                                setNoSerialNumber(!asset.serial_number);
                                 handleFieldChange(
                                     "device",
                                     asset.device.id

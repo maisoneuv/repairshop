@@ -11,18 +11,8 @@ from django.db.models import Max
 
 from tenants.models import Tenant
 
-work_item_statuses = [
-    ('New', 'New'),
-    ('In Progress', 'In Progress'),
-    ('Resolved', 'Resolved')
-]
-
-task_statuses = [
-    ('To do', 'To do'),
-    ('In progress', 'In progress'),
-    ('Done', 'Done'),
-    ('Reopened', 'Reopened')
-]
+# Picklist values for work items and tasks are now stored in the PicklistValue model
+# and managed via Django admin instead of hardcoded lists.
 
 work_item_types = [
     ('Chargeable Repair', 'Chargeable Repair'),
@@ -94,7 +84,7 @@ class WorkItem(models.Model):
     tenant = models.ForeignKey(Tenant, on_delete=models.CASCADE)
     reference_id = models.CharField(max_length=50, blank=True, null=True)
     description = models.TextField()
-    status = models.CharField(choices=work_item_statuses, default='New')
+    status = models.CharField(max_length=100, default='New')
     customer = models.ForeignKey(Customer, blank=False, null=False, on_delete=models.PROTECT)
     created_date = models.DateTimeField(auto_now_add=True)
     closed_date = models.DateTimeField(blank=True, null=True)
@@ -123,8 +113,10 @@ class WorkItem(models.Model):
     fulfillment_shop = models.ForeignKey("service.RepairShop", null=True, blank=True,
                                          on_delete=models.PROTECT,
                                          help_text="Who actually performs the repair (internal or partner).")
+    currency = models.CharField(max_length=10, blank=True, null=True, help_text="Currency for pricing (e.g., USD, EUR, GBP)")
+    summary = models.TextField(blank=True, null=True)
     # paid
-    #currency todo
+
     notes = GenericRelation(Note)
 
 
@@ -169,7 +161,7 @@ class Task(models.Model):
     summary = models.TextField(blank=True, null=True)
     description = models.TextField(blank=True)
     work_item = models.ForeignKey(WorkItem, blank=True, null=True, on_delete=models.CASCADE, related_name="tasks")
-    status = models.CharField(choices=task_statuses, default='To do')
+    status = models.CharField(max_length=100, default='To do')
     task_type = models.ForeignKey(TaskType, on_delete=models.PROTECT, null=True, blank=True, related_name='tasks')
     assigned_employee = models.ForeignKey(Employee, on_delete=models.CASCADE)
     due_date = models.DateField(null=True, blank=True)

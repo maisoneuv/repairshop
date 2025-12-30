@@ -290,7 +290,7 @@ class WorkItemViewSet(viewsets.ModelViewSet):
             return qs
 
         if user.has_permission('view_own_workitems', self.request.tenant):
-            return qs.filter(technician=user)
+            return qs.filter(technician__user=user)
 
         return WorkItem.objects.none()
 
@@ -345,7 +345,7 @@ class WorkItemViewSet(viewsets.ModelViewSet):
 
             if not (
                 user.has_permission('view_all_workitems', request.tenant) or
-                (user.has_permission('view_own_workitems', request.tenant) and instance.technician == user)
+                (user.has_permission('view_own_workitems', request.tenant) and instance.technician and instance.technician.user == user)
             ):
                 raise PermissionDenied("You don't have permission to view this work item.")
 
@@ -374,14 +374,16 @@ class WorkItemSchemaView(APIView):
     def get(self, request):
         print("User:", request.user)
         print("Is authenticated:", request.user.is_authenticated)
-        schema = get_model_schema(WorkItem)
+        tenant = getattr(request, 'tenant', None)
+        schema = get_model_schema(WorkItem, tenant=tenant)
         return Response(schema)
 
 class TaskSchemaView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
-        schema = get_model_schema(Task)
+        tenant = getattr(request, 'tenant', None)
+        schema = get_model_schema(Task, tenant=tenant)
         return Response(schema)
 
 class TaskViewSet(viewsets.ModelViewSet):
@@ -406,7 +408,7 @@ class TaskViewSet(viewsets.ModelViewSet):
             return qs
 
         if user.has_permission('view_own_tasks', self.request.tenant):
-            return qs.filter(assigned_employee=user)
+            return qs.filter(assigned_employee__user=user)
 
         return Task.objects.none()
 
@@ -465,7 +467,7 @@ class TaskViewSet(viewsets.ModelViewSet):
 
             if not (
                 user.has_permission('view_all_tasks', request.tenant) or
-                (user.has_permission('view_own_tasks', request.tenant) and instance.assigned_employee == user)
+                (user.has_permission('view_own_tasks', request.tenant) and instance.assigned_employee.user == user)
             ):
                 raise PermissionDenied("You don't have permission to view this task.")
 
@@ -494,7 +496,7 @@ class TaskViewSet(viewsets.ModelViewSet):
 
             elif (
                     user.has_permission('view_all_workitems', request.tenant) or
-                    (user.has_permission('view_own_workitems', request.tenant) and work_item.technician == user)
+                    (user.has_permission('view_own_workitems', request.tenant) and work_item.technician and work_item.technician.user == user)
             ):
                 work_item_data = WorkItemSerializer(work_item).data
 

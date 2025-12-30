@@ -35,6 +35,12 @@ class Customer(models.Model):
     )
 
     phone_number = models.CharField(max_length=9, null=True, blank=True, validators=[phone_regex])
+    prefix = models.CharField(
+        max_length=5,
+        blank=True,
+        null=True,
+        help_text="Country code prefix (e.g., '+48', '+1')"
+    )
     tax_code = models.CharField(max_length=10, null=True, blank=True, validators=[tax_code_regex])
 
     def full_name(self):
@@ -61,7 +67,7 @@ class Customer(models.Model):
                 name='unique_customer_email_per_tenant'
             ),
             models.UniqueConstraint(
-                fields=['tenant', 'phone_number'],
+                fields=['tenant', 'prefix', 'phone_number'],
                 condition=models.Q(phone_number__isnull=False) & ~models.Q(phone_number=""),
                 name='unique_customer_phone_per_tenant'
             ),
@@ -99,11 +105,17 @@ class Opportunity(models.Model):
 
 class Asset(models.Model):
     customer = models.ForeignKey(Customer, on_delete=models.CASCADE, null=False, blank=False)
-    serial_number = models.CharField(max_length=255, null=False, blank=False)
+    serial_number = models.CharField(max_length=255, null=True, blank=True)
     device = models.ForeignKey(Device, on_delete=models.CASCADE, related_name='assets', null=True)
 
     class Meta:
-        unique_together = ('customer', 'serial_number')
+        constraints = [
+            models.UniqueConstraint(
+                fields=['customer', 'device', 'serial_number'],
+                condition=models.Q(serial_number__isnull=False) & ~models.Q(serial_number=""),
+                name='unique_asset_serial_per_customer_device'
+            ),
+        ]
 
     def __str__(self):
         return self.device.model

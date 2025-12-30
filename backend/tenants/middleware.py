@@ -37,10 +37,21 @@ def _derive_slug_from_host(host: str) -> Optional[str]:
 
 class TenantMiddleware(MiddlewareMixin):
     def process_request(self, request: HttpRequest):
-        
+
         request.tenant = None
         header_val = request.META.get("HTTP_X_TENANT")
         logger.warning("TenantMiddleware incoming host=%s header=%s user=%s", request.get_host(), header_val, getattr(request, "user", None))
+
+        # 0) Check if request is authenticated via API key
+        # API keys are set by DRF authentication (request.auth)
+        # This must run AFTER authentication middleware
+        api_key = getattr(request, "auth", None)
+        if api_key and hasattr(api_key, "tenant"):
+            # API key determines the tenant
+            request.tenant = api_key.tenant
+            logger.warning("TenantMiddleware using API key tenant %s", api_key.tenant)
+            # Skip all other tenant resolution and membership checks for API keys
+            return
 
         # 1) If authenticated, prefer the user's active tenant
         user = getattr(request, "user", None)
@@ -77,4 +88,4 @@ class TenantMiddleware(MiddlewareMixin):
             and not any(request.path.startswith(p) for p in TENANT_OPTIONAL_PATHS)
         ):
             if not user.tenants.filter(pk=request.tenant.pk).exists():
-                raise PermissionDenied("You don’t have access to this tenant.")
+                raise PermissionDenied("You don't have access to this tenant.")

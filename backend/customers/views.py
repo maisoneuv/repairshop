@@ -6,9 +6,13 @@ from rest_framework.decorators import api_view
 from rest_framework.exceptions import PermissionDenied
 from rest_framework.response import Response
 
+import phonenumbers
+from phonenumbers import NumberParseException
+
 from core.mixins import TenantScopedMixin
 from .serializers import CustomerSerializer, AssetSerializer
 from .models import Customer, Asset
+from tasks.models import WorkItem
 from django.views.generic import TemplateView, ListView, DetailView, CreateView, UpdateView
 from .forms import CustomerForm, CustomerAssetForm, CustomerInlineForm, CustomerAssetInlineForm
 from dal import autocomplete
@@ -299,3 +303,143 @@ def customer_assets_api(request, pk):
     assets = customer.asset_set.select_related("device").all()
     serializer = AssetSerializer(assets, many=True)
     return Response(serializer.data)
+
+
+@api_view(["GET"])
+def customer_lookup(request):
+    """
+    Lookup customer by phone number and return customer info + latest work item device.
+
+    Query params:
+        phone: Phone number in any format (e.g., '+48-555-123-456', '(555) 123-4567')
+
+    Returns:
+        200: Customer found with optional work item data
+        404: Customer not found
+        400: Invalid phone number or missing parameter
+    """
+    phone_param = request.GET.get('phone', '').strip()
+
+    if not phone_param:
+        return Response(
+            {"error": "Phone number parameter is required"},
+            status=400
+        )
+
+    # Get tenant from request (set by API key authentication)
+    tenant = getattr(request, 'tenant', None)
+    if not tenant:
+        return Response(
+            {"error": "Tenant not resolved"},
+            status=400
+        )
+
+    # Parse phone number using phonenumbers library
+    prefix = None
+    phone_number = None
+
+    try:
+        parsed = phonenumbers.parse(phone_param, None)  # None = no default region
+        prefix = f"+{parsed.country_code}"
+        phone_number = str(parsed.national_number)
+    except NumberParseException:
+        # Fallback: Try to extract digits manually
+        digits = ''.join(filter(str.isdigit, phone_param))
+        if not digits:
+            return Response(
+                {"error": "Invalid phone number format"},
+                status=400
+            )
+
+        # Check if starts with '+'
+        if phone_param.strip().startswith('+'):
+            # Try to separate prefix from number
+            # Simple heuristic: country codes are 1-4 digits
+            for i in range(1, min(5, len(digits) + 1)):
+                prefix_candidate = f"+{digits[:i]}"
+                phone_candidate = digits[i:]
+
+                # Try to find customer with this split
+                customer = Customer.objects.filter(
+                    tenant=tenant,
+                    prefix=prefix_candidate,
+                    phone_number=phone_candidate
+                ).first()
+
+                if customer:
+                    prefix = prefix_candidate
+                    phone_number = phone_candidate
+                    break
+            else:
+                # No match found with prefix splitting
+                prefix = None
+                phone_number = digits
+        else:
+            prefix = None
+            phone_number = digits
+
+    # Search for customer
+    # Try with prefix first (if available), then without
+    customer = None
+
+    if prefix:
+        customer = Customer.objects.filter(
+            tenant=tenant,
+            prefix=prefix,
+            phone_number=phone_number
+        ).select_related('address').first()
+
+    # Fallback: Search without prefix (for legacy data or local numbers)
+    if not customer:
+        customer = Customer.objects.filter(
+            tenant=tenant,
+            phone_number=phone_number
+        ).select_related('address').first()
+
+    if not customer:
+        return Response(
+            {"error": "Customer not found"},
+            status=404
+        )
+
+    # Build customer data
+    customer_data = {
+        "first_name": customer.first_name,
+        "last_name": customer.last_name or "",  # Handle null last_name
+    }
+
+    # Find latest work item for this customer
+    latest_work_item = WorkItem.objects.filter(
+        tenant=tenant,
+        customer=customer
+    ).select_related(
+        'customer_asset__device__category'
+    ).order_by('-created_date').first()
+
+    # Build work item data
+    work_item_data = None
+    if latest_work_item:
+        # Extract device info if available
+        if latest_work_item.customer_asset and latest_work_item.customer_asset.device:
+            device = latest_work_item.customer_asset.device
+            work_item_data = {
+                "device_manufacturer": device.manufacturer or "",
+                "device_model": device.model or "",
+                "device_category": device.category.name if device.category else "",
+                "created_date": latest_work_item.created_date.isoformat() if latest_work_item.created_date else "",
+                "status": latest_work_item.status or ""
+            }
+        else:
+            # Work item exists but has no device info
+            work_item_data = {
+                "device_manufacturer": "",
+                "device_model": "",
+                "device_category": "",
+                "created_date": latest_work_item.created_date.isoformat() if latest_work_item.created_date else "",
+                "status": latest_work_item.status or ""
+            }
+
+    return Response({
+        "customer": customer_data,
+        "latest_work_item": work_item_data
+    })
