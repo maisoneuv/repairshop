@@ -9,7 +9,7 @@ class CustomerSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Customer
-        fields = ['id', 'first_name', 'last_name', 'email', 'phone_number', 'referral_source', 'tax_code', 'address']
+        fields = ['id', 'first_name', 'last_name', 'email', 'prefix', 'phone_number', 'referral_source', 'tax_code', 'address']
         read_only_fields = ['id', 'tenant']
 
     def validate_address(self, value):

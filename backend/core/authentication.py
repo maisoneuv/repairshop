@@ -153,8 +153,7 @@ class APIKeyAuthentication(BaseAuthentication):
         # Override has_permission to use API key's role
         user.has_permission = lambda perm, tenant: api_key.has_permission(perm, tenant)
 
-        # Mark as authenticated
-        user.is_authenticated = True
+        # User is already authenticated by default (is_authenticated is a read-only property)
 
         return user
 

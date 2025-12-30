@@ -19,7 +19,7 @@ from .views import (CustomerListView,
                     get_customer_assets,
                     CustomerAPISearchView,
                     get_referral_sources,
-                    CustomerViewSet, customer_assets_api)
+                    CustomerViewSet, customer_assets_api, customer_lookup)
 
 app_name = "customers"
 
@@ -47,6 +47,7 @@ urlpatterns = [
     # path('api/customers/', CustomerCreateListView.as_view(), name='customer-list-create'),
     path('api/referral-sources/', get_referral_sources, name='referral-sources'),
     path('api/customers/<int:pk>/assets/', customer_assets_api, name='customer-assets-api'),
+    path('api/customers/lookup/', customer_lookup, name='customer-lookup'),
     path("api/", include(router.urls)),
 ]
 
