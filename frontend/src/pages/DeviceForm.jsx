@@ -53,7 +53,7 @@ export default function DeviceForm({ onSuccess }) {
     return (
         <form onSubmit={handleSubmit} className="space-y-4">
             <div>
-                <label className="block text-sm font-medium">Model Name</label>
+                <label className="block text-sm font-medium">Model/Type</label>
                 {!unknownModel && (
                     <input
                         type="text"

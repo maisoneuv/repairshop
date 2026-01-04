@@ -11,16 +11,29 @@ export default function FieldRow({
     options = [],
     schema = {},
     onEditRequest,
+    currencyCode = null,
 }) {
     // Format currency values
-    const formatCurrency = (val) => {
+    const formatCurrency = (val, currency = 'PLN') => {
         if (val == null || val === '') return '—';
-        return new Intl.NumberFormat('en-US', {
-            style: 'currency',
-            currency: 'USD',
-            minimumFractionDigits: 2,
-            maximumFractionDigits: 2
-        }).format(val);
+
+        // If we have a valid currency code, try to format with currency symbol
+        if (currency && ['USD', 'EUR', 'GBP', 'PLN'].includes(currency)) {
+            try {
+                return new Intl.NumberFormat('en-US', {
+                    style: 'currency',
+                    currency: currency,
+                    minimumFractionDigits: 2,
+                    maximumFractionDigits: 2
+                }).format(val);
+            } catch (e) {
+                // Fallback if currency code is invalid
+                return `${val} ${currency}`;
+            }
+        }
+
+        // Fallback format: value + currency code
+        return `${val} ${currency}`;
     };
 
     // Format date values
@@ -71,7 +84,7 @@ export default function FieldRow({
         // Handle different value types
         switch (type) {
             case 'currency':
-                return formatCurrency(value);
+                return formatCurrency(value, currencyCode || 'PLN');
             case 'date':
                 return formatDate(value);
             case 'datetime':

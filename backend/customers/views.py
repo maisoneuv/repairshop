@@ -78,6 +78,12 @@ class CustomerAssetUpdateView(UpdateView):
         return reverse("customers:asset_list")
 
 
+class AssetRetrieveUpdateAPIView(generics.RetrieveUpdateAPIView):
+    """API endpoint for retrieving and updating asset information"""
+    queryset = Asset.objects.all()
+    serializer_class = AssetSerializer
+
+
 class CustomerSearchView(autocomplete.Select2QuerySetView):
     def get_queryset(self):
         if not self.request.user.is_authenticated:

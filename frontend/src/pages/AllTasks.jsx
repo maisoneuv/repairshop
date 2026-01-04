@@ -7,6 +7,8 @@ const COLUMNS = [
     { key: "task_type", label: "Type" },
     { key: "status", label: "Status" },
     { key: "assigned_employee", label: "Assignee" },
+    { key: "parent_work_item", label: "Parent" },
+    { key: "device_name", label: "Device Name" },
     { key: "created_date", label: "Created" },
 ];
 
@@ -22,7 +24,7 @@ export default function AllTasks() {
             setLoading(true);
             setError("");
             try {
-                const data = await fetchTasks();
+                const data = await fetchTasks({ include: "workItem,deviceName" });
                 setTasks(data || []);
             } catch (err) {
                 setError(err.message || "Failed to load tasks");
@@ -47,6 +49,12 @@ export default function AllTasks() {
             } else if (sortField === "task_type") {
                 aVal = a.task_type?.name || "";
                 bVal = b.task_type?.name || "";
+            } else if (sortField === "parent_work_item") {
+                aVal = a.work_item?.reference_id || "";
+                bVal = b.work_item?.reference_id || "";
+            } else if (sortField === "device_name") {
+                aVal = a.device_name || "";
+                bVal = b.device_name || "";
             } else {
                 aVal = normalizeValue(a[sortField]);
                 bVal = normalizeValue(b[sortField]);
@@ -150,6 +158,19 @@ export default function AllTasks() {
                                         </td>
                                         <td className="px-4 py-3 text-sm text-gray-700">
                                             {task.assigned_employee?.name || "-"}
+                                        </td>
+                                        <td className="px-4 py-3 text-sm text-gray-700">
+                                            {task.work_item ? (
+                                                <Link
+                                                    to={`/work-items/${task.work_item.id}`}
+                                                    className="text-blue-600 hover:underline"
+                                                >
+                                                    {task.work_item.reference_id}
+                                                </Link>
+                                            ) : "-"}
+                                        </td>
+                                        <td className="px-4 py-3 text-sm text-gray-700">
+                                            {task.device_name || "-"}
                                         </td>
                                         <td className="px-4 py-3 text-sm text-gray-600">
                                             {formatDate(task.created_date)}

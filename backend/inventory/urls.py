@@ -1,6 +1,6 @@
 from django.urls import path
 from . import views
-from .views import DeviceAPISearchView, DeviceCreateListView, CategoryAPISearchView, CategoryCreateListView
+from .views import DeviceAPISearchView, DeviceCreateListView, DeviceRetrieveUpdateAPIView, CategoryAPISearchView, CategoryCreateListView
 
 app_name = "inventory"
 
@@ -28,6 +28,7 @@ urlpatterns = [
     path('device-create-inline/', views.device_create_inline, name='device_create_inline'),
     path('api/devices/search/', DeviceAPISearchView.as_view(), name='device-api-search'),
     path('api/devices/', DeviceCreateListView.as_view(), name='device-api-create'),
+    path('api/devices/<int:pk>/', DeviceRetrieveUpdateAPIView.as_view(), name='device-api-detail'),
     path("api/devices/manufacturers/", views.manufacturer_search, name='manufacturer-api-search'),
     path("api/category/search/", CategoryAPISearchView.as_view(), name='category-api-search'),
     path('api/category/', CategoryCreateListView.as_view(), name='category-api-create'),

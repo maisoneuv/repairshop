@@ -396,13 +396,26 @@ class TaskViewSet(viewsets.ModelViewSet):
     def get_queryset(self):
         user = self.request.user
 
+        # Base queryset with common select_related for performance
+        base_qs = Task.objects.select_related('assigned_employee', 'task_type')
+
+        # Check for include parameter to optimize queries
+        include = self.request.query_params.get("include", "")
+        includes = [part.strip() for part in include.split(",") if part.strip()]
+
+        if "workItem" in includes or "deviceName" in includes:
+            base_qs = base_qs.select_related('work_item')
+
+        if "deviceName" in includes:
+            base_qs = base_qs.select_related('work_item__customer_asset__device')
+
         if user.is_superuser:
-            return Task.objects.all()
+            return base_qs.all()
 
         if not self.request.tenant:
             return Task.objects.none()
 
-        qs = Task.objects.filter(tenant=self.request.tenant)
+        qs = base_qs.filter(tenant=self.request.tenant)
 
         if user.has_permission('view_all_tasks', self.request.tenant):
             return qs
@@ -453,6 +466,58 @@ class TaskViewSet(viewsets.ModelViewSet):
             raise PermissionDenied("You don't have permission to delete tasks.")
 
         instance.delete()
+
+    def list(self, request, *args, **kwargs):
+        queryset = self.filter_queryset(self.get_queryset())
+        page = self.paginate_queryset(queryset)
+
+        if page is not None:
+            serializer = self.get_serializer(page, many=True)
+            data = self._add_includes_to_list(serializer.data, page)
+            return self.get_paginated_response(data)
+
+        serializer = self.get_serializer(queryset, many=True)
+        data = self._add_includes_to_list(serializer.data, queryset)
+        return Response(data)
+
+    def _add_includes_to_list(self, data, instances):
+        """Add included fields to list response based on include query parameter"""
+        include = self.request.query_params.get("include", "")
+        includes = [part.strip() for part in include.split(",") if part.strip()]
+
+        if not includes:
+            return data
+
+        # Enhance each item in the list with requested includes
+        for i, instance in enumerate(instances):
+            if "workItem" in includes and instance.work_item_id:
+                data[i]["work_item"] = {
+                    "id": instance.work_item.id,
+                    "reference_id": instance.work_item.reference_id
+                }
+
+            if "deviceName" in includes:
+                device_name = self._get_device_name(instance)
+                data[i]["device_name"] = device_name
+
+        return data
+
+    def _get_device_name(self, task):
+        """Extract device name from task's work item"""
+        if not task.work_item:
+            return None
+        work_item = task.work_item
+        if not work_item.customer_asset:
+            return None
+        asset = work_item.customer_asset
+        if not asset.device:
+            return None
+        device = asset.device
+        manufacturer = device.manufacturer or ""
+        model = device.model or ""
+        if manufacturer and model:
+            return f"{manufacturer} {model}".strip()
+        return model or manufacturer or None
 
     def retrieve(self, request, *args, **kwargs):
         instance = self.get_object()

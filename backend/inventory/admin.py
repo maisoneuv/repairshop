@@ -29,7 +29,7 @@ class CategoryAdmin(TenantAwareImportExportMixin, DraggableMPTTAdmin):
 
 @admin.register(Device)
 class DeviceAdmin(TenantAwareImportExportAdmin):
-    list_display = ('manufacturer', 'model', 'category')
+    list_display = ('id','manufacturer', 'model', 'category')
     search_fields = ('manufacturer', 'model')
     autocomplete_fields = ['category']
 

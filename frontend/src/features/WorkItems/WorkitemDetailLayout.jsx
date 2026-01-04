@@ -42,6 +42,7 @@ const WorkItemDetailLayout = [
                     { name: "estimated_price", label: "Estimated Price", type: "currency", editable: true },
                     { name: "final_price", label: "Final Price", type: "currency", editable: true, emphasis: true },
                     { name: "repair_cost", label: "Repair Cost", type: "currency", editable: true },
+                    { name: "currency", label: "Currency", type: "select", editable: true },
                 ]
             },
             {

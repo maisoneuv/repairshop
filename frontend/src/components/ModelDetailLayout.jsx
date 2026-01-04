@@ -128,6 +128,11 @@ export default function ModelDetailLayout({
                 }
                 : null;
 
+        // Get currency code for currency fields
+        const currencyCode = fieldType === "currency"
+            ? (editMode ? formData.currency : data.currency) || 'PLN'
+            : null;
+
         return (
             <FieldRow
                 key={name}
@@ -147,6 +152,7 @@ export default function ModelDetailLayout({
                 options={options}
                 schema={schema[name]}
                 onEditRequest={onEditRequest}
+                currencyCode={currencyCode}
             />
         );
     };

@@ -1,6 +1,7 @@
 import { useState } from 'react';
+import AssetForm from './AssetForm';
 
-export default function DeviceCard({ device, serialNumber, onEdit }) {
+export default function DeviceCard({ device, serialNumber, onEdit, onUpdated }) {
     const [isEditing, setIsEditing] = useState(false);
 
     const handleEdit = () => {
@@ -36,6 +37,36 @@ export default function DeviceCard({ device, serialNumber, onEdit }) {
 
     const warranty = getWarrantyStatus(deviceInfo.warranty);
 
+    // If editing, show the form
+    if (isEditing && device) {
+        return (
+            <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
+                <div className="flex items-center justify-between mb-3">
+                    <h3 className="text-base font-semibold text-gray-900">Device</h3>
+                    <button
+                        type="button"
+                        onClick={() => setIsEditing(false)}
+                        className="text-sm px-3 py-1.5 border border-gray-300 rounded-lg text-gray-600 hover:bg-gray-50 transition-colors"
+                    >
+                        Cancel
+                    </button>
+                </div>
+
+                <AssetForm
+                    initialData={device}
+                    mode="edit"
+                    submitLabel="Save Changes"
+                    onSuccess={(updatedAsset) => {
+                        if (onUpdated) {
+                            onUpdated(updatedAsset);
+                        }
+                        setIsEditing(false);
+                    }}
+                />
+            </div>
+        );
+    }
+
     return (
         <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
             <div className="flex items-center justify-between mb-3">
@@ -48,63 +79,74 @@ export default function DeviceCard({ device, serialNumber, onEdit }) {
                 </button>
             </div>
 
-            <div className="space-y-2">
-                {/* Device Model */}
-                <div>
-                    <label className="block text-sm font-medium text-gray-600 mb-1">Model</label>
-                    <p className="text-sm text-gray-900 font-medium">
-                        {deviceInfo.manufacturer} {deviceInfo.model}
-                    </p>
+            <div className="space-y-0">
+                {/* Manufacturer */}
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-2 md:gap-4 py-2">
+                    <label className="text-sm text-gray-600 font-medium">Manufacturer</label>
+                    <div className="md:col-span-2">
+                        <p className="text-sm text-gray-900 px-2 py-1">
+                            {deviceInfo.manufacturer}
+                        </p>
+                    </div>
                 </div>
 
-                {/* Device Details */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                    <div>
-                        <label className="block text-sm font-medium text-gray-600 mb-1">Serial Number</label>
-                        <p className="text-sm text-gray-900 font-mono">
+                {/* Model */}
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-2 md:gap-4 py-2">
+                    <label className="text-sm text-gray-600 font-medium">Model</label>
+                    <div className="md:col-span-2">
+                        <p className="text-sm text-gray-900 px-2 py-1">
+                            {deviceInfo.model}
+                        </p>
+                    </div>
+                </div>
+
+                {/* Serial Number */}
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-2 md:gap-4 py-2">
+                    <label className="text-sm text-gray-600 font-medium">Serial Number</label>
+                    <div className="md:col-span-2">
+                        <p className="text-sm text-gray-900 font-mono px-2 py-1">
                             {assetSerialNumber || 'Not provided'}
                         </p>
                     </div>
-
-                    <div>
-                        <label className="block text-sm font-medium text-gray-600 mb-1">Warranty</label>
-                        <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                            warranty.color === 'green' ? 'bg-green-100 text-green-800' :
-                            warranty.color === 'red' ? 'bg-red-100 text-red-800' :
-                            'bg-gray-100 text-gray-800'
-                        }`}>
-                            {warranty.status}
-                        </span>
-                    </div>
                 </div>
-
-                {/* Additional Device Info */}
-                {deviceInfo.storage && (
-                    <div>
-                        <label className="block text-sm font-medium text-gray-600 mb-1">Storage</label>
-                        <p className="text-sm text-gray-900">{deviceInfo.storage}</p>
-                    </div>
-                )}
-
-                {deviceInfo.color && (
-                    <div>
-                        <label className="block text-sm font-medium text-gray-600 mb-1">Color</label>
-                        <p className="text-sm text-gray-900">{deviceInfo.color}</p>
-                    </div>
-                )}
-
-                {deviceInfo.imei && (
-                    <div>
-                        <label className="block text-sm font-medium text-gray-600 mb-1">IMEI</label>
-                        <p className="text-sm text-gray-900 font-mono">{deviceInfo.imei}</p>
-                    </div>
-                )}
 
                 {/* Category */}
                 {deviceInfo.category_name && (
-                    <div>
-                        <label className="block text-sm font-medium text-gray-600 mb-1">Category</label>
-                        <p className="text-sm text-gray-900">{deviceInfo.category_name}</p>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-2 md:gap-4 py-2">
+                        <label className="text-sm text-gray-600 font-medium">Category</label>
+                        <div className="md:col-span-2">
+                            <p className="text-sm text-gray-900 px-2 py-1">{deviceInfo.category_name}</p>
+                        </div>
+                    </div>
+                )}
+
+                {/* Storage */}
+                {deviceInfo.storage && (
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-2 md:gap-4 py-2">
+                        <label className="text-sm text-gray-600 font-medium">Storage</label>
+                        <div className="md:col-span-2">
+                            <p className="text-sm text-gray-900 px-2 py-1">{deviceInfo.storage}</p>
+                        </div>
+                    </div>
+                )}
+
+                {/* Color */}
+                {deviceInfo.color && (
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-2 md:gap-4 py-2">
+                        <label className="text-sm text-gray-600 font-medium">Color</label>
+                        <div className="md:col-span-2">
+                            <p className="text-sm text-gray-900 px-2 py-1">{deviceInfo.color}</p>
+                        </div>
+                    </div>
+                )}
+
+                {/* IMEI */}
+                {deviceInfo.imei && (
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-2 md:gap-4 py-2">
+                        <label className="text-sm text-gray-600 font-medium">IMEI</label>
+                        <div className="md:col-span-2">
+                            <p className="text-sm text-gray-900 font-mono px-2 py-1">{deviceInfo.imei}</p>
+                        </div>
                     </div>
                 )}
             </div>
