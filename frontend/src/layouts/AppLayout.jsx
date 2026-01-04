@@ -1,7 +1,7 @@
 import { Outlet, useLocation, useNavigate } from "react-router-dom";
 import LogoutButton from "../components/LogoutButton";
 import { useUser } from "../context/UserContext";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import GlobalSearch from "../components/GlobalSearch/GlobalSearch";
 
 export default function AppLayout() {
@@ -10,6 +10,8 @@ export default function AppLayout() {
     const location = useLocation();
     const [workItemMenuOpen, setWorkItemMenuOpen] = useState(false);
     const [taskMenuOpen, setTaskMenuOpen] = useState(false);
+    const workItemMenuRef = useRef(null);
+    const taskMenuRef = useRef(null);
 
     // Get background color from environment variable (defaults to light grey)
     const appBgColor = import.meta.env.VITE_APP_BG_COLOR || '#f3f4f6';
@@ -18,6 +20,26 @@ export default function AppLayout() {
         setWorkItemMenuOpen(false);
         setTaskMenuOpen(false);
     }, [location.pathname, location.search]);
+
+    // Close dropdowns when clicking outside
+    useEffect(() => {
+        function handleClickOutside(event) {
+            if (workItemMenuRef.current && !workItemMenuRef.current.contains(event.target)) {
+                setWorkItemMenuOpen(false);
+            }
+            if (taskMenuRef.current && !taskMenuRef.current.contains(event.target)) {
+                setTaskMenuOpen(false);
+            }
+        }
+
+        // Only add listener if at least one menu is open
+        if (workItemMenuOpen || taskMenuOpen) {
+            document.addEventListener("mousedown", handleClickOutside);
+            return () => {
+                document.removeEventListener("mousedown", handleClickOutside);
+            };
+        }
+    }, [workItemMenuOpen, taskMenuOpen]);
 
     return (
         <div className="min-h-screen text-gray-900" style={{backgroundColor: appBgColor}}>
@@ -30,7 +52,7 @@ export default function AppLayout() {
                                 <div className="flex items-center">
                                     <div className="w-6 h-6 bg-blue-600 rounded-sm mr-2"></div>
                                 </div>
-                                <div className="relative">
+                                <div className="relative" ref={workItemMenuRef}>
                                     <button
                                         type="button"
                                         onClick={() => setWorkItemMenuOpen((prev) => !prev)}
@@ -69,7 +91,7 @@ export default function AppLayout() {
                                         </div>
                                     )}
                                 </div>
-                                <div className="relative">
+                                <div className="relative" ref={taskMenuRef}>
                                     <button
                                         type="button"
                                         onClick={() => setTaskMenuOpen((prev) => !prev)}

@@ -4,9 +4,26 @@ export default function WorkItemHighlights({ workItem }) {
         return new Date(dateString).toLocaleString();
     };
 
-    const formatCurrency = (amount) => {
+    const formatCurrency = (amount, currency = 'PLN') => {
         if (!amount) return 'Not set';
-        return `$${parseFloat(amount).toFixed(2)}`;
+
+        // Use Intl.NumberFormat for proper currency formatting
+        if (currency && ['USD', 'EUR', 'GBP', 'PLN'].includes(currency)) {
+            try {
+                return new Intl.NumberFormat('en-US', {
+                    style: 'currency',
+                    currency: currency,
+                    minimumFractionDigits: 2,
+                    maximumFractionDigits: 2
+                }).format(amount);
+            } catch (e) {
+                // Fallback if currency code is invalid
+                return `${parseFloat(amount).toFixed(2)} ${currency}`;
+            }
+        }
+
+        // Fallback format: value + currency code
+        return `${parseFloat(amount).toFixed(2)} ${currency}`;
     };
 
     const highlights = [
@@ -27,12 +44,12 @@ export default function WorkItemHighlights({ workItem }) {
         },
         {
             label: 'Estimated Price',
-            value: formatCurrency(workItem.estimated_price),
+            value: formatCurrency(workItem.estimated_price, workItem.currency || 'PLN'),
             subValue: 'Subject to diagnosis'
         },
         {
             label: 'Already Paid',
-            value: formatCurrency(workItem.final_price),
+            value: formatCurrency(workItem.final_price, workItem.currency || 'PLN'),
             subValue: workItem.payment_method || 'No payment recorded'
         }
     ];

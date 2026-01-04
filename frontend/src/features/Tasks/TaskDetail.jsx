@@ -52,8 +52,12 @@ export default function TaskDetail() {
             }
         });
 
-        const updated = await updateTaskField(task.id, payload);
-        setTask(updated);
+        await updateTaskField(task.id, payload);
+
+        // Refetch the task with workItemDetails to preserve parent work item data
+        const updatedTask = await fetchTask(id, "workItemDetails");
+        setTask(updatedTask);
+        setFormData(updatedTask);
         setEditMode(false);
     };
 
@@ -144,8 +148,12 @@ export default function TaskDetail() {
                                         payload[name] = val;
                                     }
 
-                                    const updated = await updateTaskField(task.id, payload);
-                                    setTask((prev) => ({ ...prev, ...updated }));
+                                    await updateTaskField(task.id, payload);
+
+                                    // Refetch the task with workItemDetails to preserve parent work item data
+                                    const updatedTask = await fetchTask(id, "workItemDetails");
+                                    setTask(updatedTask);
+                                    setFormData(updatedTask);
                                 }}
                             />
 

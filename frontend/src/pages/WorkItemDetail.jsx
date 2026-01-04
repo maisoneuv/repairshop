@@ -147,6 +147,13 @@ export default function WorkItemDetail() {
         });
     };
 
+    const handleDeviceUpdated = (updatedAsset) => {
+        setWorkItem((prev) => {
+            if (!prev) return prev;
+            return { ...prev, deviceDetails: updatedAsset };
+        });
+    };
+
     const handleSaveAll = async () => {
         if (!workItem) return;
         const payload = editableFieldNames.reduce((acc, name) => {
@@ -211,6 +218,7 @@ export default function WorkItemDetail() {
                             <DeviceCard
                                 device={workItem.deviceDetails}
                                 onEdit={() => console.log('Edit device')}
+                                onUpdated={handleDeviceUpdated}
                             />
                         </div>
 
@@ -287,7 +295,7 @@ export default function WorkItemDetail() {
                                                 to={`/tasks/${task.id}`}
                                                 className="text-indigo-600 hover:text-indigo-800 font-medium text-sm transition-colors"
                                             >
-                                                {task.task_type?.name || task.summary || `Task #${task.id}`}
+                                                {`#${task.id} ${task.task_type?.name}` || task.summary || `Task #${task.id}`}
                                             </Link>
                                             <span className={`px-2 py-1 text-xs rounded-full ${
                                                 task.status === 'Done' ? 'bg-green-100 text-green-800' :

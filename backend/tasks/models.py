@@ -113,7 +113,7 @@ class WorkItem(models.Model):
     fulfillment_shop = models.ForeignKey("service.RepairShop", null=True, blank=True,
                                          on_delete=models.PROTECT,
                                          help_text="Who actually performs the repair (internal or partner).")
-    currency = models.CharField(max_length=10, blank=True, null=True, help_text="Currency for pricing (e.g., USD, EUR, GBP)")
+    currency = models.CharField(max_length=10, blank=True, null=True, default='PLN', help_text="Currency for pricing (e.g., PLN, USD, EUR, GBP)")
     summary = models.TextField(blank=True, null=True)
     # paid
 

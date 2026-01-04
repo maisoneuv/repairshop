@@ -44,9 +44,10 @@ def create_default_picklists(sender, instance, created, **kwargs):
             ('Reopened', 'Reopened', 3, True),
         ],
         'currency': [
-            ('USD', 'US Dollar', 0, True),
-            ('EUR', 'Euro', 1, True),
-            ('GBP', 'British Pound', 2, True),
+            ('PLN', 'Polish Zloty', 0, True),
+            ('USD', 'US Dollar', 1, True),
+            ('EUR', 'Euro', 2, True),
+            ('GBP', 'British Pound', 3, True),
         ],
     }
 

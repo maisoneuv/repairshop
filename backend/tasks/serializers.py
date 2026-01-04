@@ -47,7 +47,7 @@ class WorkItemSerializer(serializers.ModelSerializer):
     device = serializers.PrimaryKeyRelatedField(
         queryset=Device.objects.all(), write_only=True, required=False
     )
-    serial_number = serializers.CharField(write_only=True, required=False)
+    serial_number = serializers.CharField(write_only=True, required=False, allow_null=True, allow_blank=True)
     pickup_point = LocationSerializer()
     dropoff_point = LocationSerializer()
     fulfillment_shop = ShopSerializer(read_only=True)
@@ -194,14 +194,29 @@ class WorkItemSerializer(serializers.ModelSerializer):
         serial_number = validated_data.pop("serial_number", None)
         customer = validated_data.get("customer")
 
-        # Create or get CustomerAsset if all required info is present
+        # Normalize empty string to None for serial_number
+        if serial_number == "":
+            serial_number = None
+
+        # Create or get CustomerAsset if device and customer are present
         asset = None
-        if device and serial_number and customer:
-            asset, _ = Asset.objects.get_or_create(
-                customer=customer,
-                serial_number=serial_number,
-                defaults={"device": device}
-            )
+        if device and customer:
+            # If serial_number is provided, use get_or_create with it
+            # If not, create a new asset without serial number (can't use get_or_create for multiple null serials)
+            if serial_number:
+                asset, _ = Asset.objects.get_or_create(
+                    customer=customer,
+                    serial_number=serial_number,
+                    device=device,
+                    defaults={"device": device}
+                )
+            else:
+                # Create a new asset without serial number
+                asset = Asset.objects.create(
+                    customer=customer,
+                    device=device,
+                    serial_number=None
+                )
         if asset:
             validated_data["customer_asset"] = asset
 

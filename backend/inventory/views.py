@@ -380,6 +380,11 @@ class DeviceCreateListView(generics.ListCreateAPIView):
     queryset = Device.objects.all()
     serializer_class = DeviceSerializer
 
+class DeviceRetrieveUpdateAPIView(generics.RetrieveUpdateAPIView):
+    """API endpoint for retrieving and updating device information"""
+    queryset = Device.objects.all()
+    serializer_class = DeviceSerializer
+
 @api_view(['GET'])
 def manufacturer_search(request):
     query = request.GET.get("q", "").lower()
