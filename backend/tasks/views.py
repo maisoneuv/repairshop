@@ -238,6 +238,14 @@ class WorkItemFilter(django_filters.FilterSet):
     """Custom filter to support filtering work items by customer (direct or via asset)"""
     customer = django_filters.NumberFilter(method='filter_by_customer')
 
+    # Date range filters
+    created_after = django_filters.DateFilter(field_name='created_date', lookup_expr='gte')
+    created_before = django_filters.DateFilter(field_name='created_date', lookup_expr='lte')
+    closed_after = django_filters.DateFilter(field_name='closed_date', lookup_expr='gte')
+    closed_before = django_filters.DateFilter(field_name='closed_date', lookup_expr='lte')
+    due_after = django_filters.DateFilter(field_name='due_date', lookup_expr='gte')
+    due_before = django_filters.DateFilter(field_name='due_date', lookup_expr='lte')
+
     def filter_by_customer(self, queryset, name, value):
         """Filter work items by customer ID - includes items where customer is direct or via asset"""
         print(f"[WorkItemFilter] Filtering by customer ID: {value}")
@@ -257,7 +265,7 @@ class WorkItemViewSet(viewsets.ModelViewSet):
     filter_backends = [filters.SearchFilter, DjangoFilterBackend]
     filterset_class = WorkItemFilter
     search_fields = [
-        "reference_id",
+        "=reference_id",  # Exact match for reference_id
         "customer__first_name",
         "customer__last_name",
         "customer__email",
@@ -386,10 +394,36 @@ class TaskSchemaView(APIView):
         schema = get_model_schema(Task, tenant=tenant)
         return Response(schema)
 
+class TaskFilter(django_filters.FilterSet):
+    """Custom filter to support filtering tasks by work item reference ID and date ranges"""
+    # Custom filter for work item reference ID
+    work_item_ref = django_filters.CharFilter(method='filter_by_work_item_reference')
+
+    # Date range filters
+    created_after = django_filters.DateFilter(field_name='created_date', lookup_expr='gte')
+    created_before = django_filters.DateFilter(field_name='created_date', lookup_expr='lte')
+    due_after = django_filters.DateFilter(field_name='due_date', lookup_expr='gte')
+    due_before = django_filters.DateFilter(field_name='due_date', lookup_expr='lte')
+    completed_after = django_filters.DateFilter(field_name='completed_date', lookup_expr='gte')
+    completed_before = django_filters.DateFilter(field_name='completed_date', lookup_expr='lte')
+
+    def filter_by_work_item_reference(self, queryset, name, value):
+        """Filter tasks by work item reference_id (e.g., RMA-123)"""
+        return queryset.filter(work_item__reference_id=value)
+
+    class Meta:
+        model = Task
+        fields = ['work_item', 'assigned_employee', 'status', 'task_type']
+
 class TaskViewSet(viewsets.ModelViewSet):
     serializer_class = TaskSerializer
-    filter_backends = [DjangoFilterBackend, filters.OrderingFilter]
-    filterset_fields = ['work_item', 'assigned_employee', 'status']
+    filter_backends = [filters.SearchFilter, DjangoFilterBackend, filters.OrderingFilter]
+    filterset_class = TaskFilter
+    search_fields = [
+        'summary',
+        'description',
+        'work_item__reference_id',  # Search by work item reference ID
+    ]
     ordering_fields = ['created_date', 'summary', 'status', 'assigned_employee', 'task_type__name']
     ordering = ["-created_date"]
 
