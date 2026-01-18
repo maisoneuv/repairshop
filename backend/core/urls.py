@@ -22,4 +22,5 @@ urlpatterns += [
     path("login/", login_view, name="login"),
     path("logout/", logout_view, name="logout"),
     path("search/", GlobalSearchView.as_view(), name="global-search"),
+    path("picklist/<str:category>/", PicklistValuesView.as_view(), name="picklist-values"),
 ]
