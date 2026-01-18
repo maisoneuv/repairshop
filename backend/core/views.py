@@ -13,7 +13,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 from django.views.decorators.csrf import ensure_csrf_cookie
 
-from .models import Note, User, Permission, RolePermission, UserRole, Role
+from .models import Note, User, Permission, RolePermission, UserRole, Role, PicklistValue
 from .serializers import (NoteSerializer, UserSerializer, PermissionSerializer,
                           RolePermissionSerializer, RoleSerializer, UserRoleSerializer,
                           UserRoleCreateSerializer, MyPermissionsResponseSerializer)
@@ -324,3 +324,30 @@ class GlobalSearchView(APIView):
         results['total_count'] = len(results['customers']) + len(results['work_items'])
 
         return Response(results)
+
+
+class PicklistValuesView(APIView):
+    """
+    Endpoint to fetch picklist values for a given category.
+    Used for populating filter dropdowns.
+    """
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, category):
+        tenant = getattr(request, 'tenant', None)
+        if not tenant:
+            return Response(
+                {'detail': 'Tenant not resolved'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        values = PicklistValue.objects.filter(
+            tenant=tenant,
+            category=category,
+            is_active=True
+        ).order_by('sort_order', 'name')
+
+        return Response([
+            {'value': v.value, 'name': v.name}
+            for v in values
+        ])

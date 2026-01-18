@@ -1,6 +1,8 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useCallback } from "react";
 import { Link } from "react-router-dom";
 import { fetchTasks } from "../api/tasks";
+import apiClient from "../api/apiClient";
+import { getPicklistPath, getEmployeeListPath } from "../api/autocompleteApi";
 
 const COLUMNS = [
     { key: "id", label: "Task ID" },
@@ -12,6 +14,8 @@ const COLUMNS = [
     { key: "created_date", label: "Created" },
 ];
 
+const EXCLUDED_STATUSES = ["Done"];
+
 export default function AllTasks() {
     const [tasks, setTasks] = useState([]);
     const [loading, setLoading] = useState(false);
@@ -19,25 +23,63 @@ export default function AllTasks() {
     const [sortField, setSortField] = useState("created_date");
     const [sortDirection, setSortDirection] = useState("desc");
 
+    // Filter state
+    const [statusOptions, setStatusOptions] = useState([]);
+    const [assigneeOptions, setAssigneeOptions] = useState([]);
+    const [statusFilter, setStatusFilter] = useState("__open__");
+    const [assigneeFilter, setAssigneeFilter] = useState("");
+
+    // Fetch filter options on mount
     useEffect(() => {
-        const load = async () => {
-            setLoading(true);
-            setError("");
+        const loadFilterOptions = async () => {
             try {
-                const data = await fetchTasks({ include: "workItem,deviceName" });
-                setTasks(data || []);
+                const [statusRes, employeeRes] = await Promise.all([
+                    apiClient.get(getPicklistPath("task_status")),
+                    apiClient.get(getEmployeeListPath()),
+                ]);
+                setStatusOptions(statusRes.data || []);
+                setAssigneeOptions(employeeRes.data || []);
             } catch (err) {
-                setError(err.message || "Failed to load tasks");
-            } finally {
-                setLoading(false);
+                console.error("Failed to load filter options:", err);
             }
         };
-
-        load();
+        loadFilterOptions();
     }, []);
 
+    const loadTasks = useCallback(async () => {
+        setLoading(true);
+        setError("");
+        try {
+            const params = { include: "workItem,deviceName" };
+            if (statusFilter && statusFilter !== "__open__" && statusFilter !== "__all__") {
+                params.status = statusFilter;
+            }
+            if (assigneeFilter) {
+                params.assigned_employee = assigneeFilter;
+            }
+            const data = await fetchTasks(params);
+            setTasks(data || []);
+        } catch (err) {
+            setError(err.message || "Failed to load tasks");
+        } finally {
+            setLoading(false);
+        }
+    }, [statusFilter, assigneeFilter]);
+
+    useEffect(() => {
+        loadTasks();
+    }, [loadTasks]);
+
+    // Apply client-side filtering for "open" status
+    const filteredTasks = useMemo(() => {
+        if (statusFilter === "__open__") {
+            return tasks.filter((task) => !EXCLUDED_STATUSES.includes(task.status));
+        }
+        return tasks;
+    }, [tasks, statusFilter]);
+
     const sortedTasks = useMemo(() => {
-        const data = [...tasks];
+        const data = [...filteredTasks];
         const direction = sortDirection === "asc" ? 1 : -1;
 
         data.sort((a, b) => {
@@ -66,7 +108,7 @@ export default function AllTasks() {
         });
 
         return data;
-    }, [tasks, sortField, sortDirection]);
+    }, [filteredTasks, sortField, sortDirection]);
 
     const handleSort = (column) => {
         if (sortField === column) {
@@ -93,6 +135,48 @@ export default function AllTasks() {
                 >
                     Create New
                 </Link>
+            </div>
+
+            {/* Filters */}
+            <div className="px-6 py-3 border-b border-gray-100 flex items-center gap-4 bg-gray-50">
+                <div className="flex items-center gap-2">
+                    <label htmlFor="status-filter" className="text-sm font-medium text-gray-600">
+                        Status:
+                    </label>
+                    <select
+                        id="status-filter"
+                        value={statusFilter}
+                        onChange={(e) => setStatusFilter(e.target.value)}
+                        className="px-3 py-1.5 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    >
+                        <option value="__open__">Open (Not Done)</option>
+                        <option value="__all__">All Statuses</option>
+                        {statusOptions.map((opt) => (
+                            <option key={opt.value} value={opt.value}>
+                                {opt.name}
+                            </option>
+                        ))}
+                    </select>
+                </div>
+
+                <div className="flex items-center gap-2">
+                    <label htmlFor="assignee-filter" className="text-sm font-medium text-gray-600">
+                        Assignee:
+                    </label>
+                    <select
+                        id="assignee-filter"
+                        value={assigneeFilter}
+                        onChange={(e) => setAssigneeFilter(e.target.value)}
+                        className="px-3 py-1.5 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    >
+                        <option value="">All Assignees</option>
+                        {assigneeOptions.map((emp) => (
+                            <option key={emp.id} value={emp.id}>
+                                {emp.name}
+                            </option>
+                        ))}
+                    </select>
+                </div>
             </div>
 
             <div className="p-6">
