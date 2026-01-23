@@ -360,3 +360,191 @@ class APIKey(TimeStampedModel):
             role=self.role,
             permission__codename=permission_codename
         ).exists()
+
+
+class Setting(models.Model):
+    """
+    Custom settings supporting both global defaults (tenant=null)
+    and tenant-specific overrides.
+    """
+    VALUE_TYPES = [
+        ('string', 'String'),
+        ('numeric', 'Numeric'),
+        ('boolean', 'Boolean'),
+        ('date', 'Date'),
+    ]
+
+    tenant = models.ForeignKey(
+        Tenant,
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name='settings',
+        help_text="Leave empty for global default settings"
+    )
+    key = models.CharField(
+        max_length=100,
+        db_index=True,
+        help_text="Unique identifier for this setting (e.g., 'tax_rate', 'company_name')"
+    )
+    value_type = models.CharField(
+        max_length=10,
+        choices=VALUE_TYPES,
+        help_text="The data type of this setting's value"
+    )
+
+    # Typed value columns - only one should be populated based on value_type
+    value_string = models.CharField(
+        max_length=500,
+        blank=True,
+        null=True,
+        help_text="Value when type is 'string'"
+    )
+    value_numeric = models.DecimalField(
+        max_digits=15,
+        decimal_places=4,
+        blank=True,
+        null=True,
+        help_text="Value when type is 'numeric'"
+    )
+    value_boolean = models.BooleanField(
+        blank=True,
+        null=True,
+        help_text="Value when type is 'boolean'"
+    )
+    value_date = models.DateField(
+        blank=True,
+        null=True,
+        help_text="Value when type is 'date'"
+    )
+
+    description = models.TextField(
+        blank=True,
+        help_text="Optional description of what this setting controls"
+    )
+    created_on = models.DateTimeField(auto_now_add=True)
+    modified_on = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['key', 'tenant']
+        constraints = [
+            models.UniqueConstraint(
+                fields=['tenant', 'key'],
+                name='unique_setting_per_tenant'
+            ),
+        ]
+        indexes = [
+            models.Index(fields=['key', 'tenant'], name='idx_setting_key_tenant'),
+        ]
+        verbose_name = "Setting"
+        verbose_name_plural = "Settings"
+
+    def __str__(self):
+        tenant_label = self.tenant.name if self.tenant else "Global"
+        return f"{self.key} ({tenant_label})"
+
+    @property
+    def value(self):
+        """Return the typed value based on value_type."""
+        if self.value_type == 'string':
+            return self.value_string
+        elif self.value_type == 'numeric':
+            return self.value_numeric
+        elif self.value_type == 'boolean':
+            return self.value_boolean
+        elif self.value_type == 'date':
+            return self.value_date
+        return None
+
+    @value.setter
+    def value(self, val):
+        """Set the appropriate typed column based on value_type."""
+        # Clear all value columns first
+        self.value_string = None
+        self.value_numeric = None
+        self.value_boolean = None
+        self.value_date = None
+
+        if self.value_type == 'string':
+            self.value_string = val
+        elif self.value_type == 'numeric':
+            self.value_numeric = val
+        elif self.value_type == 'boolean':
+            self.value_boolean = val
+        elif self.value_type == 'date':
+            self.value_date = val
+
+    def clean(self):
+        """Validate that the appropriate value column is set for the value_type."""
+        from django.core.exceptions import ValidationError
+
+        if self.value_type == 'string' and self.value_string is None:
+            raise ValidationError({'value_string': 'String value is required for string type.'})
+        elif self.value_type == 'numeric' and self.value_numeric is None:
+            raise ValidationError({'value_numeric': 'Numeric value is required for numeric type.'})
+        elif self.value_type == 'boolean' and self.value_boolean is None:
+            raise ValidationError({'value_boolean': 'Boolean value is required for boolean type.'})
+        elif self.value_type == 'date' and self.value_date is None:
+            raise ValidationError({'value_date': 'Date value is required for date type.'})
+
+    @classmethod
+    def get_value(cls, key, tenant=None, default=None):
+        """
+        Get a setting value, with tenant override taking precedence over global.
+
+        Args:
+            key: The setting key to look up
+            tenant: Optional tenant for tenant-specific override
+            default: Default value if setting not found
+
+        Returns:
+            The setting value (properly typed) or default
+        """
+        # Try tenant-specific first
+        if tenant:
+            try:
+                setting = cls.objects.get(key=key, tenant=tenant)
+                return setting.value
+            except cls.DoesNotExist:
+                pass
+
+        # Fall back to global
+        try:
+            setting = cls.objects.get(key=key, tenant__isnull=True)
+            return setting.value
+        except cls.DoesNotExist:
+            return default
+
+    @classmethod
+    def get_all_merged(cls, tenant):
+        """
+        Get all settings merged for a tenant.
+        Tenant-specific settings override global defaults.
+
+        Returns:
+            dict: {key: {value, value_type, is_override, description}}
+        """
+        result = {}
+
+        # First, get all global settings
+        global_settings = cls.objects.filter(tenant__isnull=True)
+        for setting in global_settings:
+            result[setting.key] = {
+                'value': setting.value,
+                'value_type': setting.value_type,
+                'is_override': False,
+                'description': setting.description,
+            }
+
+        # Then, overlay tenant-specific settings
+        if tenant:
+            tenant_settings = cls.objects.filter(tenant=tenant)
+            for setting in tenant_settings:
+                result[setting.key] = {
+                    'value': setting.value,
+                    'value_type': setting.value_type,
+                    'is_override': True,
+                    'description': setting.description,
+                }
+
+        return result

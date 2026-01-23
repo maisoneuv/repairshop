@@ -94,3 +94,49 @@ export async function fetchWorkItem(id, include = "") {
     throw new Error("Failed to fetch work item");
   }
 }
+
+/**
+ * Request AI summary generation for a work item
+ * @param {number} workItemId - Work item ID
+ * @returns {Promise<{message: string, request_id: string, status: string}>}
+ */
+export async function requestWorkItemSummary(workItemId) {
+  try {
+    const response = await apiClient.post(
+      `/api/tasks/work-items/${workItemId}/request-summary/`,
+      {},
+      {
+        headers: {
+          "X-CSRFToken": getCSRFToken(),
+        },
+      }
+    );
+    return response.data;
+  } catch (error) {
+    console.error("Error requesting summary:", error);
+    if (error.response && error.response.data) {
+      throw error.response.data;
+    }
+    throw new Error("Failed to request summary");
+  }
+}
+
+/**
+ * Check summary generation status for a work item
+ * @param {number} workItemId - Work item ID
+ * @returns {Promise<{status: string, summary: string|null, generated_at: string|null, request_id: string|null}>}
+ */
+export async function getWorkItemSummaryStatus(workItemId) {
+  try {
+    const response = await apiClient.get(
+      `/api/tasks/work-items/${workItemId}/summary-status/`
+    );
+    return response.data;
+  } catch (error) {
+    console.error("Error getting summary status:", error);
+    if (error.response && error.response.data) {
+      throw error.response.data;
+    }
+    throw new Error("Failed to get summary status");
+  }
+}

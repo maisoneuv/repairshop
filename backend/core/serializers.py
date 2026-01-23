@@ -1,5 +1,7 @@
 from rest_framework import serializers
-from .models import Note, Address, User, Role, RolePermission, UserRole
+from .models import Note, Address, User, Role, RolePermission, UserRole, Setting
+from decimal import Decimal
+from datetime import datetime
 from django.contrib.auth.models import Permission
 
 
@@ -88,3 +90,92 @@ class MyPermissionsResponseSerializer(serializers.Serializer):
     is_superuser = serializers.BooleanField()
     is_staff = serializers.BooleanField()
     permissions = MyPermissionSerializer(many=True)
+
+
+class SettingSerializer(serializers.ModelSerializer):
+    """Serializer for individual Setting objects."""
+    value = serializers.SerializerMethodField()
+    is_global = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Setting
+        fields = [
+            'id',
+            'key',
+            'value',
+            'value_type',
+            'description',
+            'is_global',
+            'created_on',
+            'modified_on',
+        ]
+        read_only_fields = ['id', 'created_on', 'modified_on']
+
+    def get_value(self, obj):
+        """Return the properly typed value."""
+        return obj.value
+
+    def get_is_global(self, obj):
+        """Indicate if this is a global setting."""
+        return obj.tenant is None
+
+
+class SettingWriteSerializer(serializers.ModelSerializer):
+    """Serializer for creating/updating Setting objects."""
+    value = serializers.JSONField(write_only=True)
+
+    class Meta:
+        model = Setting
+        fields = ['key', 'value', 'value_type', 'description']
+
+    def validate(self, data):
+        """Validate value matches the declared value_type."""
+        value = data.get('value')
+        value_type = data.get('value_type')
+
+        if value_type == 'string':
+            if not isinstance(value, str):
+                raise serializers.ValidationError({
+                    'value': 'Value must be a string for string type.'
+                })
+        elif value_type == 'numeric':
+            if not isinstance(value, (int, float, Decimal)):
+                raise serializers.ValidationError({
+                    'value': 'Value must be a number for numeric type.'
+                })
+        elif value_type == 'boolean':
+            if not isinstance(value, bool):
+                raise serializers.ValidationError({
+                    'value': 'Value must be a boolean for boolean type.'
+                })
+        elif value_type == 'date':
+            # Accept string in ISO format
+            if isinstance(value, str):
+                try:
+                    datetime.strptime(value, '%Y-%m-%d')
+                except ValueError:
+                    raise serializers.ValidationError({
+                        'value': 'Date must be in YYYY-MM-DD format.'
+                    })
+            else:
+                raise serializers.ValidationError({
+                    'value': 'Date must be a string in YYYY-MM-DD format.'
+                })
+
+        return data
+
+    def create(self, validated_data):
+        value = validated_data.pop('value')
+        instance = Setting(**validated_data)
+        instance.value = value
+        instance.save()
+        return instance
+
+    def update(self, instance, validated_data):
+        value = validated_data.pop('value', None)
+        for attr, val in validated_data.items():
+            setattr(instance, attr, val)
+        if value is not None:
+            instance.value = value
+        instance.save()
+        return instance

@@ -4,7 +4,7 @@ from django.contrib.auth.models import Permission
 from django.utils.translation import gettext_lazy as _
 
 from core.admin_mixins import TenantAwareImportExportAdmin, TenantAwareImportExportMixin
-from core.models import Address, Note, Role, RolePermission, User, UserRole, APIKey
+from core.models import Address, Note, Role, RolePermission, User, UserRole, APIKey, Setting
 from django.contrib import messages
 from django.utils.html import format_html
 
@@ -286,3 +286,72 @@ class APIKeyAdmin(TenantAwareImportExportAdmin):
             readonly.extend(['tenant', 'role'])
 
         return readonly
+
+
+@admin.register(Setting)
+class SettingAdmin(TenantAwareImportExportAdmin):
+    """
+    Django admin interface for managing custom settings.
+    Supports both global defaults (tenant=null) and tenant-specific overrides.
+    """
+    list_display = (
+        'key',
+        'tenant_display',
+        'value_type',
+        'value_display',
+        'modified_on',
+    )
+    list_filter = (
+        'tenant',
+        'value_type',
+    )
+    search_fields = (
+        'key',
+        'description',
+        'value_string',
+    )
+    ordering = ['key', 'tenant']
+
+    readonly_fields = ('created_on', 'modified_on')
+
+    fieldsets = (
+        (None, {
+            'fields': ('tenant', 'key', 'value_type')
+        }),
+        (_('Value'), {
+            'fields': ('value_string', 'value_numeric', 'value_boolean', 'value_date'),
+            'description': 'Fill in the appropriate field based on the selected value type.'
+        }),
+        (_('Description'), {
+            'fields': ('description',),
+        }),
+        (_('Metadata'), {
+            'fields': ('created_on', 'modified_on'),
+            'classes': ('collapse',)
+        }),
+    )
+
+    def tenant_display(self, obj):
+        """Display tenant name or 'Global' for null tenant."""
+        return obj.tenant.name if obj.tenant else "Global (Default)"
+    tenant_display.short_description = 'Scope'
+    tenant_display.admin_order_field = 'tenant'
+
+    def value_display(self, obj):
+        """Display the setting value with appropriate formatting."""
+        val = obj.value
+        if val is None:
+            return "-"
+        if obj.value_type == 'boolean':
+            return "Yes" if val else "No"
+        if obj.value_type == 'date':
+            return val.strftime('%Y-%m-%d') if val else "-"
+        if obj.value_type == 'numeric':
+            # Remove trailing zeros for cleaner display
+            return str(val).rstrip('0').rstrip('.')
+        return str(val)[:50] + ('...' if len(str(val)) > 50 else '')
+    value_display.short_description = 'Value'
+
+    def get_queryset(self, request):
+        """Include tenant relationship for efficient display."""
+        return super().get_queryset(request).select_related('tenant')

@@ -93,15 +93,28 @@ Include the API key in the `Authorization` header with the `Bearer` scheme:
 
 ```bash
 curl -H "Authorization: Bearer test_api_key" \
-     https://your-domain.com/api/work-items/
+     https://your-domain.com/api/tasks/work-items/
 ```
 
 ### Examples
 
 #### List Work Items
 ```bash
+# List all work items
 curl -H "Authorization: Bearer YOUR_API_KEY" \
-     https://your-domain.com/api/work-items/
+     https://your-domain.com/api/tasks/work-items/
+
+# Filter by status
+curl -H "Authorization: Bearer YOUR_API_KEY" \
+     "https://your-domain.com/api/tasks/work-items/?status=in_progress"
+
+# Filter by date range (created between dates)
+curl -H "Authorization: Bearer YOUR_API_KEY" \
+     "https://your-domain.com/api/tasks/work-items/?created_after=2025-01-01&created_before=2025-01-31"
+
+# Filter by customer and date
+curl -H "Authorization: Bearer YOUR_API_KEY" \
+     "https://your-domain.com/api/tasks/work-items/?customer=123&created_after=2025-01-01"
 ```
 
 #### Create a Work Item
@@ -115,17 +128,35 @@ curl -X POST \
     "description": "Screen replacement",
     "intake_method": "walkin"
   }' \
-  https://your-domain.com/api/work-items/
+  https://your-domain.com/api/tasks/work-items/
 ```
 
-#### Get Work Item Details
+#### Get Work Item Details (by Reference ID)
 ```bash
+# Search by reference ID (exact match)
 curl -H "Authorization: Bearer YOUR_API_KEY" \
-     https://your-domain.com/api/work-items/456/?include=customerDetails,deviceDetails
+     "https://your-domain.com/api/tasks/work-items/?search=RMA-123"
+
+# Returns a list with one item:
+# {
+#   "count": 1,
+#   "results": [
+#     {
+#       "id": 456,
+#       "reference_id": "RMA-123",
+#       ...
+#     }
+#   ]
+# }
 ```
 
 #### Update a Work Item
 ```bash
+# Step 1: Search by reference ID to get the database ID
+curl -H "Authorization: Bearer YOUR_API_KEY" \
+     "https://your-domain.com/api/tasks/work-items/?search=RMA-123"
+
+# Step 2: Update using the database ID from step 1
 curl -X PATCH \
   -H "Authorization: Bearer YOUR_API_KEY" \
   -H "Content-Type: application/json" \
@@ -133,7 +164,7 @@ curl -X PATCH \
     "status": "in_progress",
     "notes": "Started repair process"
   }' \
-  https://your-domain.com/api/work-items/456/
+  https://your-domain.com/api/tasks/work-items/456/
 ```
 
 ### Integration Examples
@@ -146,7 +177,7 @@ curl -X PATCH \
       "type": "n8n-nodes-base.httpRequest",
       "parameters": {
         "method": "GET",
-        "url": "https://your-domain.com/api/work-items/",
+        "url": "https://your-domain.com/api/tasks/work-items/",
         "authentication": "genericCredentialType",
         "genericAuthType": "httpHeaderAuth",
         "httpHeaderAuth": {
@@ -162,14 +193,91 @@ curl -X PATCH \
 #### JavaScript/TypeScript
 ```javascript
 const API_KEY = 'test_api_key';
-const API_BASE = 'https://your-domain.com/api';
+const API_BASE = 'https://your-domain.com/api/tasks';
 
-const fetchWorkItems = async () => {
-  const response = await fetch(`${API_BASE}/work-items/`, {
+// List all work items
+const fetchWorkItems = async (filters = {}) => {
+  const params = new URLSearchParams(filters);
+  const url = `${API_BASE}/work-items/${params.toString() ? '?' + params.toString() : ''}`;
+
+  const response = await fetch(url, {
     headers: {
       'Authorization': `Bearer ${API_KEY}`,
       'Content-Type': 'application/json'
     }
+  });
+
+  if (!response.ok) {
+    throw new Error(`API error: ${response.status}`);
+  }
+
+  return response.json();
+};
+
+// Example: Get work items created in a date range
+const getWorkItemsByDateRange = async (startDate, endDate) => {
+  return await fetchWorkItems({
+    created_after: startDate,   // Format: "2025-01-01"
+    created_before: endDate      // Format: "2025-01-31"
+  });
+};
+
+// Example: Get work items for a customer with status filter
+const getCustomerWorkItems = async (customerId, status = null) => {
+  const filters = { customer: customerId };
+  if (status) filters.status = status;
+  return await fetchWorkItems(filters);
+};
+
+// Get work item by reference ID
+const getWorkItemByReference = async (referenceId) => {
+  const response = await fetch(`${API_BASE}/work-items/?search=${referenceId}`, {
+    headers: {
+      'Authorization': `Bearer ${API_KEY}`,
+      'Content-Type': 'application/json'
+    }
+  });
+
+  if (!response.ok) {
+    throw new Error(`API error: ${response.status}`);
+  }
+
+  const data = await response.json();
+  if (data.results && data.results.length > 0) {
+    return data.results[0]; // Return first match
+  }
+  throw new Error(`Work item ${referenceId} not found`);
+};
+
+// Get work item by database ID
+const getWorkItem = async (id) => {
+  const response = await fetch(`${API_BASE}/work-items/${id}/?include=customerDetails,deviceDetails`, {
+    headers: {
+      'Authorization': `Bearer ${API_KEY}`,
+      'Content-Type': 'application/json'
+    }
+  });
+
+  if (!response.ok) {
+    throw new Error(`API error: ${response.status}`);
+  }
+
+  return response.json();
+};
+
+// Update work item by reference ID (two-step process)
+const updateWorkItemByReference = async (referenceId, updates) => {
+  // Step 1: Get the work item to find its database ID
+  const workItem = await getWorkItemByReference(referenceId);
+
+  // Step 2: Update using database ID
+  const response = await fetch(`${API_BASE}/work-items/${workItem.id}/`, {
+    method: 'PATCH',
+    headers: {
+      'Authorization': `Bearer ${API_KEY}`,
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify(updates)
   });
 
   if (!response.ok) {
@@ -185,16 +293,57 @@ const fetchWorkItems = async () => {
 import requests
 
 API_KEY = 'test_api_key'
-API_BASE = 'https://your-domain.com/api'
+API_BASE = 'https://your-domain.com/api/tasks'
 
 headers = {
     'Authorization': f'Bearer {API_KEY}',
     'Content-Type': 'application/json'
 }
 
-# Get work items
+# List all work items
 response = requests.get(f'{API_BASE}/work-items/', headers=headers)
 work_items = response.json()
+
+# List work items with filters
+def get_work_items(filters=None):
+    """Fetch work items with optional filters"""
+    params = filters or {}
+    response = requests.get(f'{API_BASE}/work-items/', headers=headers, params=params)
+    response.raise_for_status()
+    return response.json()
+
+# Example: Get work items created in a date range
+work_items = get_work_items({
+    'created_after': '2025-01-01',
+    'created_before': '2025-01-31'
+})
+
+# Example: Get work items for a customer with status filter
+work_items = get_work_items({
+    'customer': 123,
+    'status': 'in_progress'
+})
+
+# Get work item by reference ID (search)
+reference_id = 'RMA-123'
+response = requests.get(
+    f'{API_BASE}/work-items/?search={reference_id}',
+    headers=headers
+)
+data = response.json()
+if data['results']:
+    work_item = data['results'][0]
+    print(f"Found work item: {work_item['reference_id']} (ID: {work_item['id']})")
+else:
+    raise ValueError(f"Work item {reference_id} not found")
+
+# Get work item by database ID (with included details)
+db_id = work_item['id']
+response = requests.get(
+    f'{API_BASE}/work-items/{db_id}/?include=customerDetails,deviceDetails',
+    headers=headers
+)
+work_item_details = response.json()
 
 # Create work item
 new_item = {
@@ -203,6 +352,285 @@ new_item = {
     'description': 'Screen replacement'
 }
 response = requests.post(f'{API_BASE}/work-items/', json=new_item, headers=headers)
+
+# Update work item by reference ID (two-step process)
+# Step 1: Search to get database ID
+reference_id = 'RMA-123'
+response = requests.get(f'{API_BASE}/work-items/?search={reference_id}', headers=headers)
+data = response.json()
+if not data['results']:
+    raise ValueError(f"Work item {reference_id} not found")
+
+db_id = data['results'][0]['id']
+
+# Step 2: Update using database ID
+updates = {
+    'status': 'in_progress',
+    'notes': 'Started repair'
+}
+response = requests.patch(
+    f'{API_BASE}/work-items/{db_id}/',
+    json=updates,
+    headers=headers
+)
+updated_work_item = response.json()
+```
+
+### Filtering and Searching
+
+#### Available Filters
+
+You can filter work items using URL query parameters:
+
+**Basic Filters:**
+- `customer` - Filter by customer ID
+- `customer_asset` - Filter by asset ID
+- `status` - Filter by status (e.g., "New", "in_progress", "completed")
+- `type` - Filter by work item type (e.g., "repair", "warranty")
+- `owner` - Filter by owner employee ID
+- `technician` - Filter by technician employee ID
+
+**Date Range Filters:**
+- `created_after` - Work items created on or after this date (format: YYYY-MM-DD)
+- `created_before` - Work items created on or before this date (format: YYYY-MM-DD)
+- `closed_after` - Work items closed on or after this date
+- `closed_before` - Work items closed on or before this date
+- `due_after` - Work items due on or after this date
+- `due_before` - Work items due on or before this date
+
+**Search:**
+- `search` - Search by reference ID, customer name, or customer email (exact match for reference_id)
+
+**Examples:**
+```bash
+# All work items created in January 2025
+GET /api/tasks/work-items/?created_after=2025-01-01&created_before=2025-01-31
+
+# All "in_progress" items for a specific customer
+GET /api/tasks/work-items/?customer=123&status=in_progress
+
+# All items due in the next 7 days
+GET /api/tasks/work-items/?due_after=2025-01-09&due_before=2025-01-16
+
+# Combine multiple filters
+GET /api/tasks/work-items/?status=New&created_after=2025-01-01&technician=5
+```
+
+### Working with Reference IDs
+
+**Why the two-step process?**
+
+The API uses database IDs in URLs to maintain compatibility with the existing frontend application. To work with reference IDs (like "RMA-123"), external apps should:
+
+1. **Search by reference ID**: Use `?search=RMA-123` to find the work item
+2. **Use database ID for updates**: Extract the `id` from search results and use it for retrieve/update operations
+
+**Benefits:**
+- ✅ Exact match search with `=reference_id` in search_fields
+- ✅ No breaking changes to frontend
+- ✅ Simple, predictable API behavior
+- ✅ Can be wrapped in helper functions (see examples above)
+
+## Working with Tasks
+
+Tasks are subtasks within work items. The Task API supports full CRUD operations, advanced filtering, and can filter by parent work item reference ID.
+
+### Task Endpoints
+
+**Base URL:** `/api/tasks/tasks/`
+
+- `GET /api/tasks/tasks/` - List all tasks
+- `POST /api/tasks/tasks/` - Create a new task
+- `GET /api/tasks/tasks/{id}/` - Retrieve a specific task
+- `PATCH /api/tasks/tasks/{id}/` - Update a task
+- `DELETE /api/tasks/tasks/{id}/` - Delete a task
+
+### Task Examples
+
+#### List Tasks
+```bash
+# List all tasks
+curl -H "Authorization: Bearer YOUR_API_KEY" \
+     https://your-domain.com/api/tasks/tasks/
+
+# Filter by work item reference ID (e.g., all tasks for RMA-123)
+curl -H "Authorization: Bearer YOUR_API_KEY" \
+     "https://your-domain.com/api/tasks/tasks/?work_item_ref=RMA-123"
+
+# Filter by status
+curl -H "Authorization: Bearer YOUR_API_KEY" \
+     "https://your-domain.com/api/tasks/tasks/?status=In Progress"
+
+# Filter by date range (created this month)
+curl -H "Authorization: Bearer YOUR_API_KEY" \
+     "https://your-domain.com/api/tasks/tasks/?created_after=2025-01-01&created_before=2025-01-31"
+
+# Search tasks by summary or description
+curl -H "Authorization: Bearer YOUR_API_KEY" \
+     "https://your-domain.com/api/tasks/tasks/?search=diagnosis"
+```
+
+#### Create a Task
+```bash
+curl -X POST \
+  -H "Authorization: Bearer YOUR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "work_item": 456,
+    "summary": "Diagnose screen issue",
+    "description": "Check for hardware or software problem",
+    "assigned_employee": 10,
+    "status": "To do",
+    "due_date": "2025-01-15"
+  }' \
+  https://your-domain.com/api/tasks/tasks/
+```
+
+#### Update a Task
+```bash
+curl -X PATCH \
+  -H "Authorization: Bearer YOUR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "status": "Done",
+    "description": "Completed diagnosis - screen replacement needed"
+  }' \
+  https://your-domain.com/api/tasks/tasks/789/
+```
+
+### Task Filtering
+
+**Available Filters:**
+
+**Basic Filters:**
+- `work_item` - Filter by work item database ID
+- `work_item_ref` - Filter by work item reference ID (e.g., "RMA-123")
+- `assigned_employee` - Filter by employee ID
+- `status` - Filter by task status
+- `task_type` - Filter by task type ID
+
+**Date Range Filters:**
+- `created_after` / `created_before` - Filter by creation date
+- `due_after` / `due_before` - Filter by due date
+- `completed_after` / `completed_before` - Filter by completion date
+
+**Search:**
+- `search` - Search by task summary, description, or work item reference ID
+
+**Ordering:**
+- `ordering` - Sort by: `created_date`, `summary`, `status`, `assigned_employee`, `task_type__name`
+- Default: `-created_date` (newest first)
+
+**Examples:**
+```bash
+# All tasks for work item RMA-123
+GET /api/tasks/tasks/?work_item_ref=RMA-123
+
+# In-progress tasks for work item RMA-123
+GET /api/tasks/tasks/?work_item_ref=RMA-123&status=In Progress
+
+# Tasks due this week
+GET /api/tasks/tasks/?due_after=2025-01-09&due_before=2025-01-16
+
+# Overdue tasks (due before today, not completed)
+GET /api/tasks/tasks/?due_before=2025-01-09&completed_date__isnull=true
+
+# Tasks assigned to employee 5, created this month
+GET /api/tasks/tasks/?assigned_employee=5&created_after=2025-01-01
+
+# Search for diagnosis tasks
+GET /api/tasks/tasks/?search=diagnosis
+
+# Combine multiple filters
+GET /api/tasks/tasks/?work_item_ref=RMA-123&status=To do&assigned_employee=5
+```
+
+### Task Code Examples
+
+#### JavaScript/TypeScript
+```javascript
+// Get all tasks for a work item by reference ID
+const getTasksForWorkItem = async (referenceId) => {
+  const response = await fetch(`${API_BASE}/tasks/?work_item_ref=${referenceId}`, {
+    headers: {
+      'Authorization': `Bearer ${API_KEY}`,
+      'Content-Type': 'application/json'
+    }
+  });
+  return response.json();
+};
+
+// Create a task
+const createTask = async (workItemId, taskData) => {
+  const response = await fetch(`${API_BASE}/tasks/`, {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${API_KEY}`,
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({
+      work_item: workItemId,
+      ...taskData
+    })
+  });
+  return response.json();
+};
+
+// Update task status
+const updateTaskStatus = async (taskId, status) => {
+  const response = await fetch(`${API_BASE}/tasks/${taskId}/`, {
+    method: 'PATCH',
+    headers: {
+      'Authorization': `Bearer ${API_KEY}`,
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({ status })
+  });
+  return response.json();
+};
+```
+
+#### Python
+```python
+# Get all tasks for a work item by reference ID
+reference_id = 'RMA-123'
+response = requests.get(
+    f'{API_BASE}/tasks/',
+    headers=headers,
+    params={'work_item_ref': reference_id}
+)
+tasks = response.json()
+
+# Create a task
+new_task = {
+    'work_item': 456,
+    'summary': 'Diagnose screen issue',
+    'description': 'Check for hardware or software problem',
+    'assigned_employee': 10,
+    'status': 'To do',
+    'due_date': '2025-01-15'
+}
+response = requests.post(f'{API_BASE}/tasks/', json=new_task, headers=headers)
+
+# Update task status
+task_id = 789
+response = requests.patch(
+    f'{API_BASE}/tasks/{task_id}/',
+    json={'status': 'Done'},
+    headers=headers
+)
+
+# Get overdue tasks
+from datetime import date
+response = requests.get(
+    f'{API_BASE}/tasks/',
+    headers=headers,
+    params={
+        'due_before': date.today().isoformat(),
+        'status': 'To do'
+    }
+)
+overdue_tasks = response.json()
 ```
 
 ## Permissions and Roles
@@ -213,19 +641,20 @@ API keys use the same role-based permission system as regular users. When creati
 
 #### Read-Only Access
 Create a role with these permissions:
-- `view_all_workitems`
-- `view_all_customers`
-- `view_all_tasks`
+- `view_all_workitems` - View all work items
+- `view_all_customers` - View all customers
+- `view_all_tasks` - View all tasks
 
 #### Integration Access (Read + Write)
 Create a role with these permissions:
-- `view_all_workitems`, `tasks.add_workitem`, `tasks.change_workitem`
-- `view_all_customers`, `customers.add_customer`, `customers.change_customer`
-- `view_all_tasks`, `tasks.add_task`, `tasks.change_task`
+- **Work Items:** `view_all_workitems`, `tasks.add_workitem`, `tasks.change_workitem`
+- **Tasks:** `view_all_tasks`, `tasks.add_task`, `tasks.change_task`
+- **Customers:** `view_all_customers`, `customers.add_customer`, `customers.change_customer`
 
 #### Limited Scope
 Create a role with only specific permissions:
-- `view_all_workitems`, `tasks.add_workitem` (can view and create, but not update)
+- `view_all_workitems`, `tasks.add_workitem` (can view and create work items, but not update)
+- `view_all_tasks`, `tasks.add_task` (can view and create tasks, but not update)
 
 ### Setting Up Roles
 
@@ -334,7 +763,7 @@ To revoke an API key without deleting it:
 **Solution:**
 - Verify the API base URL
 - Check server status: `docker-compose ps`
-- Test with a simple endpoint like `/api/work-items/`
+- Test with a simple endpoint like `/api/tasks/work-items/`
 
 ## Migration from Session Auth
 

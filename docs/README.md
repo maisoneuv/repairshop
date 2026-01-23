@@ -2,10 +2,11 @@
 
 Complete documentation for the Fixed Service integration and deployment system.
 
-## 📋 Table of Contents
+## Table of Contents
 
 - [Quick Start](#quick-start)
 - [Integration System](#integration-system)
+- [AI Features](#ai-features)
 - [n8n Configuration](#n8n-configuration)
 - [Docker Deployment](#docker-deployment)
 - [Monitoring & Debugging](#monitoring--debugging)
@@ -53,7 +54,38 @@ The integration system provides event-driven webhooks to external services (n8n,
 
 ---
 
-## 🔌 n8n Configuration
+## AI Features
+
+### AI-Powered Summaries
+
+Generate intelligent summaries of work items using AI via n8n integration.
+
+| Document | Description | When to Read |
+|----------|-------------|--------------|
+| **[AI_SUMMARY_SETUP.md](AI_SUMMARY_SETUP.md)** | Complete AI summary setup guide | Setting up AI-powered work item summaries |
+| **[API_KEYS.md](API_KEYS.md)** | API key authentication | Required for n8n callbacks |
+
+### What's Covered
+
+#### AI_SUMMARY_SETUP.md
+- Architecture overview
+- API key setup for callbacks
+- TenantIntegration configuration
+- n8n workflow setup (webhook, AI agent, callback)
+- API reference (endpoints, payloads)
+- Troubleshooting guide
+
+### How It Works
+
+1. User clicks "Generate Summary" on a work item
+2. Backend sends all data (fields, tasks, notes) to n8n
+3. n8n processes with AI agent (OpenAI, Claude, etc.)
+4. n8n sends summary back via API callback
+5. Summary displayed on work item
+
+---
+
+## n8n Configuration
 
 ### Complete n8n Setup
 
@@ -148,6 +180,10 @@ The integration system provides event-driven webhooks to external services (n8n,
 | `workitem_created` | New WorkItem created | Notify team of new repair jobs |
 | `workitem_updated` | ANY field changes | Monitor all edits (description, price, etc.) |
 | `workitem_status_changed` | Status field changes | Track workflow progress |
+| `workitem_summary_requested` | User clicks Generate Summary | AI-powered summary generation |
+| `task_created` | New Task created | Track task creation |
+| `task_updated` | Task fields change | Monitor task changes |
+| `task_status_changed` | Task status changes | Track task completion |
 
 ### Integration Types
 
@@ -215,10 +251,12 @@ The integration system provides event-driven webhooks to external services (n8n,
 
 ---
 
-## 📝 Document Status
+## Document Status
 
 | Document | Status | Last Updated |
 |----------|--------|--------------|
+| AI_SUMMARY_SETUP.md | ✅ Complete | Jan 2026 |
+| API_KEYS.md | ✅ Complete | Nov 2025 |
 | INTEGRATION_SETUP.md | ✅ Complete | Nov 2025 |
 | N8N_WEBHOOK_SETUP.md | ✅ Complete | Nov 2025 |
 | N8N_AUTHENTICATION.md | ✅ Complete | Nov 2025 |
@@ -252,4 +290,4 @@ When adding new documentation:
 
 ---
 
-**Last Updated:** November 2025
+**Last Updated:** January 2026

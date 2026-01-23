@@ -77,6 +77,9 @@ class WorkItemSerializer(serializers.ModelSerializer):
         extra_kwargs = {
             "customer_asset": {"required": False, "allow_null": True},
             "tenant": {"read_only": True},
+            "summary_status": {"read_only": True},
+            "summary_generated_at": {"read_only": True},
+            "summary_request_id": {"read_only": True},
         }
 
     def __init__(self, *args, **kwargs):

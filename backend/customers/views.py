@@ -84,6 +84,61 @@ class AssetRetrieveUpdateAPIView(generics.RetrieveUpdateAPIView):
     serializer_class = AssetSerializer
 
 
+class AssetViewSet(viewsets.ModelViewSet):
+    """API endpoint for listing and creating customer assets (devices)"""
+    serializer_class = AssetSerializer
+
+    def get_queryset(self):
+        user = self.request.user
+        tenant = getattr(self.request, "tenant", None)
+
+        if user.is_superuser:
+            qs = Asset.objects.select_related("device", "customer").all()
+        else:
+            if not tenant:
+                return Asset.objects.none()
+            qs = Asset.objects.select_related("device", "customer").filter(
+                customer__tenant=tenant
+            )
+
+        # Optional filtering by customer_id
+        customer_id = self.request.query_params.get('customer_id')
+        if customer_id:
+            qs = qs.filter(customer_id=customer_id)
+
+        return qs
+
+    def perform_create(self, serializer):
+        user = self.request.user
+        tenant = getattr(self.request, "tenant", None)
+
+        if not user.is_superuser and not tenant:
+            raise PermissionDenied("Tenant not resolved")
+
+        serializer.save()
+
+    def perform_update(self, serializer):
+        user = self.request.user
+        tenant = getattr(self.request, "tenant", None)
+
+        if not user.is_superuser:
+            instance = self.get_object()
+            if instance.customer.tenant_id != tenant.id:
+                raise PermissionDenied("Cannot modify assets from another tenant")
+
+        serializer.save()
+
+    def perform_destroy(self, instance):
+        user = self.request.user
+        tenant = getattr(self.request, "tenant", None)
+
+        if not user.is_superuser:
+            if instance.customer.tenant_id != tenant.id:
+                raise PermissionDenied("Cannot delete assets from another tenant")
+
+        instance.delete()
+
+
 class CustomerSearchView(autocomplete.Select2QuerySetView):
     def get_queryset(self):
         if not self.request.user.is_authenticated:
