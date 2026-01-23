@@ -59,6 +59,17 @@ class User(AbstractUser, PermissionsMixin):
     def has_permission(self, permission_codename, tenant):
         if self.is_superuser:
             return True
+
+        # Handle both 'app_label.codename' and 'codename' formats
+        if '.' in permission_codename:
+            app_label, codename = permission_codename.split('.', 1)
+            return UserRole.objects.filter(
+                user=self,
+                role__tenant=tenant,
+                role__role_permissions__permission__codename=codename,
+                role__role_permissions__permission__content_type__app_label=app_label
+            ).exists()
+
         return UserRole.objects.filter(
             user=self,
             role__tenant=tenant,
@@ -355,7 +366,15 @@ class APIKey(TimeStampedModel):
         if self.tenant != tenant:
             return False
 
-        # Check if role has this permission
+        # Handle both 'app_label.codename' and 'codename' formats
+        if '.' in permission_codename:
+            app_label, codename = permission_codename.split('.', 1)
+            return RolePermission.objects.filter(
+                role=self.role,
+                permission__codename=codename,
+                permission__content_type__app_label=app_label
+            ).exists()
+
         return RolePermission.objects.filter(
             role=self.role,
             permission__codename=permission_codename
