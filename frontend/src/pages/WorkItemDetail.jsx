@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useParams, Link } from "react-router-dom";
 import { fetchSchema } from "../api/schema";
 import { fetchWorkItem, updateWorkItemField } from "../api/workItems";
+import { getSettingValue } from "../api/settings";
 import WorkItemDetailHeader from "../components/WorkItemDetailHeader";
 import WorkItemHighlights from "../components/WorkItemHighlights";
 import WorkItemTabs from "../components/WorkItemTabs";
@@ -13,6 +14,7 @@ import TaskForm from "../features/Tasks/TaskForm";
 import ModelDetailLayout from "../components/ModelDetailLayout";
 import WorkitemDetailLayout from "../features/WorkItems/WorkitemDetailLayout";
 import FormDocumentsSection from "../components/FormDocumentsSection";
+import WorkItemSummary from "../components/WorkItemSummary";
 
 export default function WorkItemDetail() {
     const { id } = useParams();
@@ -21,6 +23,7 @@ export default function WorkItemDetail() {
     const [formData, setFormData] = useState({});
     const [editMode, setEditMode] = useState(false);
     const [isSaving, setIsSaving] = useState(false);
+    const [showSummary, setShowSummary] = useState(false);
 
     useEffect(() => {
         async function load() {
@@ -41,6 +44,15 @@ export default function WorkItemDetail() {
 
         load();
     }, [id]);
+
+    // Fetch enable_summary setting
+    useEffect(() => {
+        async function loadSummarySetting() {
+            const enabled = await getSettingValue('enable_summary', false);
+            setShowSummary(enabled === true);
+        }
+        loadSummarySetting();
+    }, []);
 
     const normalizeFieldValue = (name, value) => {
         // Handle empty strings as null for the backend
@@ -270,6 +282,10 @@ export default function WorkItemDetail() {
                                             </p>
                                         </div>
                                     )}
+
+                                    {activeTab === 'documents' && (
+                                        <FormDocumentsSection workItemId={workItem.id} />
+                                    )}
                                 </div>
                             )}
                         </WorkItemTabs>
@@ -335,8 +351,14 @@ export default function WorkItemDetail() {
                             />
                         </div>
 
-                        {/* Intake Forms */}
-                        <FormDocumentsSection workItemId={workItem.id} />
+                        {/* AI Summary - only shown if enable_summary setting is true */}
+                        {showSummary && (
+                            <WorkItemSummary
+                                workItemId={workItem.id}
+                                initialSummary={workItem.summary}
+                                initialStatus={workItem.summary_status}
+                            />
+                        )}
 
                         {/* Activity Timeline */}
                         <EnhancedActivityTimeline model="workitem" objectId={workItem.id} />

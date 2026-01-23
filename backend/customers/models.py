@@ -118,4 +118,4 @@ class Asset(models.Model):
         ]
 
     def __str__(self):
-        return self.device.model
+        return self.device.model if self.device else f"Asset {self.pk}"

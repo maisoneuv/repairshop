@@ -115,6 +115,19 @@ class WorkItem(models.Model):
                                          help_text="Who actually performs the repair (internal or partner).")
     currency = models.CharField(max_length=10, blank=True, null=True, default='PLN', help_text="Currency for pricing (e.g., PLN, USD, EUR, GBP)")
     summary = models.TextField(blank=True, null=True)
+    summary_status = models.CharField(
+        max_length=20,
+        choices=[
+            ('none', 'None'),
+            ('pending', 'Pending'),
+            ('completed', 'Completed'),
+            ('failed', 'Failed'),
+        ],
+        default='none',
+        help_text="Status of AI summary generation"
+    )
+    summary_generated_at = models.DateTimeField(null=True, blank=True)
+    summary_request_id = models.UUIDField(null=True, blank=True, help_text="UUID to correlate summary request/callback")
     # paid
 
     notes = GenericRelation(Note)

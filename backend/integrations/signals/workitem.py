@@ -198,6 +198,12 @@ def build_workitem_payload(workitem, event_type):
             'customer_asset': {
                 'id': workitem.customer_asset.id,
                 'name': str(workitem.customer_asset),
+                'serial_number': workitem.customer_asset.serial_number,
+                'device': {
+                    'id': workitem.customer_asset.device.id,
+                    'model': workitem.customer_asset.device.model,
+                    'manufacturer': workitem.customer_asset.device.manufacturer,
+                } if workitem.customer_asset.device else None,
             } if workitem.customer_asset else None,
 
             # Pricing
@@ -238,3 +244,131 @@ def build_workitem_payload(workitem, event_type):
         }
 
     return payload
+
+
+def build_summary_request_payload(workitem, request_id):
+    """
+    Build comprehensive payload for AI summary generation.
+    Includes all work item data, tasks, and notes.
+
+    Args:
+        workitem: WorkItem instance
+        request_id: UUID for correlating request/callback
+
+    Returns:
+        Dict containing the full payload for AI summarization
+    """
+    from core.models import Note
+
+    # Get base workitem payload
+    payload = build_workitem_payload(workitem, 'workitem_summary_requested')
+
+    # Add request_id for callback correlation
+    payload['request_id'] = str(request_id)
+
+    # Add all tasks for this work item
+    tasks_data = []
+    for task in workitem.tasks.select_related('task_type', 'assigned_employee').all():
+        tasks_data.append({
+            'id': task.id,
+            'summary': task.summary,
+            'description': task.description,
+            'status': task.status,
+            'task_type': task.task_type.name if task.task_type else None,
+            'assigned_to': str(task.assigned_employee) if task.assigned_employee else None,
+            'created_date': task.created_date.isoformat() if task.created_date else None,
+            'completed_date': task.completed_date.isoformat() if task.completed_date else None,
+        })
+    payload['tasks'] = tasks_data
+
+    # Add all notes for this work item
+    notes_data = []
+    for note in workitem.notes.select_related('author').all():
+        notes_data.append({
+            'id': note.id,
+            'content': note.content,
+            'author': str(note.author) if note.author else 'System',
+            'created_at': note.created_at.isoformat(),
+            'source': 'workitem',
+        })
+
+    # Also include notes from related tasks
+    task_content_type = ContentType.objects.get_for_model(workitem.tasks.model)
+    task_ids = list(workitem.tasks.values_list('id', flat=True))
+    if task_ids:
+        for note in Note.objects.filter(
+            content_type=task_content_type,
+            object_id__in=task_ids
+        ).select_related('author'):
+            notes_data.append({
+                'id': note.id,
+                'content': note.content,
+                'author': str(note.author) if note.author else 'System',
+                'created_at': note.created_at.isoformat(),
+                'source': 'task',
+            })
+
+    payload['notes'] = notes_data
+
+    return payload
+
+
+def trigger_summary_request(workitem, request_id):
+    """
+    Trigger summary request integrations for a work item.
+    Called from the ViewSet action via transaction.on_commit().
+
+    Args:
+        workitem: WorkItem instance
+        request_id: UUID for correlating request/callback
+    """
+    from integrations.models import TenantIntegration
+
+    event_type = 'workitem_summary_requested'
+
+    # Find active integrations for this tenant and event type
+    integrations = TenantIntegration.objects.filter(
+        tenant=workitem.tenant,
+        event_type=event_type,
+        is_active=True
+    )
+
+    if not integrations.exists():
+        logger.warning(
+            f"No active summary_requested integrations found for tenant {workitem.tenant.name}. "
+            f"Marking summary as failed."
+        )
+        # Update status to failed since no integration will process it
+        workitem.summary_status = 'failed'
+        workitem.save(update_fields=['summary_status'])
+        return
+
+    logger.info(
+        f"Triggering {integrations.count()} summary integration(s) for WorkItem "
+        f"{workitem.reference_id}"
+    )
+
+    # Build the comprehensive payload
+    payload = build_summary_request_payload(workitem, request_id)
+
+    # Get ContentType for WorkItem
+    content_type = ContentType.objects.get_for_model(WorkItem)
+
+    # Enqueue a Celery task for each integration
+    for integration in integrations:
+        try:
+            send_integration_webhook.delay(
+                integration_id=integration.id,
+                content_type_id=content_type.id,
+                object_id=workitem.id,
+                event_type=event_type,
+                payload=payload
+            )
+            logger.debug(
+                f"Enqueued summary webhook task for integration {integration.name} "
+                f"(WorkItem {workitem.reference_id})"
+            )
+        except Exception as exc:
+            logger.exception(
+                f"Failed to enqueue summary webhook task for integration {integration.name}: {exc}"
+            )

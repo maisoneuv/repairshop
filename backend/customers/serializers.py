@@ -1,4 +1,5 @@
 from inventory.serializers import DeviceSerializer
+from inventory.models import Device
 from .models import Customer, Asset
 from rest_framework import serializers
 from core.serializers import AddressSerializer
@@ -52,7 +53,32 @@ class CustomerSerializer(serializers.ModelSerializer):
 
 class AssetSerializer(serializers.ModelSerializer):
     device = DeviceSerializer(read_only=True)
+    device_id = serializers.PrimaryKeyRelatedField(
+        queryset=Device.objects.all(),
+        source='device',
+        write_only=True,
+        required=False
+    )
+    customer_id = serializers.PrimaryKeyRelatedField(
+        queryset=Customer.objects.all(),
+        source='customer',
+        write_only=True,
+        required=False
+    )
 
     class Meta:
         model = Asset
-        fields = ["id", "serial_number", "device"]
+        fields = ["id", "serial_number", "device", "device_id", "customer_id", "customer"]
+        read_only_fields = ["id", "customer"]
+
+    def create(self, validated_data):
+        request = self.context.get("request")
+        tenant = getattr(request, "tenant", None) if request else None
+        if tenant is None:
+            raise serializers.ValidationError({"detail": "Tenant not resolved"})
+
+        customer = validated_data.get('customer')
+        if customer and customer.tenant_id != tenant.id:
+            raise serializers.ValidationError({"customer_id": "Customer does not belong to this tenant"})
+
+        return Asset.objects.create(**validated_data)

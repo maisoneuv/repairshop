@@ -10,6 +10,7 @@ from .views import (CustomerListView,
                     CustomerAssetDetailView,
                     CustomerAssetUpdateView,
                     AssetRetrieveUpdateAPIView,
+                    AssetViewSet,
                     CustomerSearchView,
                     CustomerPhoneSearchView,
                     customer_search,
@@ -26,6 +27,7 @@ app_name = "customers"
 
 router = DefaultRouter()
 router.register(r'customers', CustomerViewSet, basename="customer")
+router.register(r'assets', AssetViewSet, basename="asset")
 
 urlpatterns = [
     path('all', CustomerListView.as_view(), name="customer_list"),

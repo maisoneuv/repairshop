@@ -23,8 +23,10 @@ class TenantIntegration(models.Model):
         ('workitem_created', 'WorkItem Created'),
         ('workitem_updated', 'WorkItem Updated'),
         ('workitem_status_changed', 'WorkItem Status Changed'),
+        ('workitem_summary_requested', 'WorkItem Summary Requested'),
         ('task_created', 'Task Created'),
         ('task_updated', 'Task Updated'),
+        ('task_status_changed', 'Task Status Changed'),
     ]
 
     tenant = models.ForeignKey(

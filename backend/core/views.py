@@ -13,10 +13,14 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 from django.views.decorators.csrf import ensure_csrf_cookie
 
-from .models import Note, User, Permission, RolePermission, UserRole, Role
+from django.db import models as db_models
+from rest_framework.decorators import action
+
+from .models import Note, User, Permission, RolePermission, UserRole, Role, Setting
 from .serializers import (NoteSerializer, UserSerializer, PermissionSerializer,
                           RolePermissionSerializer, RoleSerializer, UserRoleSerializer,
-                          UserRoleCreateSerializer, MyPermissionsResponseSerializer)
+                          UserRoleCreateSerializer, MyPermissionsResponseSerializer,
+                          SettingSerializer, SettingWriteSerializer)
 from .utils import create_system_note
 from tenants.managers import TenantAwareManager
 from .permissions import TenantUserMatchesRequestTenant
@@ -324,3 +328,146 @@ class GlobalSearchView(APIView):
         results['total_count'] = len(results['customers']) + len(results['work_items'])
 
         return Response(results)
+
+
+class SettingViewSet(viewsets.ModelViewSet):
+    """
+    ViewSet for managing custom settings.
+
+    Endpoints:
+    - GET /api/core/settings/ - List tenant settings (and globals if no tenant)
+    - GET /api/core/settings/merged/ - Get all settings merged (global + tenant overrides)
+    - GET /api/core/settings/{id}/ - Get specific setting
+    - POST /api/core/settings/ - Create tenant-specific setting
+    - PUT/PATCH /api/core/settings/{id}/ - Update setting
+    - DELETE /api/core/settings/{id}/ - Delete tenant-specific setting
+    - GET /api/core/settings/by-key/{key}/ - Get setting by key (merged)
+    """
+    permission_classes = [IsAuthenticated]
+
+    def get_serializer_class(self):
+        if self.action in ['create', 'update', 'partial_update']:
+            return SettingWriteSerializer
+        return SettingSerializer
+
+    def get_queryset(self):
+        """
+        Return settings visible to the current tenant.
+        - Global settings (tenant=null)
+        - Tenant-specific settings for current tenant
+        """
+        tenant = getattr(self.request, 'tenant', None)
+
+        if tenant:
+            # Return both global and tenant-specific
+            return Setting.objects.filter(
+                db_models.Q(tenant__isnull=True) | db_models.Q(tenant=tenant)
+            ).select_related('tenant')
+        else:
+            # No tenant context - return only globals
+            return Setting.objects.filter(tenant__isnull=True)
+
+    def perform_create(self, serializer):
+        """Create a tenant-specific setting."""
+        tenant = getattr(self.request, 'tenant', None)
+        if not tenant:
+            raise PermissionDenied('Tenant context required to create settings.')
+        serializer.save(tenant=tenant)
+
+    def perform_update(self, serializer):
+        """Only allow updating tenant-specific settings, not globals."""
+        instance = self.get_object()
+        tenant = getattr(self.request, 'tenant', None)
+
+        if instance.tenant is None:
+            raise PermissionDenied('Cannot modify global settings via API.')
+
+        if tenant and instance.tenant_id != tenant.id:
+            raise PermissionDenied('Cannot modify settings from another tenant.')
+
+        serializer.save()
+
+    def perform_destroy(self, instance):
+        """Only allow deleting tenant-specific settings."""
+        if instance.tenant is None:
+            raise PermissionDenied('Cannot delete global settings via API.')
+
+        tenant = getattr(self.request, 'tenant', None)
+        if tenant and instance.tenant_id != tenant.id:
+            raise PermissionDenied('Cannot delete settings from another tenant.')
+
+        instance.delete()
+
+    @action(detail=False, methods=['get'])
+    def merged(self, request):
+        """
+        Get all settings merged for the current tenant.
+        Global settings serve as defaults, tenant settings override.
+
+        Response format:
+        {
+            "settings": {
+                "setting_key": {
+                    "value": <typed_value>,
+                    "value_type": "string|numeric|boolean|date",
+                    "is_override": true|false,
+                    "description": "..."
+                },
+                ...
+            }
+        }
+        """
+        tenant = getattr(request, 'tenant', None)
+        merged = Setting.get_all_merged(tenant)
+        return Response({'settings': merged})
+
+    @action(detail=False, methods=['get'], url_path='by-key/(?P<key>[^/.]+)')
+    def by_key(self, request, key=None):
+        """
+        Get a specific setting by key, returning the merged value.
+
+        Response format:
+        {
+            "key": "setting_key",
+            "value": <typed_value>,
+            "value_type": "string|numeric|boolean|date",
+            "is_override": true|false,
+            "description": "...",
+            "found": true|false
+        }
+        """
+        tenant = getattr(request, 'tenant', None)
+
+        # Try tenant-specific first
+        setting = None
+        is_override = False
+
+        if tenant:
+            try:
+                setting = Setting.objects.get(key=key, tenant=tenant)
+                is_override = True
+            except Setting.DoesNotExist:
+                pass
+
+        # Fall back to global
+        if not setting:
+            try:
+                setting = Setting.objects.get(key=key, tenant__isnull=True)
+            except Setting.DoesNotExist:
+                return Response({
+                    'key': key,
+                    'value': None,
+                    'value_type': None,
+                    'is_override': False,
+                    'description': None,
+                    'found': False
+                })
+
+        return Response({
+            'key': setting.key,
+            'value': setting.value,
+            'value_type': setting.value_type,
+            'is_override': is_override,
+            'description': setting.description,
+            'found': True
+        })

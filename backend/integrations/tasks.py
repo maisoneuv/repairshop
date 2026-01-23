@@ -4,7 +4,6 @@ These tasks are called asynchronously after database commits to ensure data cons
 """
 import json
 import logging
-from datetime import datetime
 from typing import Dict, Any
 
 import requests
@@ -12,15 +11,18 @@ from celery import shared_task
 from django.contrib.contenttypes.models import ContentType
 from django.utils import timezone
 
+MAX_WEBHOOK_RETRIES = 3
+
 logger = logging.getLogger(__name__)
 
 
 @shared_task(
     bind=True,
     autoretry_for=(requests.RequestException,),
-    retry_kwargs={'max_retries': 3, 'countdown': 60},  # Retry up to 3 times, wait 60s between retries
+    retry_kwargs={'max_retries': MAX_WEBHOOK_RETRIES, 'countdown': 60},
     retry_backoff=True,  # Exponential backoff
     retry_jitter=True,  # Add random jitter to avoid thundering herd
+    max_retries=MAX_WEBHOOK_RETRIES,
 )
 def send_integration_webhook(
     self,
@@ -45,19 +47,52 @@ def send_integration_webhook(
     from integrations.models import TenantIntegration, IntegrationSync
 
     try:
+        # Resolve content type and related model
+        content_type = ContentType.objects.get(id=content_type_id)
+        model_class = content_type.model_class()
+
+        is_summary_request = (
+            event_type == 'workitem_summary_requested' and
+            model_class is not None and
+            content_type.model == 'workitem'
+        )
+
+        def mark_summary_failed(reason):
+            """Mark the work item summary as failed when integration cannot run."""
+            if not is_summary_request or model_class is None:
+                return
+            try:
+                workitem = model_class.objects.get(pk=object_id)
+            except model_class.DoesNotExist:
+                logger.warning(
+                    "Unable to mark summary failed for %s:%s - object missing",
+                    content_type.model,
+                    object_id
+                )
+                return
+
+            if workitem.summary_status != 'pending':
+                return
+
+            workitem.summary_status = 'failed'
+            workitem.save(update_fields=['summary_status'])
+            logger.error(
+                "Marked summary as failed for WorkItem %s due to integration error: %s",
+                getattr(workitem, 'reference_id', workitem.pk),
+                reason
+            )
+
         # Get the integration configuration
         integration = TenantIntegration.objects.get(id=integration_id)
 
         if not integration.is_active:
             logger.info(f"Integration {integration.name} is inactive, skipping webhook")
+            mark_summary_failed("Integration inactive")
             return
-
-        # Get or create the sync record
-        content_type = ContentType.objects.get(id=content_type_id)
 
         # For update events, always create a new sync record (not idempotent)
         # For creation events, use get_or_create (idempotent)
-        if event_type in ['workitem_updated', 'workitem_status_changed', 'task_updated']:
+        if event_type in ['workitem_updated', 'workitem_status_changed', 'task_updated', 'workitem_summary_requested']:
             # Update events: create a new sync record each time
             sync_record = IntegrationSync.objects.create(
                 integration=integration,
@@ -171,6 +206,8 @@ def send_integration_webhook(
             sync_record.last_error = error_msg
             sync_record.save(update_fields=['status', 'last_error'])
 
+        mark_summary_failed(error_msg)
+
         # System notes removed - check IntegrationSync table in admin for failure details
         # if self.request.retries >= 2:  # 0, 1, 2 = 3 attempts
         #     if 'obj' not in locals():
@@ -185,6 +222,8 @@ def send_integration_webhook(
 
     except TenantIntegration.DoesNotExist:
         logger.error(f"TenantIntegration {integration_id} not found")
+        if 'mark_summary_failed' in locals():
+            mark_summary_failed('Integration configuration missing')
         return {'status': 'error', 'message': 'Integration not found'}
 
     except Exception as exc:
@@ -199,6 +238,8 @@ def send_integration_webhook(
             sync_record.status = 'failed'
             sync_record.last_error = error_msg
             sync_record.save(update_fields=['status', 'last_error'])
+
+        mark_summary_failed(error_msg)
 
         # System notes removed - check IntegrationSync table in admin for error details
         # if 'obj' not in locals():

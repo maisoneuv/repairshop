@@ -7,8 +7,11 @@ from .models import WorkItem, Task, TaskType
 from .forms import WorkItemForm, TaskForm
 from django.views.generic import TemplateView, ListView, DetailView, CreateView, UpdateView
 from django.db.models import Q
-from rest_framework import viewsets, filters
+from rest_framework import viewsets, filters, status
+from rest_framework.decorators import action
 import django_filters
+import uuid
+from django.db import transaction
 from .serializers import WorkItemSerializer, TaskSerializer, TaskTypeSerializer
 from rest_framework.views import APIView
 from rest_framework.response import Response
@@ -374,6 +377,69 @@ class WorkItemViewSet(viewsets.ModelViewSet):
             data["owner"] = EmployeeSerializer(instance.owner).data
 
         return Response(data)
+
+    @action(detail=True, methods=['post'], url_path='request-summary')
+    def request_summary(self, request, pk=None):
+        """
+        Trigger AI summary generation for this work item.
+
+        POST /api/tasks/work-items/{id}/request-summary/
+
+        Returns:
+            202 Accepted with request_id for tracking
+        """
+        workitem = self.get_object()
+
+        # Check permission
+        user = request.user
+        if not user.is_superuser and not user.has_permission('tasks.change_workitem', request.tenant):
+            raise PermissionDenied("You don't have permission to generate summaries for work items.")
+
+        # Check if already pending
+        if workitem.summary_status == 'pending':
+            return Response(
+                {'error': 'Summary generation already in progress'},
+                status=status.HTTP_409_CONFLICT
+            )
+
+        # Generate unique request ID for callback correlation
+        request_id = uuid.uuid4()
+
+        # Update work item status
+        workitem.summary_status = 'pending'
+        workitem.summary_request_id = request_id
+        workitem.save(update_fields=['summary_status', 'summary_request_id'])
+
+        # Import here to avoid circular imports
+        from integrations.signals.workitem import trigger_summary_request
+
+        # Use transaction.on_commit to ensure save completes first
+        # Bind the values explicitly to avoid late binding issues
+        transaction.on_commit(
+            lambda wi=workitem, rid=request_id: trigger_summary_request(wi, rid)
+        )
+
+        return Response({
+            'message': 'Summary generation requested',
+            'request_id': str(request_id),
+            'status': 'pending'
+        }, status=status.HTTP_202_ACCEPTED)
+
+    @action(detail=True, methods=['get'], url_path='summary-status')
+    def summary_status(self, request, pk=None):
+        """
+        Check the status of AI summary generation.
+
+        GET /api/tasks/work-items/{id}/summary-status/
+        """
+        workitem = self.get_object()
+
+        return Response({
+            'status': workitem.summary_status,
+            'summary': workitem.summary if workitem.summary_status == 'completed' else None,
+            'generated_at': workitem.summary_generated_at.isoformat() if workitem.summary_generated_at else None,
+            'request_id': str(workitem.summary_request_id) if workitem.summary_request_id else None
+        })
 
 
 class WorkItemSchemaView(APIView):
