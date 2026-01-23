@@ -16,6 +16,10 @@ export function getEmployeeListPath() {
     return `/api/service/api/employee/list/`;
 }
 
+export function getPicklistPath(category) {
+    return `/api/core/picklist/${category}/`;
+}
+
 export function getDeviceSearchPath(query) {
     return `/api/inventory/api/devices/search/?q=${encodeURIComponent(query)}`;
 }

@@ -1,7 +1,9 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useCallback } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { fetchWorkItems } from "../../api/workItems";
 import { useUser } from "../../context/UserContext";
+import apiClient from "../../api/apiClient";
+import { getPicklistPath, getEmployeeListPath } from "../../api/autocompleteApi";
 
 const COLUMNS = [
     { key: "reference_id", label: "RMA #" },
@@ -10,6 +12,8 @@ const COLUMNS = [
     { key: "device_category_name", label: "Device Category"},
     { key: "created_date", label: "Created" },
 ];
+
+const EXCLUDED_STATUSES = ["Resolved"];
 
 export default function WorkItemList() {
     const { employee } = useUser();
@@ -20,33 +24,74 @@ export default function WorkItemList() {
     const [sortField, setSortField] = useState("created_date");
     const [sortDirection, setSortDirection] = useState("desc");
 
+    // Filter state
+    const [statusOptions, setStatusOptions] = useState([]);
+    const [ownerOptions, setOwnerOptions] = useState([]);
+    const [statusFilter, setStatusFilter] = useState("__open__");
+    const [ownerFilter, setOwnerFilter] = useState("");
+
+    // Fetch filter options on mount
     useEffect(() => {
-        const load = async () => {
-            setLoading(true);
-            setError("");
+        const loadFilterOptions = async () => {
             try {
-                const data = await fetchWorkItems();
-                setItems(data || []);
+                const [statusRes, employeeRes] = await Promise.all([
+                    apiClient.get(getPicklistPath("workitem_status")),
+                    apiClient.get(getEmployeeListPath()),
+                ]);
+                setStatusOptions(statusRes.data || []);
+                setOwnerOptions(employeeRes.data || []);
             } catch (err) {
-                setError(err.message || "Failed to load work items");
-            } finally {
-                setLoading(false);
+                console.error("Failed to load filter options:", err);
             }
         };
-
-        load();
+        loadFilterOptions();
     }, []);
+
+    const loadWorkItems = useCallback(async () => {
+        setLoading(true);
+        setError("");
+        try {
+            const params = {};
+            if (statusFilter && statusFilter !== "__open__" && statusFilter !== "__all__") {
+                params.status = statusFilter;
+            }
+            if (ownerFilter) {
+                params.owner = ownerFilter;
+            }
+            const data = await fetchWorkItems(params);
+            setItems(data || []);
+        } catch (err) {
+            setError(err.message || "Failed to load work items");
+        } finally {
+            setLoading(false);
+        }
+    }, [statusFilter, ownerFilter]);
+
+    useEffect(() => {
+        loadWorkItems();
+    }, [loadWorkItems]);
 
     const view = searchParams.get("view") || "all";
 
     const filteredItems = useMemo(() => {
-        if (view !== "my" || !employee) return items;
-        return items.filter((item) => {
-            const ownerId = item.owner ?? null;
-            const technicianId = item.technician ?? null;
-            return ownerId === employee.id || technicianId === employee.id;
-        });
-    }, [items, view, employee]);
+        let result = items;
+
+        // Apply "my" view filter
+        if (view === "my" && employee) {
+            result = result.filter((item) => {
+                const ownerId = item.owner ?? null;
+                const technicianId = item.technician ?? null;
+                return ownerId === employee.id || technicianId === employee.id;
+            });
+        }
+
+        // Apply "open" status filter (exclude resolved items) - client-side for __open__ filter
+        if (statusFilter === "__open__") {
+            result = result.filter((item) => !EXCLUDED_STATUSES.includes(item.status));
+        }
+
+        return result;
+    }, [items, view, employee, statusFilter]);
 
     const sortedItems = useMemo(() => {
         const data = [...filteredItems];
@@ -123,6 +168,48 @@ export default function WorkItemList() {
                     >
                         Create New
                     </Link>
+                </div>
+            </div>
+
+            {/* Filters */}
+            <div className="px-6 py-3 border-b border-gray-100 flex items-center gap-4 bg-gray-50">
+                <div className="flex items-center gap-2">
+                    <label htmlFor="status-filter" className="text-sm font-medium text-gray-600">
+                        Status:
+                    </label>
+                    <select
+                        id="status-filter"
+                        value={statusFilter}
+                        onChange={(e) => setStatusFilter(e.target.value)}
+                        className="px-3 py-1.5 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    >
+                        <option value="__open__">Open (Not Resolved)</option>
+                        <option value="__all__">All Statuses</option>
+                        {statusOptions.map((opt) => (
+                            <option key={opt.value} value={opt.value}>
+                                {opt.name}
+                            </option>
+                        ))}
+                    </select>
+                </div>
+
+                <div className="flex items-center gap-2">
+                    <label htmlFor="owner-filter" className="text-sm font-medium text-gray-600">
+                        Owner:
+                    </label>
+                    <select
+                        id="owner-filter"
+                        value={ownerFilter}
+                        onChange={(e) => setOwnerFilter(e.target.value)}
+                        className="px-3 py-1.5 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    >
+                        <option value="">All Owners</option>
+                        {ownerOptions.map((emp) => (
+                            <option key={emp.id} value={emp.id}>
+                                {emp.name}
+                            </option>
+                        ))}
+                    </select>
                 </div>
             </div>
 
