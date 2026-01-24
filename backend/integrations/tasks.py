@@ -4,7 +4,8 @@ These tasks are called asynchronously after database commits to ensure data cons
 """
 import json
 import logging
-from typing import Dict, Any
+import time
+from typing import Dict, Any, Tuple
 
 import requests
 from celery import shared_task
@@ -12,8 +13,34 @@ from django.contrib.contenttypes.models import ContentType
 from django.utils import timezone
 
 MAX_WEBHOOK_RETRIES = 3
+MAX_PAYLOAD_SIZE = 65536  # 64KB
 
 logger = logging.getLogger(__name__)
+
+
+def sanitize_headers(headers: Dict[str, str]) -> Dict[str, str]:
+    """Remove sensitive values from headers for logging."""
+    sensitive_keys = ['authorization', 'x-api-key', 'api-key', 'x-auth-token']
+    sanitized = {}
+    for key, value in headers.items():
+        if key.lower() in sensitive_keys:
+            sanitized[key] = '[REDACTED]'
+        else:
+            sanitized[key] = value
+    return sanitized
+
+
+def truncate_payload(data: Any, max_size: int = MAX_PAYLOAD_SIZE) -> Tuple[Any, bool]:
+    """Truncate payload if too large. Returns (data, was_truncated)."""
+    if data is None:
+        return None, False
+    try:
+        serialized = json.dumps(data)
+        if len(serialized) > max_size:
+            return {'_truncated': True, '_original_size': len(serialized)}, True
+    except (TypeError, ValueError):
+        pass
+    return data, False
 
 
 @shared_task(
@@ -146,20 +173,75 @@ def send_integration_webhook(
             f"(attempt {self.request.retries + 1})"
         )
 
-        response = requests.post(
-            integration.webhook_url,
-            json=payload,
-            headers=headers,
-            timeout=30  # 30 second timeout
-        )
+        from integrations.models import IntegrationRequestLog
 
-        response.raise_for_status()  # Raise exception for 4xx/5xx status codes
+        start_time = time.time()
+        response = None
+        response_data = None
 
-        # Parse response
         try:
-            response_data = response.json()
-        except json.JSONDecodeError:
-            response_data = {'raw_response': response.text}
+            response = requests.post(
+                integration.webhook_url,
+                json=payload,
+                headers=headers,
+                timeout=30  # 30 second timeout
+            )
+            response_time_ms = int((time.time() - start_time) * 1000)
+
+            # Parse response
+            try:
+                response_data = response.json()
+            except json.JSONDecodeError:
+                response_data = {'raw_response': response.text}
+
+            # Truncate payloads if needed
+            request_body, req_truncated = truncate_payload(payload)
+            response_body, resp_truncated = truncate_payload(response_data)
+
+            # Create log entry
+            IntegrationRequestLog.objects.create(
+                tenant=integration.tenant,
+                direction='outbound',
+                method='POST',
+                url=integration.webhook_url,
+                request_headers=sanitize_headers(headers),
+                request_body=request_body,
+                request_body_truncated=req_truncated,
+                response_status_code=response.status_code,
+                response_headers=dict(response.headers),
+                response_body=response_body,
+                response_body_truncated=resp_truncated,
+                success=response.ok,
+                response_time_ms=response_time_ms,
+                integration=integration,
+                integration_sync=sync_record,
+                retry_number=self.request.retries,
+            )
+
+            response.raise_for_status()  # Raise exception for 4xx/5xx status codes
+
+        except requests.RequestException as inner_exc:
+            # Log failed request if we haven't logged yet (e.g., connection error before response)
+            response_time_ms = int((time.time() - start_time) * 1000)
+            if response is None:
+                request_body, req_truncated = truncate_payload(payload)
+                IntegrationRequestLog.objects.create(
+                    tenant=integration.tenant,
+                    direction='outbound',
+                    method='POST',
+                    url=integration.webhook_url,
+                    request_headers=sanitize_headers(headers),
+                    request_body=request_body,
+                    request_body_truncated=req_truncated,
+                    response_status_code=None,
+                    success=False,
+                    error_message=str(inner_exc),
+                    response_time_ms=response_time_ms,
+                    integration=integration,
+                    integration_sync=sync_record,
+                    retry_number=self.request.retries,
+                )
+            raise
 
         # Update sync record with success
         sync_record.status = 'synced'
@@ -279,4 +361,41 @@ def retry_failed_syncs(max_retries=3):
 
     return {
         'retried_count': failed_syncs.count()
+    }
+
+
+@shared_task
+def cleanup_old_integration_logs(success_days=30, failed_days=90):
+    """
+    Periodic task to clean up old integration request logs.
+    Can be scheduled with Celery Beat (e.g., daily at 3 AM).
+
+    Args:
+        success_days: Retention days for successful requests (default: 30)
+        failed_days: Retention days for failed requests (default: 90)
+    """
+    from datetime import timedelta
+    from integrations.models import IntegrationRequestLog
+
+    now = timezone.now()
+
+    # Delete old successful logs
+    success_deleted, _ = IntegrationRequestLog.objects.filter(
+        success=True,
+        timestamp__lt=now - timedelta(days=success_days)
+    ).delete()
+
+    # Delete old failed logs
+    failed_deleted, _ = IntegrationRequestLog.objects.filter(
+        success=False,
+        timestamp__lt=now - timedelta(days=failed_days)
+    ).delete()
+
+    total = success_deleted + failed_deleted
+    logger.info(f"Cleaned up {total} integration logs ({success_deleted} success, {failed_deleted} failed)")
+
+    return {
+        'success_deleted': success_deleted,
+        'failed_deleted': failed_deleted,
+        'total': total,
     }
