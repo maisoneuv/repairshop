@@ -60,22 +60,25 @@ This is a multi-tenant service management application with Django REST Framework
 **Integration System** (`backend/integrations/`):
 - `TenantIntegration`: Per-tenant configuration for external integrations (n8n, Notion, Slack)
 - `IntegrationSync`: Audit trail and idempotency for integration webhooks
+- `IntegrationRequestLog`: Complete HTTP request/response logging for all integration traffic
 - `APIKey`: Secure authentication for external systems to call our API
 - Event-driven architecture using Django signals with transaction safety
 - Background processing via Celery tasks with automatic retries
-- See [backend/docs/INTEGRATION_SETUP.md](backend/docs/INTEGRATION_SETUP.md) for outbound webhooks
-- See [backend/docs/API_KEYS.md](backend/docs/API_KEYS.md) for inbound API authentication
+- See [docs/INTEGRATION_SETUP.md](docs/INTEGRATION_SETUP.md) for outbound webhooks
+- See [docs/API_KEYS.md](docs/API_KEYS.md) for inbound API authentication
+- See [docs/INTEGRATION_REQUEST_LOGS.md](docs/INTEGRATION_REQUEST_LOGS.md) for request logging
 
 ## Documentation
 
-All integration and deployment documentation is in the [`backend/docs/`](backend/docs/) directory:
-- **[backend/docs/API_KEYS.md](backend/docs/API_KEYS.md)** - API key authentication for external systems
-- **[backend/docs/INTEGRATION_SETUP.md](backend/docs/INTEGRATION_SETUP.md)** - Quick start guide for integrations
-- **[backend/docs/N8N_WEBHOOK_SETUP.md](backend/docs/N8N_WEBHOOK_SETUP.md)** - Complete n8n configuration guide
-- **[backend/docs/N8N_AUTHENTICATION.md](backend/docs/N8N_AUTHENTICATION.md)** - Authentication methods and security
-- **[backend/docs/DOCKER_DEPLOYMENT.md](backend/docs/DOCKER_DEPLOYMENT.md)** - Docker deployment guide
-- **[backend/docs/MONITORING_INTEGRATIONS.md](backend/docs/MONITORING_INTEGRATIONS.md)** - Debugging and monitoring
-- See [backend/docs/README.md](backend/docs/README.md) for complete index
+All integration and deployment documentation is in the [`docs/`](docs/) directory:
+- **[docs/API_KEYS.md](docs/API_KEYS.md)** - API key authentication for external systems
+- **[docs/INTEGRATION_SETUP.md](docs/INTEGRATION_SETUP.md)** - Quick start guide for integrations
+- **[docs/INTEGRATION_REQUEST_LOGS.md](docs/INTEGRATION_REQUEST_LOGS.md)** - HTTP request/response logging for integrations
+- **[docs/N8N_WEBHOOK_SETUP.md](docs/N8N_WEBHOOK_SETUP.md)** - Complete n8n configuration guide
+- **[docs/N8N_AUTHENTICATION.md](docs/N8N_AUTHENTICATION.md)** - Authentication methods and security
+- **[docs/DOCKER_DEPLOYMENT.md](docs/DOCKER_DEPLOYMENT.md)** - Docker deployment guide
+- **[docs/MONITORING_INTEGRATIONS.md](docs/MONITORING_INTEGRATIONS.md)** - Debugging and monitoring
+- See [docs/README.md](docs/README.md) for complete index
 
 ### Key Architectural Patterns
 

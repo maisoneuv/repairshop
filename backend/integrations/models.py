@@ -163,3 +163,150 @@ class IntegrationSync(models.Model):
     def can_retry(self, max_retries=3):
         """Check if this sync can be retried."""
         return self.status == 'failed' and self.retry_count < max_retries
+
+
+class IntegrationRequestLog(models.Model):
+    """
+    Unified logging for all integration HTTP requests (inbound and outbound).
+    Provides detailed audit trail with request/response data, timing, and status.
+    """
+
+    DIRECTION_CHOICES = [
+        ('inbound', 'Inbound (External to Us)'),
+        ('outbound', 'Outbound (Us to External)'),
+    ]
+
+    # Core identification
+    tenant = models.ForeignKey(
+        Tenant,
+        on_delete=models.CASCADE,
+        related_name='integration_logs'
+    )
+    direction = models.CharField(
+        max_length=10,
+        choices=DIRECTION_CHOICES,
+        db_index=True
+    )
+
+    # Timing
+    timestamp = models.DateTimeField(auto_now_add=True, db_index=True)
+    response_time_ms = models.IntegerField(
+        null=True,
+        blank=True,
+        help_text="Response time in milliseconds"
+    )
+
+    # HTTP details
+    method = models.CharField(max_length=10)  # GET, POST, PUT, DELETE, etc.
+    url = models.TextField(help_text="Full URL for outbound, endpoint path for inbound")
+
+    # Request data
+    request_headers = models.JSONField(
+        default=dict,
+        blank=True,
+        help_text="HTTP headers (sensitive headers redacted)"
+    )
+    request_body = models.JSONField(
+        null=True,
+        blank=True,
+        help_text="Request body (may be truncated)"
+    )
+    request_body_truncated = models.BooleanField(
+        default=False,
+        help_text="True if request body was truncated due to size"
+    )
+
+    # Response data
+    response_status_code = models.IntegerField(
+        null=True,
+        blank=True,
+        help_text="HTTP status code"
+    )
+    response_headers = models.JSONField(
+        default=dict,
+        blank=True,
+        help_text="Response headers"
+    )
+    response_body = models.JSONField(
+        null=True,
+        blank=True,
+        help_text="Response body (may be truncated)"
+    )
+    response_body_truncated = models.BooleanField(
+        default=False,
+        help_text="True if response body was truncated due to size"
+    )
+
+    # Status tracking
+    success = models.BooleanField(
+        db_index=True,
+        help_text="True if request was successful (2xx for outbound, completed for inbound)"
+    )
+    error_message = models.TextField(
+        blank=True,
+        null=True,
+        help_text="Error message if request failed"
+    )
+
+    # Relationships (optional, based on context)
+    # For outbound: link to the integration config and sync record
+    integration = models.ForeignKey(
+        'integrations.TenantIntegration',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='request_logs',
+        help_text="For outbound: which integration triggered this"
+    )
+    integration_sync = models.ForeignKey(
+        'integrations.IntegrationSync',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='request_logs',
+        help_text="For outbound: which sync record this log belongs to"
+    )
+
+    # For inbound: link to the API key used
+    api_key = models.ForeignKey(
+        'core.APIKey',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='request_logs',
+        help_text="For inbound: which API key was used"
+    )
+
+    # Retry tracking (for outbound)
+    retry_number = models.IntegerField(
+        default=0,
+        help_text="For outbound: which retry attempt this is (0 = first attempt)"
+    )
+
+    # Client info (for inbound)
+    client_ip = models.GenericIPAddressField(
+        null=True,
+        blank=True,
+        help_text="For inbound: client IP address"
+    )
+    user_agent = models.TextField(
+        blank=True,
+        null=True,
+        help_text="For inbound: User-Agent header"
+    )
+
+    class Meta:
+        ordering = ['-timestamp']
+        indexes = [
+            models.Index(fields=['tenant', 'timestamp']),
+            models.Index(fields=['tenant', 'direction', 'success']),
+            models.Index(fields=['integration', 'timestamp']),
+            models.Index(fields=['api_key', 'timestamp']),
+            models.Index(fields=['integration_sync']),
+        ]
+        verbose_name = "Integration Request Log"
+        verbose_name_plural = "Integration Request Logs"
+
+    def __str__(self):
+        status = self.response_status_code or 'N/A'
+        return f"{self.direction} {self.method} {status} - {self.timestamp}"

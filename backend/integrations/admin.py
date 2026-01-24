@@ -3,7 +3,7 @@ Django admin configuration for Integration models.
 """
 from django.contrib import admin
 from django.utils.html import format_html
-from .models import TenantIntegration, IntegrationSync
+from .models import TenantIntegration, IntegrationSync, IntegrationRequestLog
 
 
 @admin.register(TenantIntegration)
@@ -139,6 +139,147 @@ class IntegrationSyncAdmin(admin.ModelAdmin):
 
     def has_add_permission(self, request):
         """Disable manual creation of sync records."""
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        """Allow deletion for cleanup purposes."""
+        return True
+
+
+@admin.register(IntegrationRequestLog)
+class IntegrationRequestLogAdmin(admin.ModelAdmin):
+    """Admin interface for viewing integration request logs."""
+
+    list_display = [
+        'id',
+        'timestamp',
+        'tenant',
+        'direction_badge',
+        'method',
+        'url_truncated',
+        'status_badge',
+        'response_time_display',
+        'source_display',
+    ]
+    list_filter = [
+        'direction',
+        'success',
+        'method',
+        'tenant',
+        ('timestamp', admin.DateFieldListFilter),
+        'response_status_code',
+    ]
+    search_fields = [
+        'url',
+        'error_message',
+        'integration__name',
+        'api_key__name',
+    ]
+    readonly_fields = [
+        'tenant',
+        'direction',
+        'timestamp',
+        'response_time_ms',
+        'method',
+        'url',
+        'request_headers',
+        'request_body',
+        'request_body_truncated',
+        'response_status_code',
+        'response_headers',
+        'response_body',
+        'response_body_truncated',
+        'success',
+        'error_message',
+        'integration',
+        'integration_sync',
+        'api_key',
+        'retry_number',
+        'client_ip',
+        'user_agent',
+    ]
+    date_hierarchy = 'timestamp'
+
+    fieldsets = (
+        ('Request Overview', {
+            'fields': ('tenant', 'direction', 'method', 'url', 'timestamp', 'response_time_ms')
+        }),
+        ('Status', {
+            'fields': ('success', 'response_status_code', 'error_message')
+        }),
+        ('Request Details', {
+            'fields': ('request_headers', 'request_body', 'request_body_truncated'),
+            'classes': ('collapse',)
+        }),
+        ('Response Details', {
+            'fields': ('response_headers', 'response_body', 'response_body_truncated'),
+            'classes': ('collapse',)
+        }),
+        ('Context', {
+            'fields': ('integration', 'integration_sync', 'api_key', 'retry_number'),
+            'classes': ('collapse',)
+        }),
+        ('Client Info (Inbound)', {
+            'fields': ('client_ip', 'user_agent'),
+            'classes': ('collapse',)
+        }),
+    )
+
+    def direction_badge(self, obj):
+        """Display a colored badge for direction."""
+        colors = {'inbound': 'blue', 'outbound': 'purple'}
+        return format_html(
+            '<span style="color: {}; font-weight: bold;">{}</span>',
+            colors.get(obj.direction, 'gray'),
+            obj.get_direction_display()
+        )
+    direction_badge.short_description = 'Direction'
+
+    def url_truncated(self, obj):
+        """Display truncated URL for list view."""
+        url = obj.url
+        if len(url) > 50:
+            return url[:50] + '...'
+        return url
+    url_truncated.short_description = 'URL'
+
+    def status_badge(self, obj):
+        """Display a colored badge for success/failure."""
+        if obj.success:
+            return format_html(
+                '<span style="color: green; font-weight: bold;">✓ {}</span>',
+                obj.response_status_code or 'OK'
+            )
+        return format_html(
+            '<span style="color: red; font-weight: bold;">✗ {}</span>',
+            obj.response_status_code or 'Error'
+        )
+    status_badge.short_description = 'Status'
+
+    def response_time_display(self, obj):
+        """Display response time in human-readable format."""
+        if obj.response_time_ms is None:
+            return '-'
+        if obj.response_time_ms > 1000:
+            return f'{obj.response_time_ms / 1000:.2f}s'
+        return f'{obj.response_time_ms}ms'
+    response_time_display.short_description = 'Response Time'
+
+    def source_display(self, obj):
+        """Display the source (integration or API key)."""
+        if obj.integration:
+            return f'Integration: {obj.integration.name}'
+        if obj.api_key:
+            return f'API Key: {obj.api_key.name}'
+        return '-'
+    source_display.short_description = 'Source'
+
+    def has_add_permission(self, request):
+        """Disable manual creation of log records."""
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        """Disable editing of log records."""
         return False
 
     def has_delete_permission(self, request, obj=None):
