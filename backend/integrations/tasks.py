@@ -117,20 +117,9 @@ def send_integration_webhook(
             mark_summary_failed("Integration inactive")
             return
 
-        # For update events, always create a new sync record (not idempotent)
         # For creation events, use get_or_create (idempotent)
-        if event_type in ['workitem_updated', 'workitem_status_changed', 'task_updated', 'workitem_summary_requested']:
-            # Update events: create a new sync record each time
-            sync_record = IntegrationSync.objects.create(
-                integration=integration,
-                content_type=content_type,
-                object_id=object_id,
-                event_type=event_type,
-                status='pending',
-                request_payload=payload
-            )
-            created = True
-        else:
+        # For all other events (updates, status changes, etc.), create a new sync record each time
+        if event_type.endswith('_created'):
             # Creation events: use get_or_create for idempotency
             sync_record, created = IntegrationSync.objects.get_or_create(
                 integration=integration,
@@ -150,6 +139,17 @@ def send_integration_webhook(
                     f"for event {event_type}, skipping"
                 )
                 return
+        else:
+            # All other events: create a new sync record each time
+            sync_record = IntegrationSync.objects.create(
+                integration=integration,
+                content_type=content_type,
+                object_id=object_id,
+                event_type=event_type,
+                status='pending',
+                request_payload=payload
+            )
+            created = True
 
         # Update retry count
         sync_record.retry_count = self.request.retries
