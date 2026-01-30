@@ -5,7 +5,8 @@ from django.shortcuts import render, reverse
 from django.views.generic import TemplateView, ListView, DetailView, CreateView, UpdateView
 from rest_framework import generics
 from rest_framework.response import Response
-
+import django_filters
+from django_filters.rest_framework import DjangoFilterBackend
 
 from .models import Device, InventoryItem, InventoryList, InventoryBalance, InventoryTransaction, PurchaseOrder, PurchaseOrderItem, Category
 from .forms import DeviceForm, InventoryItemForm, InventoryBalanceForm, PurchaseOrderForm, PurchaseOrderItemForm, DeviceInlineForm
@@ -14,6 +15,18 @@ from core.utils import build_table_data, get_nested_attr
 from .serializers import DeviceSerializer, CategorySerializer
 from django.db.models import Q
 from rest_framework.decorators import api_view
+
+
+class DeviceFilter(django_filters.FilterSet):
+    """Filter for searching devices by model, manufacturer, or category"""
+    model = django_filters.CharFilter(field_name='model', lookup_expr='icontains')
+    manufacturer = django_filters.CharFilter(field_name='manufacturer', lookup_expr='icontains')
+    category = django_filters.NumberFilter(field_name='category')
+    category_name = django_filters.CharFilter(field_name='category__name', lookup_expr='icontains')
+
+    class Meta:
+        model = Device
+        fields = ['model', 'manufacturer', 'category', 'category_name']
 
 
 class DeviceListView(ListView):
@@ -379,6 +392,8 @@ class DeviceAPISearchView(generics.ListAPIView):
 class DeviceCreateListView(generics.ListCreateAPIView):
     queryset = Device.objects.all()
     serializer_class = DeviceSerializer
+    filter_backends = [DjangoFilterBackend]
+    filterset_class = DeviceFilter
 
 class DeviceRetrieveUpdateAPIView(generics.RetrieveUpdateAPIView):
     """API endpoint for retrieving and updating device information"""
