@@ -1,4 +1,5 @@
 export default function FieldRow({
+    name,
     label,
     value,
     type = "text",
@@ -176,12 +177,12 @@ export default function FieldRow({
     // Handle double-click to trigger edit mode
     const handleDoubleClick = () => {
         if (onEditRequest && editable) {
-            onEditRequest();
+            onEditRequest(name);
         }
     };
 
     return (
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-2 md:gap-4 py-2">
+        <div id={name ? `field-${name}` : undefined} className="grid grid-cols-1 md:grid-cols-3 gap-2 md:gap-4 py-2">
             {/* Label Column */}
             <label className="text-sm text-gray-600 font-medium">
                 {label}

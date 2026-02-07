@@ -158,6 +158,7 @@ export default function ModelDetailLayout({
         return (
             <FieldRow
                 key={name}
+                name={name}
                 label={label}
                 value={value}
                 type={isTextArea ? "textarea" : fieldType}

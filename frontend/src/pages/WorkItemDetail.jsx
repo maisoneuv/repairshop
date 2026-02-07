@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useParams, Link } from "react-router-dom";
 import { fetchSchema } from "../api/schema";
 import { fetchWorkItem, updateWorkItemField } from "../api/workItems";
@@ -30,6 +30,7 @@ export default function WorkItemDetail() {
     const [notesRefreshKey, setNotesRefreshKey] = useState(0);
     const [wiStatusColorMap, setWiStatusColorMap] = useState({});
     const [taskStatusColorMap, setTaskStatusColorMap] = useState({});
+    const scrollTargetField = useRef(null);
 
     useEffect(() => {
         async function load() {
@@ -123,11 +124,29 @@ export default function WorkItemDetail() {
         }
     });
 
-    const handleEdit = () => {
+    const handleEdit = (fieldName) => {
         if (!workItem || editMode) return;
         setFormData(workItem);
+        scrollTargetField.current = fieldName || null;
         setEditMode(true);
     };
+
+    // Scroll to the field that was double-clicked after edit mode renders
+    useEffect(() => {
+        if (editMode && scrollTargetField.current) {
+            const fieldName = scrollTargetField.current;
+            scrollTargetField.current = null;
+            // Use requestAnimationFrame to wait for the DOM to update
+            requestAnimationFrame(() => {
+                const el = document.getElementById(`field-${fieldName}`);
+                if (el) {
+                    el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    const input = el.querySelector('input, select, textarea');
+                    if (input) input.focus();
+                }
+            });
+        }
+    }, [editMode]);
 
     const handleCancelEdit = () => {
         if (workItem) {
