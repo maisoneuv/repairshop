@@ -1,11 +1,6 @@
 import { useNavigate } from 'react-router-dom';
 import { useEffect, useRef } from 'react';
-
-const STATUS_COLORS = {
-  'New': 'bg-blue-100 text-blue-800',
-  'In Progress': 'bg-yellow-100 text-yellow-800',
-  'Resolved': 'bg-green-100 text-green-800',
-};
+import { getStatusStyle } from '../../utils/statusColors';
 
 const SearchDropdown = ({
   results,
@@ -15,7 +10,9 @@ const SearchDropdown = ({
   selectedIndex,
   onSelect,
   onClose,
-  showSeeAll = true
+  showSeeAll = true,
+  isMobileOverlay = false,
+  statusColorMap,
 }) => {
   const navigate = useNavigate();
   const dropdownRef = useRef(null);
@@ -122,7 +119,7 @@ const SearchDropdown = ({
             {customer.recent_work_items.map((wi) => (
               <div key={wi.id} className="text-xs text-gray-600 flex items-center gap-2">
                 <span className="font-medium">{wi.reference_id}</span>
-                <span className={`px-1.5 py-0.5 rounded text-xs ${STATUS_COLORS[wi.status] || 'bg-gray-100 text-gray-800'}`}>
+                <span className={`px-1.5 py-0.5 rounded text-xs ${getStatusStyle(wi.status, statusColorMap)}`}>
                   {wi.status}
                 </span>
                 {wi.device_name && (
@@ -157,7 +154,7 @@ const SearchDropdown = ({
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2 flex-wrap">
               <span className="text-sm font-medium text-gray-900">{workItem.reference_id}</span>
-              <span className={`px-2 py-0.5 rounded text-xs font-medium ${STATUS_COLORS[workItem.status] || 'bg-gray-100 text-gray-800'}`}>
+              <span className={`px-2 py-0.5 rounded text-xs font-medium ${getStatusStyle(workItem.status, statusColorMap)}`}>
                 {workItem.status}
               </span>
               {workItem.priority === 'Express' && (
@@ -182,7 +179,11 @@ const SearchDropdown = ({
   return (
     <div
       ref={dropdownRef}
-      className="absolute top-full left-0 right-0 mt-2 bg-white border border-gray-200 rounded-lg shadow-lg z-50 max-h-[600px] overflow-hidden flex flex-col"
+      className={
+        isMobileOverlay
+          ? "flex-1 overflow-hidden flex flex-col"
+          : "absolute top-full left-0 right-0 mt-2 bg-white border border-gray-200 rounded-lg shadow-lg z-50 max-h-[600px] overflow-hidden flex flex-col"
+      }
     >
       {isLoading && (
         <div className="px-4 py-8 text-center">

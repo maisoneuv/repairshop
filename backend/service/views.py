@@ -1,5 +1,6 @@
 # employees/views.py
 from django.contrib.auth.models import Permission
+from django.db import transaction
 from django_filters.rest_framework import DjangoFilterBackend
 from collections import OrderedDict
 
@@ -11,9 +12,12 @@ from core.mixins import TenantScopedMixin
 from core.models import UserRole
 from core.serializers import UserSerializer
 from core.views import GenericSearchView
-from .models import Employee, Location, RepairShop
+from .models import CashRegister, CashTransaction, CashTransactionType, Employee, Location, RepairShop
 from customers.models import Customer
-from .serializers import EmployeeSerializer, CurrentEmployeeSerializer, LocationSerializer, ShopSerializer
+from .serializers import (
+    CashRegisterSerializer, CashTransactionSerializer, CashTransferSerializer,
+    EmployeeSerializer, CurrentEmployeeSerializer, LocationSerializer, ShopSerializer,
+)
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
@@ -551,3 +555,91 @@ def ensure_customer_address_location(request):
 
     status_code = status.HTTP_201_CREATED if created else status.HTTP_200_OK
     return Response(payload, status=status_code)
+
+
+class CashRegisterViewSet(TenantScopedMixin, ModelViewSet):
+    permission_classes = [IsAuthenticated]
+    serializer_class = CashRegisterSerializer
+    queryset = CashRegister.objects.all()
+    filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
+    filterset_fields = ['shop', 'is_active', 'default_owner']
+    search_fields = ['name']
+    ordering_fields = ['name', 'created_at']
+    ordering = ['shop', 'name']
+
+    def get_queryset(self):
+        return (super().get_queryset()
+                .select_related('shop', 'default_owner__user'))
+
+
+class CashTransactionViewSet(TenantScopedMixin, ModelViewSet):
+    permission_classes = [IsAuthenticated]
+    serializer_class = CashTransactionSerializer
+    queryset = CashTransaction.objects.all()
+    filter_backends = [DjangoFilterBackend, filters.OrderingFilter]
+    filterset_fields = ['register', 'transaction_type', 'work_item']
+    ordering_fields = ['created_at', 'amount']
+    ordering = ['-created_at']
+    http_method_names = ['get', 'post', 'head']
+
+    def get_queryset(self):
+        return (super().get_queryset()
+                .select_related('register__shop', 'work_item', 'performed_by__user'))
+
+    def perform_create(self, serializer):
+        tenant = self._require_tenant()
+        employee = Employee.objects.filter(
+            user=self.request.user, tenant=tenant
+        ).first()
+        serializer.save(tenant=tenant, performed_by=employee)
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def transfer_between_registers(request):
+    if not request.tenant:
+        return Response({"detail": "Tenant not resolved"}, status=400)
+
+    serializer = CashTransferSerializer(data=request.data)
+    serializer.is_valid(raise_exception=True)
+
+    source = serializer.validated_data['source_register']
+    destination = serializer.validated_data['destination_register']
+    amount = serializer.validated_data['amount']
+    description = serializer.validated_data.get('description', '')
+
+    if source.tenant != request.tenant or destination.tenant != request.tenant:
+        return Response({"detail": "Registers not found"}, status=404)
+
+    employee = Employee.objects.filter(
+        user=request.user, tenant=request.tenant
+    ).first()
+
+    with transaction.atomic():
+        out_txn = CashTransaction.objects.create(
+            tenant=request.tenant,
+            register=source,
+            transaction_type=CashTransactionType.TRANSFER_OUT,
+            amount=amount,
+            currency='PLN',
+            description=f"Transfer to {destination.name}" + (f": {description}" if description else ""),
+            performed_by=employee,
+        )
+        in_txn = CashTransaction.objects.create(
+            tenant=request.tenant,
+            register=destination,
+            transaction_type=CashTransactionType.TRANSFER_IN,
+            amount=amount,
+            currency='PLN',
+            description=f"Transfer from {source.name}" + (f": {description}" if description else ""),
+            performed_by=employee,
+            related_transaction=out_txn,
+        )
+        out_txn.related_transaction = in_txn
+        out_txn.save(update_fields=['related_transaction'])
+
+    return Response({
+        "message": "Transfer completed",
+        "source_balance": str(source.current_balance),
+        "destination_balance": str(destination.current_balance),
+    }, status=status.HTTP_201_CREATED)

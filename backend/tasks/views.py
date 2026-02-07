@@ -1,12 +1,15 @@
+from decimal import Decimal
+
 from django.http import JsonResponse
 from django.shortcuts import render, redirect, reverse, get_object_or_404
 
 from customers.serializers import CustomerSerializer
+from service.models import CashTransaction, CashTransactionType, Employee
 from service.serializers import EmployeeSerializer
 from .models import WorkItem, Task, TaskType
 from .forms import WorkItemForm, TaskForm
 from django.views.generic import TemplateView, ListView, DetailView, CreateView, UpdateView
-from django.db.models import Q
+from django.db.models import Q, Sum
 from rest_framework import viewsets, filters, status
 from rest_framework.decorators import action
 import django_filters
@@ -322,14 +325,185 @@ class WorkItemViewSet(viewsets.ModelViewSet):
     def perform_update(self, serializer):
         user = self.request.user
 
-        if user.is_superuser:
-            serializer.save()
-            return
+        if not user.is_superuser:
+            if not user.has_permission('tasks.change_workitem', self.request.tenant):
+                raise PermissionDenied("You don't have permission to change work items.")
 
-        if not user.has_permission('tasks.change_workitem', self.request.tenant):
-            raise PermissionDenied("You don't have permission to change work items.")
+        # Tag the instance with the user who made the change (used by signals for notes)
+        instance = serializer.instance
+        instance._changed_by = self.request.user
+
+        # Capture old values before saving
+        old_register_id = instance.payment_register_id
+        old_prepaid = instance.prepaid_amount or Decimal('0.00')
+        old_final = instance.final_price or Decimal('0.00')
 
         serializer.save()
+
+        # Reload to get new values
+        instance.refresh_from_db()
+        new_register_id = instance.payment_register_id
+        new_prepaid = instance.prepaid_amount or Decimal('0.00')
+        new_final = instance.final_price or Decimal('0.00')
+
+        # Resolve the employee performing the action
+        performed_by = None
+        try:
+            performed_by = Employee.objects.get(user=user, tenant=self.request.tenant)
+        except Employee.DoesNotExist:
+            pass
+
+        self._handle_auto_transactions(
+            instance=instance,
+            old_register_id=old_register_id,
+            new_register_id=new_register_id,
+            old_prepaid=old_prepaid,
+            new_prepaid=new_prepaid,
+            old_final=old_final,
+            new_final=new_final,
+            performed_by=performed_by,
+        )
+
+    def _handle_auto_transactions(
+        self, instance, old_register_id, new_register_id,
+        old_prepaid, new_prepaid, old_final, new_final, performed_by
+    ):
+        """Auto-create CashTransaction records when payment_register and amounts change."""
+        if not new_register_id:
+            return
+
+        register_changed = old_register_id != new_register_id
+        prepaid_changed = old_prepaid != new_prepaid
+        final_changed = old_final != new_final
+
+        if not register_changed and not prepaid_changed and not final_changed:
+            return
+
+        with transaction.atomic():
+            # Case 1: Register was just assigned (wasn't set before)
+            if register_changed and not old_register_id:
+                # Create deposits for any existing amounts
+                if new_prepaid > 0:
+                    CashTransaction.objects.create(
+                        tenant=instance.tenant,
+                        register_id=new_register_id,
+                        transaction_type=CashTransactionType.DEPOSIT,
+                        amount=new_prepaid,
+                        currency=instance.currency or 'PLN',
+                        work_item=instance,
+                        description=f"Prepaid amount for {instance.reference_id}",
+                        performed_by=performed_by,
+                    )
+                if new_final > 0:
+                    CashTransaction.objects.create(
+                        tenant=instance.tenant,
+                        register_id=new_register_id,
+                        transaction_type=CashTransactionType.DEPOSIT,
+                        amount=new_final,
+                        currency=instance.currency or 'PLN',
+                        work_item=instance,
+                        description=f"Final price payment for {instance.reference_id}",
+                        performed_by=performed_by,
+                    )
+                return
+
+            # Case 2: Register changed from one to another
+            if register_changed and old_register_id:
+                # Reverse all previous auto-transactions on the old register for this work item
+                old_total = CashTransaction.objects.filter(
+                    register_id=old_register_id,
+                    work_item=instance,
+                ).aggregate(total=Sum('amount'))['total'] or Decimal('0.00')
+
+                if old_total != Decimal('0.00'):
+                    CashTransaction.objects.create(
+                        tenant=instance.tenant,
+                        register_id=old_register_id,
+                        transaction_type=CashTransactionType.WITHDRAWAL,
+                        amount=abs(old_total),
+                        currency=instance.currency or 'PLN',
+                        work_item=instance,
+                        description=f"Register reassignment - reversed for {instance.reference_id}",
+                        performed_by=performed_by,
+                    )
+
+                # Create deposits on the new register
+                if new_prepaid > 0:
+                    CashTransaction.objects.create(
+                        tenant=instance.tenant,
+                        register_id=new_register_id,
+                        transaction_type=CashTransactionType.DEPOSIT,
+                        amount=new_prepaid,
+                        currency=instance.currency or 'PLN',
+                        work_item=instance,
+                        description=f"Prepaid amount for {instance.reference_id}",
+                        performed_by=performed_by,
+                    )
+                if new_final > 0:
+                    CashTransaction.objects.create(
+                        tenant=instance.tenant,
+                        register_id=new_register_id,
+                        transaction_type=CashTransactionType.DEPOSIT,
+                        amount=new_final,
+                        currency=instance.currency or 'PLN',
+                        work_item=instance,
+                        description=f"Final price payment for {instance.reference_id}",
+                        performed_by=performed_by,
+                    )
+                return
+
+            # Case 3: Same register, but amounts changed
+            if prepaid_changed:
+                diff = new_prepaid - old_prepaid
+                if diff != Decimal('0.00'):
+                    if diff > 0:
+                        CashTransaction.objects.create(
+                            tenant=instance.tenant,
+                            register_id=new_register_id,
+                            transaction_type=CashTransactionType.DEPOSIT,
+                            amount=diff,
+                            currency=instance.currency or 'PLN',
+                            work_item=instance,
+                            description=f"Prepaid amount updated for {instance.reference_id}",
+                            performed_by=performed_by,
+                        )
+                    else:
+                        CashTransaction.objects.create(
+                            tenant=instance.tenant,
+                            register_id=new_register_id,
+                            transaction_type=CashTransactionType.WITHDRAWAL,
+                            amount=abs(diff),
+                            currency=instance.currency or 'PLN',
+                            work_item=instance,
+                            description=f"Prepaid amount reduced for {instance.reference_id}",
+                            performed_by=performed_by,
+                        )
+
+            if final_changed:
+                diff = new_final - old_final
+                if diff != Decimal('0.00'):
+                    if diff > 0:
+                        CashTransaction.objects.create(
+                            tenant=instance.tenant,
+                            register_id=new_register_id,
+                            transaction_type=CashTransactionType.DEPOSIT,
+                            amount=diff,
+                            currency=instance.currency or 'PLN',
+                            work_item=instance,
+                            description=f"Final price updated for {instance.reference_id}",
+                            performed_by=performed_by,
+                        )
+                    else:
+                        CashTransaction.objects.create(
+                            tenant=instance.tenant,
+                            register_id=new_register_id,
+                            transaction_type=CashTransactionType.WITHDRAWAL,
+                            amount=abs(diff),
+                            currency=instance.currency or 'PLN',
+                            work_item=instance,
+                            description=f"Final price reduced for {instance.reference_id}",
+                            performed_by=performed_by,
+                        )
 
     def perform_destroy(self, instance):
         user = self.request.user
@@ -546,13 +720,12 @@ class TaskViewSet(viewsets.ModelViewSet):
     def perform_update(self, serializer):
         user = self.request.user
 
-        if user.is_superuser:
-            serializer.save()
-            return
+        if not user.is_superuser:
+            if not user.has_permission('tasks.change_task', self.request.tenant):
+                raise PermissionDenied("You don't have permission to change tasks.")
 
-        if not user.has_permission('tasks.change_task', self.request.tenant):
-            raise PermissionDenied("You don't have permission to change tasks.")
-
+        # Tag the instance with the user who made the change (used by signals for notes)
+        serializer.instance._changed_by = user
         serializer.save()
 
     def perform_destroy(self, instance):

@@ -1,9 +1,12 @@
 import { useState, useRef, useEffect } from 'react';
 import useGlobalSearch from '../../hooks/useGlobalSearch';
+import apiClient from '../../api/apiClient';
+import { getPicklistPath } from '../../api/autocompleteApi';
+import { buildStatusColorMap } from '../../utils/statusColors';
 import SearchDropdown from './SearchDropdown';
 import RecentSearches from './RecentSearches';
 
-const GlobalSearch = () => {
+const GlobalSearch = ({ isMobileOverlay = false, onNavigate }) => {
   const {
     query,
     setQuery,
@@ -21,12 +24,32 @@ const GlobalSearch = () => {
 
   const searchContainerRef = useRef(null);
   const inputRef = useRef(null);
+  const [statusColorMap, setStatusColorMap] = useState({});
 
   // Calculate total number of results for keyboard navigation
   const totalResults = (results.customers?.length || 0) + (results.work_items?.length || 0);
 
-  // Handle click outside to close dropdown
   useEffect(() => {
+    apiClient.get(getPicklistPath("workitem_status"))
+      .then(res => setStatusColorMap(buildStatusColorMap(res.data)))
+      .catch(() => {});
+  }, []);
+
+  // Auto-focus and auto-open in mobile overlay mode
+  useEffect(() => {
+    if (isMobileOverlay) {
+      setIsOpen(true);
+      setIsFocused(true);
+      setTimeout(() => {
+        if (inputRef.current) inputRef.current.focus();
+      }, 50);
+    }
+  }, [isMobileOverlay]);
+
+  // Handle click outside to close dropdown (skip in overlay mode)
+  useEffect(() => {
+    if (isMobileOverlay) return;
+
     const handleClickOutside = (event) => {
       if (searchContainerRef.current && !searchContainerRef.current.contains(event.target)) {
         setIsOpen(false);
@@ -39,7 +62,7 @@ const GlobalSearch = () => {
     return () => {
       document.removeEventListener('mousedown', handleClickOutside);
     };
-  }, []);
+  }, [isMobileOverlay]);
 
   // Open dropdown when results change or when focusing
   useEffect(() => {
@@ -64,6 +87,7 @@ const GlobalSearch = () => {
   };
 
   const handleInputBlur = () => {
+    if (isMobileOverlay) return; // Don't close on blur in overlay mode
     // Small delay to allow click events to register
     setTimeout(() => {
       setIsFocused(false);
@@ -75,6 +99,9 @@ const GlobalSearch = () => {
     setSelectedIndex(-1);
     if (inputRef.current) {
       inputRef.current.blur();
+    }
+    if (isMobileOverlay && onNavigate) {
+      onNavigate();
     }
   };
 
@@ -147,7 +174,7 @@ const GlobalSearch = () => {
   };
 
   return (
-    <div ref={searchContainerRef} className="relative w-full">
+    <div ref={searchContainerRef} className={isMobileOverlay ? "w-full flex flex-col flex-1 min-h-0" : "relative w-full"}>
       <div className="relative">
         <input
           ref={inputRef}
@@ -196,6 +223,8 @@ const GlobalSearch = () => {
           selectedIndex={selectedIndex}
           onSelect={handleSelect}
           onClose={handleClose}
+          isMobileOverlay={isMobileOverlay}
+          statusColorMap={statusColorMap}
         />
       )}
 
@@ -204,6 +233,7 @@ const GlobalSearch = () => {
           searches={recentSearches}
           onSearchClick={handleRecentSearchClick}
           onClear={handleClearRecent}
+          isMobileOverlay={isMobileOverlay}
         />
       )}
     </div>

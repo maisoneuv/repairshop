@@ -60,6 +60,7 @@ export default function WorkItemForm({ onCreated }) {
                 owner: employee.id,        // For validation (schema expects this)
                 owner_id: employee.id,     // For API submission (serializer expects this)
                 dropoff_point: employee.location_id,
+                pickup_point: employee.location_id,
             }));
 
             // Set the selected owner for display
@@ -78,6 +79,11 @@ export default function WorkItemForm({ onCreated }) {
             });
 
             setSelectedDropoffPoint({
+                id: employee.location_id,
+                name: employee.location_name,
+            });
+
+            setSelectedPickupPoint({
                 id: employee.location_id,
                 name: employee.location_name,
             });

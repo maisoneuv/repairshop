@@ -1,8 +1,8 @@
 from rest_framework import serializers
 from .models import WorkItem, Task, TaskType, TaskTypeValidationRule
 from core.models import PicklistValue
-from service.serializers import EmployeeSerializer, LocationSerializer, ShopSerializer
-from service.models import Employee, RepairShop, Location
+from service.serializers import CashRegisterSerializer, EmployeeSerializer, LocationSerializer, ShopSerializer
+from service.models import CashRegister, Employee, RepairShop, Location
 from inventory.models import Device
 from customers.models import Asset
 
@@ -66,6 +66,12 @@ class WorkItemSerializer(serializers.ModelSerializer):
     technician_id = serializers.PrimaryKeyRelatedField(
         source="technician",
         queryset=Employee.objects.all(),
+        write_only=True, required=False, allow_null=True
+    )
+    payment_register = CashRegisterSerializer(read_only=True)
+    payment_register_id = serializers.PrimaryKeyRelatedField(
+        source="payment_register",
+        queryset=CashRegister.objects.all(),
         write_only=True, required=False, allow_null=True
     )
     device_name = serializers.SerializerMethodField()
@@ -227,6 +233,31 @@ class WorkItemSerializer(serializers.ModelSerializer):
         validated_data["dropoff_point"] = de
 
         return super().create(validated_data)
+
+    def update(self, instance, validated_data):
+        device = validated_data.pop("device", None)
+        serial_number = validated_data.pop("serial_number", None)
+
+        if serial_number == "":
+            serial_number = None
+
+        if device and instance.customer:
+            if serial_number:
+                asset, _ = Asset.objects.get_or_create(
+                    customer=instance.customer,
+                    serial_number=serial_number,
+                    device=device,
+                    defaults={"device": device}
+                )
+            else:
+                asset = Asset.objects.create(
+                    customer=instance.customer,
+                    device=device,
+                    serial_number=None
+                )
+            validated_data["customer_asset"] = asset
+
+        return super().update(instance, validated_data)
 
 
 class TaskTypeSerializer(serializers.ModelSerializer):

@@ -6,6 +6,7 @@ import EmployeeAutocomplete from "./autocomplete/EmployeeAutocomplete";
 import LocationAutocomplete from "./autocomplete/LocationAutocomplete";
 import RepairShopAutocomplete from "./autocomplete/RepairShopAutocomplete";
 import TaskTypeSelect from "./TaskTypeSelect";
+import CashRegisterSelect from "./autocomplete/CashRegisterSelect";
 
 export default function ModelDetailLayout({
                                               data,
@@ -102,7 +103,28 @@ export default function ModelDetailLayout({
             );
         }
 
+        const isCashRegisterForeignKey =
+            schema[name]?.type === "foreignkey" &&
+            schema[name]?.related_model === "CashRegister";
+
+        if (isCashRegisterForeignKey) {
+            return ({ value: current, onChange }) => (
+                <CashRegisterSelect
+                    value={current}
+                    onSelect={(reg) => onChange(reg)}
+                    required={schema[name]?.required}
+                    placeholder="Select register..."
+                    showLabel={false}
+                />
+            );
+        }
+
         return undefined;
+    };
+
+    // Map model names to frontend route prefixes when they differ from the Django app name
+    const modelRouteMap = {
+        'CashRegister': 'cash-registers',
     };
 
     // Helper function to render a field using FieldRow
@@ -123,7 +145,7 @@ export default function ModelDetailLayout({
         const linkToRecord =
             fieldType === "foreignkey" && value
                 ? {
-                    app: schema[name].related_app.toLowerCase(),
+                    app: modelRouteMap[schema[name].related_model] || schema[name].related_app.toLowerCase(),
                     id: value?.id || value,
                 }
                 : null;
@@ -208,7 +230,7 @@ export default function ModelDetailLayout({
                                                 linkToRecord={
                                                     fieldType === "foreignkey" && value
                                                         ? {
-                                                            app: schema[name].related_app.toLowerCase(),
+                                                            app: modelRouteMap[schema[name].related_model] || schema[name].related_app.toLowerCase(),
                                                             id: value?.id || value,
                                                         }
                                                         : null
@@ -221,7 +243,7 @@ export default function ModelDetailLayout({
                                                 </label>
                                                 {fieldType === "foreignkey" && value ? (
                                                     <a
-                                                        href={`/${schema[name].related_app.toLowerCase()}/${value.id || value}/`}
+                                                        href={`/${modelRouteMap[schema[name].related_model] || schema[name].related_app.toLowerCase()}/${value.id || value}/`}
                                                         className="text-blue-600 hover:underline"
                                                     >
                                                         {value.name || `#${value.id || value}`}

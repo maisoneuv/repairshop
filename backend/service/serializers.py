@@ -1,7 +1,7 @@
 from rest_framework import serializers
 
 from core.serializers import AddressSerializer
-from .models import Employee, Location, LocationType, RepairShop
+from .models import CashRegister, CashTransaction, Employee, Location, LocationType, RepairShop
 from core.models import User, Address
 
 
@@ -51,6 +51,14 @@ class LocationSerializer(serializers.ModelSerializer):
                 return {"id": location.id}
             except Location.DoesNotExist:
                 raise serializers.ValidationError(f"Location with id {data} does not exist")
+
+        # Handle dictionary with only 'id' key - treat as existing location reference
+        if isinstance(data, dict) and set(data.keys()) == {"id"}:
+            try:
+                location = Location.objects.get(id=data["id"])
+                return {"id": location.id}
+            except Location.DoesNotExist:
+                raise serializers.ValidationError(f"Location with id {data['id']} does not exist")
 
         # Handle dictionary data (for new locations or detailed data)
         d = dict(data or {})
@@ -149,3 +157,79 @@ class ShopSerializer(serializers.ModelSerializer):
     #         addr_ser.is_valid(raise_exception=True)
     #         validated_data["address"] = addr_ser.save()
     #     return RepairShop.objects.create(tenant=tenant, **validated_data)
+
+
+class CashRegisterSerializer(serializers.ModelSerializer):
+    current_balance = serializers.DecimalField(
+        max_digits=10, decimal_places=2, read_only=True
+    )
+    shop_name = serializers.CharField(source='shop.name', read_only=True)
+    default_owner_name = serializers.SerializerMethodField()
+
+    class Meta:
+        model = CashRegister
+        fields = [
+            'id', 'name', 'shop', 'shop_name', 'default_owner',
+            'default_owner_name', 'opening_balance', 'current_balance',
+            'is_active', 'created_at',
+        ]
+        read_only_fields = ['id', 'created_at', 'current_balance']
+
+    def get_default_owner_name(self, obj):
+        if obj.default_owner:
+            return str(obj.default_owner)
+        return None
+
+
+class CashTransactionSerializer(serializers.ModelSerializer):
+    register_name = serializers.CharField(source='register.name', read_only=True)
+    performed_by_name = serializers.SerializerMethodField()
+    work_item_reference = serializers.CharField(
+        source='work_item.reference_id', read_only=True, default=None
+    )
+
+    class Meta:
+        model = CashTransaction
+        fields = [
+            'id', 'register', 'register_name', 'transaction_type',
+            'amount', 'currency', 'work_item', 'work_item_reference',
+            'related_transaction', 'description', 'performed_by',
+            'performed_by_name', 'created_at',
+        ]
+        read_only_fields = ['id', 'created_at', 'related_transaction']
+
+    def get_performed_by_name(self, obj):
+        if obj.performed_by:
+            return str(obj.performed_by)
+        return None
+
+
+class CashTransferSerializer(serializers.Serializer):
+    source_register = serializers.PrimaryKeyRelatedField(
+        queryset=CashRegister.objects.all()
+    )
+    destination_register = serializers.PrimaryKeyRelatedField(
+        queryset=CashRegister.objects.all()
+    )
+    amount = serializers.DecimalField(max_digits=10, decimal_places=2)
+    description = serializers.CharField(max_length=255, required=False, default="", allow_blank=True)
+
+    def validate(self, data):
+        if data['source_register'] == data['destination_register']:
+            raise serializers.ValidationError(
+                "Source and destination registers must be different."
+            )
+        if data['amount'] <= 0:
+            raise serializers.ValidationError(
+                "Transfer amount must be positive."
+            )
+        if data['source_register'].shop != data['destination_register'].shop:
+            raise serializers.ValidationError(
+                "Transfers are only allowed between registers in the same shop."
+            )
+        source_balance = data['source_register'].current_balance
+        if source_balance < data['amount']:
+            raise serializers.ValidationError(
+                f"Insufficient balance. Available: {source_balance}"
+            )
+        return data

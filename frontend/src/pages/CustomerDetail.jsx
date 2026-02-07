@@ -3,6 +3,9 @@ import { useParams, Link } from "react-router-dom";
 import { getCustomer, updateCustomer } from "../api/customers";
 import { fetchCustomerAssets } from "../api/assets";
 import { fetchWorkItems } from "../api/workItems";
+import apiClient from "../api/apiClient";
+import { getPicklistPath } from "../api/autocompleteApi";
+import { buildStatusColorMap, getStatusStyle } from "../utils/statusColors";
 import CustomerForm from "../components/CustomerForm";
 
 export default function CustomerDetail() {
@@ -12,19 +15,22 @@ export default function CustomerDetail() {
     const [workItems, setWorkItems] = useState([]);
     const [loading, setLoading] = useState(true);
     const [isEditing, setIsEditing] = useState(false);
+    const [statusColorMap, setStatusColorMap] = useState({});
 
     useEffect(() => {
         async function load() {
             try {
                 setLoading(true);
-                const [customerData, assetsData, workItemsData] = await Promise.all([
+                const [customerData, assetsData, workItemsData, picklistRes] = await Promise.all([
                     getCustomer(id),
                     fetchCustomerAssets(id).catch(() => []),
                     fetchWorkItems({ customer: id }).catch((err) => {
                         console.error('Error fetching work items:', err);
                         return [];
-                    })
+                    }),
+                    apiClient.get(getPicklistPath("workitem_status")).catch(() => ({ data: [] })),
                 ]);
+                setStatusColorMap(buildStatusColorMap(picklistRes.data));
 
                 setCustomer(customerData);
                 setAssets(assetsData);
@@ -320,12 +326,7 @@ export default function CustomerDetail() {
                                                 <span className="font-medium text-indigo-600 hover:text-indigo-800">
                                                     {item.reference_id || `#${item.id}`}
                                                 </span>
-                                                <span className={`px-2 py-1 text-xs rounded-full font-medium ${
-                                                    item.status === 'Resolved' ? 'bg-green-100 text-green-800' :
-                                                    item.status === 'In Progress' ? 'bg-blue-100 text-blue-800' :
-                                                    item.status === 'New' ? 'bg-sky-100 text-sky-800' :
-                                                    'bg-gray-100 text-gray-800'
-                                                }`}>
+                                                <span className={`px-2 py-1 text-xs rounded-full font-medium ${getStatusStyle(item.status, statusColorMap)}`}>
                                                     {item.status}
                                                 </span>
                                             </div>

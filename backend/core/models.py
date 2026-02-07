@@ -118,10 +118,24 @@ class PicklistValue(models.Model):
     Allows admins to define custom status values, currencies, and other dropdown options.
     This is a generic model that can be used by any app for customizable dropdown fields.
     """
+    COLOR_CHOICES = [
+        ('gray', 'Gray'),
+        ('sky', 'Sky'),
+        ('amber', 'Amber'),
+        ('emerald', 'Emerald'),
+        ('purple', 'Purple'),
+        ('rose', 'Rose'),
+        ('indigo', 'Indigo'),
+        ('teal', 'Teal'),
+        ('orange', 'Orange'),
+        ('pink', 'Pink'),
+    ]
+
     tenant = models.ForeignKey(Tenant, on_delete=models.CASCADE)
     category = models.CharField(max_length=50, help_text="Type of picklist (e.g., 'workitem_status', 'task_status', 'currency')")
     name = models.CharField(max_length=100, help_text="Display label shown to users")
     value = models.CharField(max_length=100, help_text="Internal value stored in database")
+    color = models.CharField(max_length=20, choices=COLOR_CHOICES, default='gray', blank=True, help_text="Badge color for status display")
     sort_order = models.IntegerField(default=0, help_text="Controls display order in dropdowns (lower numbers appear first)")
     is_active = models.BooleanField(default=True, help_text="Only active values can be selected by users")
     is_system = models.BooleanField(default=False, help_text="System-protected values that should not be deleted")

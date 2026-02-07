@@ -1,10 +1,11 @@
 import { useState } from 'react';
 import apiClient from '../api/apiClient';
 import AutocompleteInput from './AutocompleteInput';
-import { buildSearchFn, getCategorySearchPath } from '../api/autocompleteApi';
+import { buildSearchFn, getCategorySearchPath, getManufacturerSearchPath } from '../api/autocompleteApi';
 import { createCategory } from '../api/categories';
 
 const searchCategories = buildSearchFn(getCategorySearchPath);
+const searchManufacturers = buildSearchFn(getManufacturerSearchPath);
 
 export default function AssetForm({ initialData, mode = 'edit', submitLabel = 'Save', onSuccess }) {
     const deviceInfo = initialData?.device || {};
@@ -141,17 +142,17 @@ export default function AssetForm({ initialData, mode = 'edit', submitLabel = 'S
                     <h4 className="text-sm font-semibold text-gray-700 mb-3">Device Information</h4>
                     <div className="space-y-3">
                         <div>
-                            <label htmlFor="manufacturer" className="block text-sm font-medium text-gray-700 mb-1">
+                            <label className="block text-sm font-medium text-gray-700 mb-1">
                                 Manufacturer
                             </label>
-                            <input
-                                type="text"
-                                id="manufacturer"
-                                name="manufacturer"
+                            <AutocompleteInput
+                                searchFn={searchManufacturers}
                                 value={formData.manufacturer}
-                                onChange={handleChange}
-                                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                                onSelect={(item) => setFormData((prev) => ({ ...prev, manufacturer: item.name }))}
+                                onCreateNewItem={(customValue) => setFormData((prev) => ({ ...prev, manufacturer: customValue }))}
+                                displayField={(item) => item?.name || ''}
                                 placeholder="e.g., Apple, Samsung"
+                                allowCustomCreate
                             />
                         </div>
 

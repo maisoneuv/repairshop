@@ -1,7 +1,9 @@
 import { useEffect, useState } from "react";
+import { Link } from "react-router-dom";
 import { fetchNotes, createNote } from "../api/notes";
+import { getStatusStyle } from "../utils/statusColors";
 
-export default function EnhancedActivityTimeline({ model, objectId }) {
+export default function EnhancedActivityTimeline({ model, objectId, refreshKey, statusColorMap }) {
     const [notes, setNotes] = useState([]);
     const [newNote, setNewNote] = useState("");
     const [error, setError] = useState("");
@@ -11,7 +13,7 @@ export default function EnhancedActivityTimeline({ model, objectId }) {
         fetchNotes(model, objectId)
             .then(setNotes)
             .catch(() => setError("Failed to load notes"));
-    }, [model, objectId]);
+    }, [model, objectId, refreshKey]);
 
     const handleSubmit = async (e) => {
         e.preventDefault();
@@ -39,6 +41,30 @@ export default function EnhancedActivityTimeline({ model, objectId }) {
         } else {
             return date.toLocaleDateString();
         }
+    };
+
+    const getStatusClass = (status) => {
+        return getStatusStyle(status, statusColorMap);
+    };
+
+    const renderStatusBadge = (status) => (
+        <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold border ${getStatusClass(status)}`}>
+            {status}
+        </span>
+    );
+
+    const formatNoteContent = (text) => {
+        // Detect status change notes and render with colored badges
+        const statusChangeRegex = /^(.*status changed from )'([^']+)'( to )'([^']+)'$/i;
+        const match = text.match(statusChangeRegex);
+        if (match) {
+            return (
+                <span>
+                    {match[1]}{renderStatusBadge(match[2])}{match[3]}{renderStatusBadge(match[4])}
+                </span>
+            );
+        }
+        return linkifyText(text);
     };
 
     const linkifyText = (text) => {
@@ -108,9 +134,8 @@ export default function EnhancedActivityTimeline({ model, objectId }) {
             <div className="space-y-4">
                 {notes.length > 0 ? (
                     notes.map((note, index) => {
-                        const isSystem = !note.author_name;
                         const isFirst = index === 0;
-                        const isFromDifferentSource = note.source_model && note.source_model !== model;
+                        const isTaskRelated = note.source_model && note.source_model !== model;
 
                         return (
                             <div key={note.id} className="relative">
@@ -122,14 +147,12 @@ export default function EnhancedActivityTimeline({ model, objectId }) {
                                 <div className="flex gap-3">
                                     {/* Timeline Dot */}
                                     <div className={`flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center ${
-                                        isSystem
-                                            ? 'bg-gray-100 border-2 border-gray-300'
-                                            : isFromDifferentSource
+                                        isTaskRelated
                                             ? 'bg-purple-100 border-2 border-purple-300'
-                                            : 'bg-indigo-100 border-2 border-indigo-300'
+                                            : 'bg-gray-100 border-2 border-gray-300'
                                     }`}>
                                         <span className="text-xs">
-                                            {isSystem ? '🛠️' : '👤'}
+                                            {isTaskRelated ? '📋' : '👤'}
                                         </span>
                                     </div>
 
@@ -137,25 +160,26 @@ export default function EnhancedActivityTimeline({ model, objectId }) {
                                     <div className="flex-1 min-w-0">
                                         <div className="flex items-center gap-2 mb-1">
                                             <span className="text-sm font-medium text-gray-900">
-                                                {isSystem ? 'System' : note.author_name}
+                                                {note.author_name || 'System'}
                                             </span>
                                             <span className="text-xs text-gray-500">
                                                 {formatTime(note.created_at)}
                                             </span>
-                                            {isFromDifferentSource && (
-                                                <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-purple-100 text-purple-800">
+                                            {isTaskRelated && (
+                                                <Link
+                                                    to={`/tasks/${note.source_id}`}
+                                                    className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-purple-100 text-purple-800 hover:bg-purple-200 transition-colors"
+                                                >
                                                     From Task #{note.source_id}
-                                                </span>
+                                                </Link>
                                             )}
                                         </div>
                                         <div className={`text-sm p-3 rounded-lg ${
-                                            isSystem
-                                                ? 'bg-gray-50 text-gray-700'
-                                                : isFromDifferentSource
+                                            isTaskRelated
                                                 ? 'bg-purple-50 text-gray-800'
-                                                : 'bg-indigo-50 text-gray-800'
+                                                : 'bg-gray-50 text-gray-700'
                                         }`}>
-                                            {linkifyText(note.content)}
+                                            {formatNoteContent(note.content)}
                                         </div>
                                     </div>
                                 </div>

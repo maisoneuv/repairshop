@@ -12,6 +12,10 @@ import LoginPage from "./pages/LoginPage";
 import SearchResults from "./pages/SearchResults";
 import AllTasks from "./pages/AllTasks";
 import MyTasks from "./pages/MyTasks";
+import ProfilePage from "./pages/ProfilePage";
+import CashRegisterList from "./features/CashRegisters/CashRegisterList";
+import CashRegisterDetail from "./features/CashRegisters/CashRegisterDetail";
+import CashRegisterForm from "./features/CashRegisters/CashRegisterForm";
 import { useUser } from "./context/UserContext";
 
 function App() {
@@ -41,8 +45,11 @@ function App() {
                 <Route path="/tasks/all" element={<AllTasks />} />
                 <Route path="/tasks/my" element={<MyTasks />} />
                 <Route path="/tasks" element={<TaskList />} />
+                <Route path="/cash-registers" element={<CashRegisterList />} />
+                <Route path="/cash-registers/new" element={<CashRegisterForm />} />
+                <Route path="/cash-registers/:id" element={<CashRegisterDetail />} />
                 <Route path="/search" element={<SearchResults />} />
-
+                <Route path="/profile" element={<ProfilePage />} />
             </Route>
             <Route path="/login" element={<Navigate to="/" replace />} />
         </Routes>

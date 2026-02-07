@@ -114,6 +114,10 @@ class WorkItem(models.Model):
                                          on_delete=models.PROTECT,
                                          help_text="Who actually performs the repair (internal or partner).")
     currency = models.CharField(max_length=10, blank=True, null=True, default='PLN', help_text="Currency for pricing (e.g., PLN, USD, EUR, GBP)")
+    payment_register = models.ForeignKey(
+        "service.CashRegister", on_delete=models.SET_NULL,
+        null=True, blank=True, related_name="work_item_payments",
+    )
     summary = models.TextField(blank=True, null=True)
     summary_status = models.CharField(
         max_length=20,

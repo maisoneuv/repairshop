@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { fetchTasks } from "../api/tasks";
 import apiClient from "../api/apiClient";
 import { getPicklistPath, getEmployeeListPath } from "../api/autocompleteApi";
+import { buildStatusColorMap, getStatusStyle } from "../utils/statusColors";
 
 const COLUMNS = [
     { key: "id", label: "Task ID" },
@@ -45,6 +46,8 @@ export default function AllTasks() {
         };
         loadFilterOptions();
     }, []);
+
+    const statusColorMap = useMemo(() => buildStatusColorMap(statusOptions), [statusOptions]);
 
     const loadTasks = useCallback(async () => {
         setLoading(true);
@@ -237,8 +240,10 @@ export default function AllTasks() {
                                         <td className="px-4 py-3 text-sm text-gray-700">
                                             {task.task_type?.name || "-"}
                                         </td>
-                                        <td className="px-4 py-3 text-sm text-gray-700">
-                                            {task.status || "-"}
+                                        <td className="px-4 py-3 text-sm">
+                                            <span className={`inline-block px-2 py-0.5 rounded-full text-xs font-medium border ${getStatusStyle(task.status, statusColorMap)}`}>
+                                                {task.status || "-"}
+                                            </span>
                                         </td>
                                         <td className="px-4 py-3 text-sm text-gray-700">
                                             {task.assigned_employee?.name || "-"}

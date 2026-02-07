@@ -1,12 +1,5 @@
 import { useState, useRef, useEffect, useMemo } from 'react';
-
-const STATUS_STYLES = {
-    new: { label: "New", className: "bg-sky-50 text-sky-700 border-sky-200" },
-    in_progress: { label: "In Progress", className: "bg-amber-50 text-amber-700 border-amber-200" },
-    resolved: { label: "Resolved", className: "bg-emerald-50 text-emerald-700 border-emerald-200" },
-    reopened: { label: "Reopened", className: "bg-purple-50 text-purple-700 border-purple-200" },
-    cancelled: { label: "Cancelled", className: "bg-rose-50 text-rose-700 border-rose-200" },
-};
+import { getStatusStyle } from '../utils/statusColors';
 
 const normalizeKey = (value) => {
     if (!value) return "";
@@ -26,24 +19,7 @@ const formatStatusLabel = (value) => {
         .replace(/\b\w/g, (char) => char.toUpperCase());
 };
 
-const getStatusBadge = (status) => {
-    const key = normalizeKey(status);
-    const baseClassName = "inline-flex items-center px-3 py-1 rounded-full text-sm font-semibold border";
-    const style = STATUS_STYLES[key];
-    if (style) {
-        return {
-            label: style.label,
-            className: `${baseClassName} ${style.className}`,
-        };
-    }
-
-    return {
-        label: formatStatusLabel(status),
-        className: `${baseClassName} bg-gray-100 text-gray-700 border-gray-200`,
-    };
-};
-
-export default function WorkItemDetailHeader({ workItem, schema, onEdit, onStatusChange }) {
+export default function WorkItemDetailHeader({ workItem, schema, onEdit, onStatusChange, statusColorMap }) {
     const [isStatusDropdownOpen, setIsStatusDropdownOpen] = useState(false);
     const dropdownRef = useRef(null);
 
@@ -136,6 +112,15 @@ export default function WorkItemDetailHeader({ workItem, schema, onEdit, onStatu
             subValue: workItem.payment_method || 'No payment recorded'
         }
     ];
+
+    const getStatusBadge = (status) => {
+        const baseClassName = "inline-flex items-center px-3 py-1 rounded-full text-sm font-semibold border";
+        const colorClasses = getStatusStyle(status, statusColorMap);
+        return {
+            label: formatStatusLabel(status),
+            className: `${baseClassName} ${colorClasses}`,
+        };
+    };
 
     const statusBadge = getStatusBadge(workItem.status);
     const isExpressPriority = normalizeKey(workItem.priority) === "express";
