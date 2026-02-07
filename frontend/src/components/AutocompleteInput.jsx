@@ -61,6 +61,8 @@ export default function AutocompleteInput({
             } else {
                 setQuery(displayField(value));
             }
+        } else if (typeof value === "string") {
+            setQuery(value);
         }
     }, [value, getDetailFn, displayField]);
 
@@ -215,18 +217,22 @@ export default function AutocompleteInput({
                         </div>
                     ))}
 
-                    {!loading && results.length === 0 && !onCreateNewClick && (
+                    {!loading && results.length === 0 && !onCreateNewClick && !allowCustomCreate && (
                         <div className="px-4 py-2 text-gray-500">
                             No results found.
-                            {allowCustomCreate && query && (
-                                <div
-                                    onMouseDown={() => onCreateNewItem(query)}
-                                    className="mt-2 px-4 py-2 bg-blue-50 text-blue-800 font-medium cursor-pointer hover:bg-blue-100"
-                                >
-                                    Create "{query}"
-                                </div>
-                            )}
                         </div>
+                    )}
+
+                    {!loading && allowCustomCreate && query && !onCreateNewClick && (
+                        // Show "Create" option if query doesn't exactly match any existing result
+                        !results.some((item) => displayField(item).toLowerCase() === query.toLowerCase()) && (
+                            <div
+                                onMouseDown={() => onCreateNewItem(query)}
+                                className="px-4 py-2 cursor-pointer transition-colors bg-blue-50 hover:bg-blue-100 text-blue-800 font-medium border-t border-gray-200"
+                            >
+                                Create "{query}"
+                            </div>
+                        )
                     )}
 
                     {!loading && onCreateNewClick && (

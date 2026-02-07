@@ -1,10 +1,14 @@
-const RecentSearches = ({ searches, onSearchClick, onClear }) => {
+const RecentSearches = ({ searches, onSearchClick, onClear, isMobileOverlay = false }) => {
   if (!searches || searches.length === 0) {
     return null;
   }
 
   return (
-    <div className="absolute top-full left-0 right-0 mt-2 bg-white border border-gray-200 rounded-lg shadow-lg z-50 overflow-hidden">
+    <div className={
+      isMobileOverlay
+        ? "flex-1 overflow-hidden"
+        : "absolute top-full left-0 right-0 mt-2 bg-white border border-gray-200 rounded-lg shadow-lg z-50 overflow-hidden"
+    }>
       <div className="px-4 py-2 bg-gray-50 border-b border-gray-100 flex items-center justify-between">
         <h3 className="text-xs font-semibold text-gray-700 uppercase tracking-wider">
           Recent Searches

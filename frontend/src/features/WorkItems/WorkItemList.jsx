@@ -4,6 +4,7 @@ import { fetchWorkItems } from "../../api/workItems";
 import { useUser } from "../../context/UserContext";
 import apiClient from "../../api/apiClient";
 import { getPicklistPath, getEmployeeListPath } from "../../api/autocompleteApi";
+import { buildStatusColorMap, getStatusStyle } from "../../utils/statusColors";
 
 const COLUMNS = [
     { key: "reference_id", label: "RMA #" },
@@ -46,6 +47,8 @@ export default function WorkItemList() {
         };
         loadFilterOptions();
     }, []);
+
+    const statusColorMap = useMemo(() => buildStatusColorMap(statusOptions), [statusOptions]);
 
     const loadWorkItems = useCallback(async () => {
         setLoading(true);
@@ -268,7 +271,11 @@ export default function WorkItemList() {
                                                 {item.reference_id || `#${item.id}`}
                                             </Link>
                                         </td>
-                                        <td className="px-4 py-3 text-sm text-gray-700">{item.status || "-"}</td>
+                                        <td className="px-4 py-3 text-sm">
+                                            <span className={`inline-block px-2 py-0.5 rounded-full text-xs font-medium border ${getStatusStyle(item.status, statusColorMap)}`}>
+                                                {item.status || "-"}
+                                            </span>
+                                        </td>
                                         <td className="px-4 py-3 text-sm text-gray-700">{item.device_name || "-"}</td>
                                         <td className="px-4 py-3 text-sm text-gray-700">{item.device_category_name || "-"}</td>
                                         <td className="px-4 py-3 text-sm text-gray-600">

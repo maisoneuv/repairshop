@@ -2,7 +2,7 @@ from django.contrib import admin
 
 from core.admin_mixins import TenantAwareImportExportAdmin
 
-from .models import Employee, Location, RepairShop
+from .models import CashRegister, CashTransaction, Employee, Location, RepairShop
 
 
 @admin.register(RepairShop)
@@ -27,3 +27,20 @@ class EmployeeAdmin(TenantAwareImportExportAdmin):
     list_filter = ('tenant', 'role')
     search_fields = ('user__email', 'user__first_name', 'user__last_name')
     autocomplete_fields = ['tenant', 'user', 'location']
+
+
+@admin.register(CashRegister)
+class CashRegisterAdmin(TenantAwareImportExportAdmin):
+    list_display = ('name', 'shop', 'tenant', 'default_owner', 'opening_balance', 'is_active')
+    list_filter = ('tenant', 'shop', 'is_active')
+    search_fields = ('name', 'shop__name')
+    autocomplete_fields = ['tenant', 'shop', 'default_owner']
+
+
+@admin.register(CashTransaction)
+class CashTransactionAdmin(TenantAwareImportExportAdmin):
+    list_display = ('register', 'transaction_type', 'amount', 'currency', 'work_item', 'performed_by', 'created_at')
+    list_filter = ('tenant', 'transaction_type', 'currency')
+    search_fields = ('description', 'register__name')
+    autocomplete_fields = ['tenant', 'register', 'work_item', 'performed_by']
+    readonly_fields = ('created_at',)

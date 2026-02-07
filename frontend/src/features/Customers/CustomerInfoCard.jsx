@@ -4,6 +4,9 @@ import AddressModal from "../../components/AddressModal";
 import CustomerForm from "../../components/CustomerForm";
 import { updateCustomer } from "../../api/customers";
 
+const formatPhone = (phone) =>
+    phone.replace(/\D/g, "").replace(/(.{3})(?=.)/g, "$1 ").trim();
+
 export default function CustomerInfoCard({ customer, onUpdated }) {
     const [showEditModal, setShowEditModal] = useState(false);
     const [showAddressModal, setShowAddressModal] = useState(false);
@@ -52,7 +55,7 @@ export default function CustomerInfoCard({ customer, onUpdated }) {
                                 href={`tel:${customer.phone_number}`}
                                 className="text-indigo-600 hover:text-indigo-800 transition-colors"
                             >
-                                {customer.phone_number}
+                                {formatPhone(customer.phone_number)}
                             </a>
                         </p>
                     )}

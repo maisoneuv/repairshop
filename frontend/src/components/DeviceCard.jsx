@@ -1,12 +1,50 @@
 import { useState } from 'react';
 import AssetForm from './AssetForm';
+import DeviceAutocomplete from './autocomplete/DeviceAutocomplete';
+import Modal from './Modal';
+import DeviceForm from '../pages/DeviceForm';
+import { updateWorkItemField, fetchWorkItem } from '../api/workItems';
 
-export default function DeviceCard({ device, serialNumber, onEdit, onUpdated }) {
+export default function DeviceCard({ device, serialNumber, onEdit, onUpdated, workItemId }) {
     const [isEditing, setIsEditing] = useState(false);
+    const [isAdding, setIsAdding] = useState(false);
+    const [selectedDevice, setSelectedDevice] = useState(null);
+    const [newSerialNumber, setNewSerialNumber] = useState('');
+    const [noSerialNumber, setNoSerialNumber] = useState(false);
+    const [isSubmitting, setIsSubmitting] = useState(false);
+    const [addError, setAddError] = useState('');
+    const [showDeviceModal, setShowDeviceModal] = useState(false);
 
     const handleEdit = () => {
         setIsEditing(true);
         if (onEdit) onEdit();
+    };
+
+    const handleAddDevice = async () => {
+        if (!selectedDevice) return;
+        setIsSubmitting(true);
+        setAddError('');
+
+        try {
+            await updateWorkItemField(workItemId, {
+                device: selectedDevice.id,
+                serial_number: noSerialNumber ? null : (newSerialNumber || null),
+            });
+
+            const refreshed = await fetchWorkItem(workItemId, 'deviceDetails');
+            if (onUpdated && refreshed.deviceDetails) {
+                onUpdated(refreshed.deviceDetails);
+            }
+            setIsAdding(false);
+            setSelectedDevice(null);
+            setNewSerialNumber('');
+            setNoSerialNumber(false);
+        } catch (err) {
+            console.error('Failed to add device:', err);
+            setAddError(typeof err === 'string' ? err : 'Failed to add device');
+        } finally {
+            setIsSubmitting(false);
+        }
     };
 
     const getWarrantyStatus = (warranty) => {
@@ -29,8 +67,98 @@ export default function DeviceCard({ device, serialNumber, onEdit, onUpdated }) 
     if (!deviceInfo) {
         return (
             <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
-                <h3 className="text-base font-semibold text-gray-900 mb-2">Device</h3>
-                <p className="text-gray-500 text-sm">No device information available</p>
+                <div className="flex items-center justify-between mb-3">
+                    <h3 className="text-base font-semibold text-gray-900">Device</h3>
+                    {workItemId && !isAdding && (
+                        <button
+                            onClick={() => setIsAdding(true)}
+                            className="text-indigo-600 hover:text-indigo-800 font-medium text-sm transition-colors"
+                        >
+                            Add Device
+                        </button>
+                    )}
+                </div>
+
+                {isAdding ? (
+                    <div className="space-y-3">
+                        <DeviceAutocomplete
+                            value={selectedDevice}
+                            onSelect={(item) => setSelectedDevice(item)}
+                            onCreateNewClick={() => setShowDeviceModal(true)}
+                            placeholder="Search device..."
+                        />
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">
+                                Serial Number {!noSerialNumber && <span className="text-red-500">*</span>}
+                            </label>
+                            <input
+                                type="text"
+                                className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
+                                    noSerialNumber ? 'bg-gray-100 cursor-not-allowed border-gray-200' : 'border-gray-300'
+                                }`}
+                                value={newSerialNumber}
+                                onChange={(e) => setNewSerialNumber(e.target.value)}
+                                placeholder="Enter serial number"
+                                disabled={noSerialNumber}
+                            />
+                            <label className="flex items-center space-x-2 cursor-pointer mt-2">
+                                <input
+                                    type="checkbox"
+                                    checked={noSerialNumber}
+                                    onChange={(e) => {
+                                        setNoSerialNumber(e.target.checked);
+                                        if (e.target.checked) setNewSerialNumber('');
+                                    }}
+                                    className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                                />
+                                <span className="text-sm text-gray-600">Device has no serial number</span>
+                            </label>
+                        </div>
+
+                        {addError && (
+                            <p className="text-sm text-red-600">{addError}</p>
+                        )}
+
+                        <div className="flex gap-2 justify-end">
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    setIsAdding(false);
+                                    setSelectedDevice(null);
+                                    setNewSerialNumber('');
+                                    setNoSerialNumber(false);
+                                    setAddError('');
+                                }}
+                                className="text-sm px-3 py-1.5 border border-gray-300 rounded-lg text-gray-600 hover:bg-gray-50 transition-colors"
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                type="button"
+                                onClick={handleAddDevice}
+                                disabled={!selectedDevice || (!newSerialNumber && !noSerialNumber) || isSubmitting}
+                                className="text-sm px-3 py-1.5 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                            >
+                                {isSubmitting ? 'Saving...' : 'Save'}
+                            </button>
+                        </div>
+
+                        <Modal
+                            isOpen={showDeviceModal}
+                            onClose={() => setShowDeviceModal(false)}
+                            title="Create New Device"
+                        >
+                            <DeviceForm
+                                onSuccess={(newDevice) => {
+                                    setSelectedDevice(newDevice);
+                                    setShowDeviceModal(false);
+                                }}
+                            />
+                        </Modal>
+                    </div>
+                ) : (
+                    <p className="text-gray-500 text-sm">No device information available</p>
+                )}
             </div>
         );
     }

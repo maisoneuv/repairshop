@@ -1,5 +1,5 @@
 import { Outlet, useLocation, useNavigate } from "react-router-dom";
-import LogoutButton from "../components/LogoutButton";
+import UserProfileDropdown from "../components/UserProfileDropdown";
 import { useUser } from "../context/UserContext";
 import { useEffect, useState, useRef } from "react";
 import GlobalSearch from "../components/GlobalSearch/GlobalSearch";
@@ -10,6 +10,8 @@ export default function AppLayout() {
     const location = useLocation();
     const [workItemMenuOpen, setWorkItemMenuOpen] = useState(false);
     const [taskMenuOpen, setTaskMenuOpen] = useState(false);
+    const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+    const [mobileSearchOpen, setMobileSearchOpen] = useState(false);
     const workItemMenuRef = useRef(null);
     const taskMenuRef = useRef(null);
 
@@ -19,6 +21,8 @@ export default function AppLayout() {
     useEffect(() => {
         setWorkItemMenuOpen(false);
         setTaskMenuOpen(false);
+        setMobileMenuOpen(false);
+        setMobileSearchOpen(false);
     }, [location.pathname, location.search]);
 
     // Close dropdowns when clicking outside
@@ -41,104 +45,156 @@ export default function AppLayout() {
         }
     }, [workItemMenuOpen, taskMenuOpen]);
 
+    // Scroll lock when mobile search overlay is open
+    useEffect(() => {
+        if (mobileSearchOpen) {
+            document.body.style.overflow = 'hidden';
+        } else {
+            document.body.style.overflow = '';
+        }
+        return () => {
+            document.body.style.overflow = '';
+        };
+    }, [mobileSearchOpen]);
+
     return (
         <div className="min-h-screen text-gray-900" style={{backgroundColor: appBgColor}}>
             {user && (
                 <nav className="bg-white shadow-sm mb-6">
-                    <div className="max-w-7xl mx-auto px-6 py-4">
+                    <div className="max-w-7xl mx-auto px-4 md:px-6 py-3 md:py-4">
                         <div className="flex items-center justify-between">
-                            {/* Left nav links */}
-                            <div className="flex items-center space-x-8">
+                            {/* Left: logo + mobile hamburger + desktop nav links */}
+                            <div className="flex items-center">
+                                {/* Logo - always visible */}
                                 <div className="flex items-center">
                                     <div className="w-6 h-6 bg-blue-600 rounded-sm mr-2"></div>
                                 </div>
-                                <div className="relative" ref={workItemMenuRef}>
+
+                                {/* Mobile hamburger button */}
+                                <button
+                                    type="button"
+                                    onClick={() => setMobileMenuOpen(prev => !prev)}
+                                    className="md:hidden p-2 text-gray-600 hover:text-blue-600"
+                                    aria-label="Toggle menu"
+                                >
+                                    <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        {mobileMenuOpen ? (
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
+                                        ) : (
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 6h16M4 12h16M4 18h16" />
+                                        )}
+                                    </svg>
+                                </button>
+
+                                {/* Desktop nav links - hidden on mobile */}
+                                <div className="hidden md:flex items-center space-x-8 ml-6">
+                                    <div className="relative" ref={workItemMenuRef}>
+                                        <button
+                                            type="button"
+                                            onClick={() => setWorkItemMenuOpen((prev) => !prev)}
+                                            className="flex items-center gap-1 text-gray-600 hover:text-blue-600 font-medium"
+                                        >
+                                            Work Items
+                                            <svg className={`w-4 h-4 transition-transform ${workItemMenuOpen ? "rotate-180" : ""}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" />
+                                            </svg>
+                                        </button>
+
+                                        {workItemMenuOpen && (
+                                            <div className="absolute left-0 mt-2 w-48 bg-white border border-gray-200 rounded-lg shadow-lg z-30 overflow-hidden">
+                                                <button
+                                                    type="button"
+                                                    onClick={() => navigate("/work-items")}
+                                                    className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-blue-50"
+                                                >
+                                                    All Work Items
+                                                </button>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => navigate({ pathname: "/work-items", search: "?view=my" })}
+                                                    className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-blue-50"
+                                                >
+                                                    My Work Items
+                                                </button>
+                                                <div className="border-t border-gray-100" />
+                                                <button
+                                                    type="button"
+                                                    onClick={() => navigate("/work-items/new")}
+                                                    className="w-full text-left px-4 py-2 text-sm font-medium text-blue-600 hover:bg-blue-50"
+                                                >
+                                                    Create New
+                                                </button>
+                                            </div>
+                                        )}
+                                    </div>
+                                    <div className="relative" ref={taskMenuRef}>
+                                        <button
+                                            type="button"
+                                            onClick={() => setTaskMenuOpen((prev) => !prev)}
+                                            className="flex items-center gap-1 text-gray-600 hover:text-blue-600 font-medium"
+                                        >
+                                            Tasks
+                                            <svg className={`w-4 h-4 transition-transform ${taskMenuOpen ? "rotate-180" : ""}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" />
+                                            </svg>
+                                        </button>
+
+                                        {taskMenuOpen && (
+                                            <div className="absolute left-0 mt-2 w-48 bg-white border border-gray-200 rounded-lg shadow-lg z-30 overflow-hidden">
+                                                <button
+                                                    type="button"
+                                                    onClick={() => navigate("/tasks/all")}
+                                                    className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-blue-50"
+                                                >
+                                                    All Tasks
+                                                </button>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => navigate("/tasks/my")}
+                                                    className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-blue-50"
+                                                >
+                                                    My Tasks
+                                                </button>
+                                                <div className="border-t border-gray-100" />
+                                                <button
+                                                    type="button"
+                                                    onClick={() => navigate("/tasks/new")}
+                                                    className="w-full text-left px-4 py-2 text-sm font-medium text-blue-600 hover:bg-blue-50"
+                                                >
+                                                    Create New
+                                                </button>
+                                            </div>
+                                        )}
+                                    </div>
                                     <button
                                         type="button"
-                                        onClick={() => setWorkItemMenuOpen((prev) => !prev)}
-                                        className="flex items-center gap-1 text-gray-600 hover:text-blue-600 font-medium"
+                                        onClick={() => navigate("/cash-registers")}
+                                        className="text-gray-600 hover:text-blue-600 font-medium"
                                     >
-                                        Work Items
-                                        <svg className={`w-4 h-4 transition-transform ${workItemMenuOpen ? "rotate-180" : ""}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" />
-                                        </svg>
+                                        Cash Registers
                                     </button>
-
-                                    {workItemMenuOpen && (
-                                        <div className="absolute left-0 mt-2 w-48 bg-white border border-gray-200 rounded-lg shadow-lg z-30 overflow-hidden">
-                                            <button
-                                                type="button"
-                                                onClick={() => navigate("/work-items")}
-                                                className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-blue-50"
-                                            >
-                                                All Work Items
-                                            </button>
-                                            <button
-                                                type="button"
-                                                onClick={() => navigate({ pathname: "/work-items", search: "?view=my" })}
-                                                className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-blue-50"
-                                            >
-                                                My Work Items
-                                            </button>
-                                            <div className="border-t border-gray-100" />
-                                            <button
-                                                type="button"
-                                                onClick={() => navigate("/work-items/new")}
-                                                className="w-full text-left px-4 py-2 text-sm font-medium text-blue-600 hover:bg-blue-50"
-                                            >
-                                                Create New
-                                            </button>
-                                        </div>
-                                    )}
-                                </div>
-                                <div className="relative" ref={taskMenuRef}>
-                                    <button
-                                        type="button"
-                                        onClick={() => setTaskMenuOpen((prev) => !prev)}
-                                        className="flex items-center gap-1 text-gray-600 hover:text-blue-600 font-medium"
-                                    >
-                                        Tasks
-                                        <svg className={`w-4 h-4 transition-transform ${taskMenuOpen ? "rotate-180" : ""}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" />
-                                        </svg>
-                                    </button>
-
-                                    {taskMenuOpen && (
-                                        <div className="absolute left-0 mt-2 w-48 bg-white border border-gray-200 rounded-lg shadow-lg z-30 overflow-hidden">
-                                            <button
-                                                type="button"
-                                                onClick={() => navigate("/tasks/all")}
-                                                className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-blue-50"
-                                            >
-                                                All Tasks
-                                            </button>
-                                            <button
-                                                type="button"
-                                                onClick={() => navigate("/tasks/my")}
-                                                className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-blue-50"
-                                            >
-                                                My Tasks
-                                            </button>
-                                            <div className="border-t border-gray-100" />
-                                            <button
-                                                type="button"
-                                                onClick={() => navigate("/tasks/new")}
-                                                className="w-full text-left px-4 py-2 text-sm font-medium text-blue-600 hover:bg-blue-50"
-                                            >
-                                                Create New
-                                            </button>
-                                        </div>
-                                    )}
                                 </div>
                             </div>
 
-                            {/* Center search */}
-                            <div className="flex-1 max-w-md mx-8">
+                            {/* Center search - desktop only */}
+                            <div className="hidden md:block flex-1 max-w-md mx-8">
                                 <GlobalSearch />
                             </div>
 
                             {/* Right side actions */}
-                            <div className="flex items-center space-x-4">
+                            <div className="flex items-center space-x-2 md:space-x-4">
+                                {/* Mobile search icon */}
+                                <button
+                                    type="button"
+                                    onClick={() => setMobileSearchOpen(true)}
+                                    className="md:hidden p-2 text-gray-600 hover:text-blue-600"
+                                    aria-label="Search"
+                                >
+                                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                                    </svg>
+                                </button>
+
                                 <button
                                     type="button"
                                     onClick={() => navigate("/work-items/new")}
@@ -148,13 +204,67 @@ export default function AppLayout() {
                                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
                                     </svg>
                                 </button>
-                                <LogoutButton />
+                                <UserProfileDropdown />
                             </div>
                         </div>
+
+                        {/* Mobile navigation menu */}
+                        {mobileMenuOpen && (
+                            <div className="md:hidden border-t border-gray-100 mt-3 pt-3 space-y-1">
+                                <button
+                                    type="button"
+                                    onClick={() => { navigate("/work-items"); setMobileMenuOpen(false); }}
+                                    className="block w-full text-left px-3 py-2 text-gray-600 hover:text-blue-600 hover:bg-gray-50 rounded-lg font-medium"
+                                >
+                                    Work Items
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => { navigate("/tasks/all"); setMobileMenuOpen(false); }}
+                                    className="block w-full text-left px-3 py-2 text-gray-600 hover:text-blue-600 hover:bg-gray-50 rounded-lg font-medium"
+                                >
+                                    Tasks
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => { navigate("/cash-registers"); setMobileMenuOpen(false); }}
+                                    className="block w-full text-left px-3 py-2 text-gray-600 hover:text-blue-600 hover:bg-gray-50 rounded-lg font-medium"
+                                >
+                                    Cash Registers
+                                </button>
+                            </div>
+                        )}
                     </div>
                 </nav>
             )}
-            <main className="max-w-7xl mx-auto px-6 pb-6">
+
+            {/* Mobile search overlay */}
+            {mobileSearchOpen && (
+                <div
+                    className="fixed inset-0 z-50 bg-white md:hidden flex flex-col"
+                    onKeyDown={(e) => {
+                        if (e.key === 'Escape') setMobileSearchOpen(false);
+                    }}
+                >
+                    <div className="flex items-start gap-3 px-4 pt-3 flex-1 min-h-0">
+                        <button
+                            type="button"
+                            onClick={() => setMobileSearchOpen(false)}
+                            className="p-1 mt-1 text-gray-500 hover:text-gray-700 flex-shrink-0"
+                            aria-label="Close search"
+                        >
+                            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 19l-7-7 7-7" />
+                            </svg>
+                        </button>
+                        <div className="flex-1 flex flex-col min-h-0 h-full">
+                            <GlobalSearch isMobileOverlay onNavigate={() => setMobileSearchOpen(false)} />
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            <main className="max-w-7xl mx-auto px-4 md:px-6 pb-6">
                 <Outlet />
             </main>
         </div>

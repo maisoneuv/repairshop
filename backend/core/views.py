@@ -491,6 +491,6 @@ class PicklistValuesView(APIView):
         ).order_by('sort_order', 'name')
 
         return Response([
-            {'value': v.value, 'name': v.name}
+            {'value': v.value, 'name': v.name, 'color': v.color}
             for v in values
         ])

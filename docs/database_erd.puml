@@ -1,0 +1,209 @@
+@startuml database_erd
+skinparam linetype ortho
+skinparam roundcorner 5
+skinparam packageStyle rectangle
+
+title Service Management System - Database ERD
+
+' ===========================================
+' TENANT & AUTH
+' ===========================================
+package "Tenant & Auth" #E8F5E9 {
+    entity Tenant
+    entity User
+    entity Role
+    entity RolePermission
+    entity UserRole
+    entity APIKey
+}
+
+' ===========================================
+' CORE
+' ===========================================
+package "Core" #FFF3E0 {
+    entity Address
+    entity PicklistValue
+    entity Setting
+    entity Note
+}
+
+' ===========================================
+' CUSTOMERS
+' ===========================================
+package "Customers" #E3F2FD {
+    entity Customer
+    entity Asset
+    entity Lead
+    entity Opportunity
+}
+
+' ===========================================
+' SERVICE
+' ===========================================
+package "Service" #FCE4EC {
+    entity RepairShop
+    entity Location
+    entity Employee
+    entity CashRegister
+    entity CashTransaction
+}
+
+' ===========================================
+' WORK MANAGEMENT
+' ===========================================
+package "Work Management" #F3E5F5 {
+    entity WorkItem
+    entity Task
+    entity TaskType
+    entity TaskTypeValidationRule
+}
+
+' ===========================================
+' INVENTORY
+' ===========================================
+package "Inventory" #FFFDE7 {
+    entity Category
+    entity Device
+    entity InventoryList
+    entity InventoryItem
+    entity Supplier
+    entity PurchaseOrder
+    entity PurchaseOrderItem
+    entity InventoryTransaction
+    entity InventoryBalance
+    entity AttributeDefinition
+    entity PartAttributeValue
+}
+
+' ===========================================
+' INTEGRATIONS
+' ===========================================
+package "Integrations" #E8EAF6 {
+    entity TenantIntegration
+    entity IntegrationSync
+    entity IntegrationRequestLog
+}
+
+' ===========================================
+' DOCUMENTS
+' ===========================================
+package "Documents" #ECEFF1 {
+    entity FormTemplate
+    entity FormDocument
+}
+
+' ===========================================
+' RELATIONSHIPS
+' ===========================================
+
+' Tenant relationships
+Tenant ||--o{ User
+Tenant ||--o{ Role
+Tenant ||--o{ Customer
+Tenant ||--o{ RepairShop
+Tenant ||--o{ Location
+Tenant ||--o{ Employee
+Tenant ||--o{ WorkItem
+Tenant ||--o{ Task
+Tenant ||--o{ TaskType
+Tenant ||--o{ PicklistValue
+Tenant ||--o{ Setting
+Tenant ||--o{ TenantIntegration
+Tenant ||--o{ APIKey
+Tenant ||--o{ CashRegister
+Tenant ||--o{ CashTransaction
+Tenant ||--o{ FormTemplate
+Tenant ||--o{ FormDocument
+Tenant ||--o{ IntegrationRequestLog
+
+' User relationships
+User ||--o{ UserRole
+User ||--o| Employee
+User }o--o| User : created_by
+User ||--o{ Note
+User ||--o{ APIKey
+User ||--o{ FormTemplate
+User ||--o{ FormDocument
+
+' Role relationships
+Role ||--o{ RolePermission
+Role ||--o{ UserRole
+Role ||--o{ APIKey
+
+' Customer relationships
+Customer ||--o{ Asset
+Customer }o--o| Address
+Customer ||--o{ Opportunity
+Customer ||--o{ Location
+Customer ||--o{ WorkItem
+
+' Asset & Device
+Asset }o--o| Device
+Device }o--o| Category
+Category }o--o| Category : parent
+
+' Lead
+Lead ||--o{ Opportunity
+
+' RepairShop
+RepairShop }o--|| Address
+RepairShop ||--o{ Location
+RepairShop ||--o{ CashRegister
+RepairShop ||--o{ WorkItem
+
+' Location
+Location ||--o{ Employee
+Location ||--o| InventoryList
+Location ||--o{ WorkItem
+
+' Employee
+Employee ||--o{ WorkItem
+Employee ||--o{ Task
+Employee ||--o{ CashTransaction
+Employee ||--o| CashRegister
+
+' CashRegister & CashTransaction
+CashRegister ||--o{ CashTransaction
+CashRegister ||--o{ WorkItem
+CashTransaction }o--o| WorkItem
+CashTransaction }o--o| CashTransaction : related
+
+' WorkItem
+WorkItem ||--o{ Task
+WorkItem ||--o{ FormDocument
+WorkItem }o--o| Asset
+WorkItem ||--o{ PurchaseOrder
+WorkItem ||--o{ InventoryTransaction
+
+' TaskType
+TaskType ||--o{ Task
+TaskType ||--o{ TaskTypeValidationRule
+
+' Inventory
+InventoryItem }o--|| InventoryList
+InventoryItem }o--o| InventoryItem : parent
+InventoryItem ||--o{ PurchaseOrderItem
+InventoryItem ||--o{ InventoryTransaction
+InventoryItem ||--o{ InventoryBalance
+InventoryItem ||--o{ PartAttributeValue
+
+InventoryList ||--o{ InventoryTransaction
+InventoryList ||--o{ InventoryBalance
+
+Supplier ||--o{ PurchaseOrder
+PurchaseOrder ||--o{ PurchaseOrderItem
+PurchaseOrder ||--o{ InventoryTransaction
+
+AttributeDefinition ||--o{ PartAttributeValue
+
+' Integrations
+TenantIntegration ||--o{ IntegrationSync
+TenantIntegration ||--o{ IntegrationRequestLog
+TenantIntegration ||--o| APIKey
+IntegrationSync ||--o{ IntegrationRequestLog
+APIKey ||--o{ IntegrationRequestLog
+
+' Documents
+FormTemplate ||--o{ FormDocument
+
+@enduml

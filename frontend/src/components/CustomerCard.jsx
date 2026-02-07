@@ -2,6 +2,9 @@ import { useState } from "react";
 import { Link } from "react-router-dom";
 import CustomerForm from "./CustomerForm";
 
+const formatPhone = (phone) =>
+    phone.replace(/\D/g, "").replace(/(.{3})(?=.)/g, "$1 ").trim();
+
 export default function CustomerCard({ customer, onEdit, onUpdated }) {
     const [isEditing, setIsEditing] = useState(false);
 
@@ -97,7 +100,7 @@ export default function CustomerCard({ customer, onEdit, onUpdated }) {
                                     href={`tel:${customer.phone_number}`}
                                     className="text-indigo-600 hover:text-indigo-800 transition-colors"
                                 >
-                                    {customer.phone_number}
+                                    {formatPhone(customer.phone_number)}
                                 </a>
                             ) : (
                                 <span className="text-gray-500">No phone on file</span>

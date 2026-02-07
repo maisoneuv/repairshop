@@ -1,5 +1,8 @@
+from decimal import Decimal
+
+from django.core.validators import MinValueValidator
 from django.db import models
-from django.db.models import TextChoices
+from django.db.models import Sum, TextChoices
 
 from core.models import User, Address
 from tenants.models import Tenant
@@ -71,3 +74,99 @@ class Employee(models.Model):
         permissions = [
             ("view_all_employees", "Can view all employees in tenant"),
         ]
+
+
+class CashRegister(models.Model):
+    tenant = models.ForeignKey("tenants.Tenant", on_delete=models.CASCADE)
+    shop = models.ForeignKey(RepairShop, on_delete=models.CASCADE, related_name="cash_registers")
+    name = models.CharField(max_length=120)
+    default_owner = models.ForeignKey(
+        Employee,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="default_registers",
+    )
+    opening_balance = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        default=Decimal('0.00'),
+        validators=[MinValueValidator(Decimal('0.00'))],
+    )
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = [("tenant", "shop", "name")]
+        ordering = ["shop", "name"]
+
+    def __str__(self):
+        return f"{self.shop.name} - {self.name}"
+
+    @property
+    def current_balance(self):
+        result = self.transactions.aggregate(total=Sum('amount'))
+        return (result['total'] or Decimal('0.00')) + self.opening_balance
+
+
+class CashTransactionType(models.TextChoices):
+    DEPOSIT = "deposit", "Deposit"
+    WITHDRAWAL = "withdrawal", "Withdrawal"
+    TRANSFER_IN = "transfer_in", "Transfer In"
+    TRANSFER_OUT = "transfer_out", "Transfer Out"
+    ADJUSTMENT = "adjustment", "Adjustment"
+
+
+class CashTransaction(models.Model):
+    tenant = models.ForeignKey("tenants.Tenant", on_delete=models.CASCADE)
+    register = models.ForeignKey(
+        CashRegister,
+        on_delete=models.PROTECT,
+        related_name="transactions",
+    )
+    transaction_type = models.CharField(
+        max_length=20,
+        choices=CashTransactionType.choices,
+    )
+    amount = models.DecimalField(max_digits=10, decimal_places=2)
+    currency = models.CharField(max_length=10, default='PLN')
+    work_item = models.ForeignKey(
+        "tasks.WorkItem",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="cash_transactions",
+    )
+    related_transaction = models.ForeignKey(
+        'self',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="transfer_pair",
+    )
+    description = models.CharField(max_length=255, blank=True)
+    performed_by = models.ForeignKey(
+        Employee,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="cash_transactions",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+        indexes = [
+            models.Index(fields=['tenant', 'register', 'created_at']),
+            models.Index(fields=['work_item']),
+        ]
+
+    def __str__(self):
+        return f"{self.get_transaction_type_display()}: {self.amount} {self.currency}"
+
+    def save(self, *args, **kwargs):
+        if self.transaction_type in (CashTransactionType.WITHDRAWAL, CashTransactionType.TRANSFER_OUT):
+            self.amount = -abs(self.amount)
+        elif self.transaction_type in (CashTransactionType.DEPOSIT, CashTransactionType.TRANSFER_IN):
+            self.amount = abs(self.amount)
+        super().save(*args, **kwargs)

@@ -1,13 +1,25 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef, useMemo } from "react";
 import { useParams, Link } from "react-router-dom";
 import ModelDetailLayout from "../../components/ModelDetailLayout";
 import TaskDetailLayout from "./layouts/TaskDetailLayout";
 import { fetchSchema } from "../../api/schema";
 import { fetchTask, updateTaskField } from "../../api/tasks";
+import apiClient from "../../api/apiClient";
+import { getPicklistPath } from "../../api/autocompleteApi";
+import { buildStatusColorMap, getStatusStyle } from "../../utils/statusColors";
 import ParentWorkItemCard from "../../components/ParentWorkItemCard";
 import DeviceCard from "../../components/DeviceCard";
 import EnhancedActivityTimeline from "../../components/EnhancedActivityTimeline";
 import CompleteTaskModal from "../../components/CompleteTaskModal";
+
+const formatStatusLabel = (value) => {
+    if (!value) return "Unknown";
+    return value
+        .toString()
+        .trim()
+        .replace(/[_\s]+/g, " ")
+        .replace(/\b\w/g, (char) => char.toUpperCase());
+};
 
 export default function TaskDetail() {
     const { id } = useParams();
@@ -16,6 +28,54 @@ export default function TaskDetail() {
     const [editMode, setEditMode] = useState(false);
     const [formData, setFormData] = useState({});
     const [showCompleteModal, setShowCompleteModal] = useState(false);
+    const [notesRefreshKey, setNotesRefreshKey] = useState(0);
+    const [wiStatusColorMap, setWiStatusColorMap] = useState({});
+    const [taskStatusColorMap, setTaskStatusColorMap] = useState({});
+    const [isStatusDropdownOpen, setIsStatusDropdownOpen] = useState(false);
+    const statusDropdownRef = useRef(null);
+
+    const statusOptions = useMemo(() => {
+        if (!schema?.status?.choices) return [];
+        return schema.status.choices.map(([value, label]) => ({ value, label }));
+    }, [schema]);
+
+    useEffect(() => {
+        const handleClickOutside = (event) => {
+            if (statusDropdownRef.current && !statusDropdownRef.current.contains(event.target)) {
+                setIsStatusDropdownOpen(false);
+            }
+        };
+        if (isStatusDropdownOpen) {
+            document.addEventListener('mousedown', handleClickOutside);
+        }
+        return () => document.removeEventListener('mousedown', handleClickOutside);
+    }, [isStatusDropdownOpen]);
+
+    const handleStatusSelect = async (newStatus) => {
+        setIsStatusDropdownOpen(false);
+        if (newStatus === 'Done') {
+            setShowCompleteModal(true);
+            return;
+        }
+        try {
+            await updateTaskField(task.id, { status: newStatus });
+            const updatedTask = await fetchTask(id, "workItemDetails");
+            setTask(updatedTask);
+            setFormData(updatedTask);
+            setNotesRefreshKey((k) => k + 1);
+        } catch (err) {
+            console.error('Failed to update status:', err);
+        }
+    };
+
+    const getStatusBadge = (status) => {
+        const baseClassName = "inline-flex items-center px-3 py-1 rounded-full text-sm font-semibold border";
+        const colorClasses = getStatusStyle(status, taskStatusColorMap);
+        return {
+            label: formatStatusLabel(status),
+            className: `${baseClassName} ${colorClasses}`,
+        };
+    };
 
     useEffect(() => {
         async function load() {
@@ -36,6 +96,16 @@ export default function TaskDetail() {
 
         load();
     }, [id]);
+
+    useEffect(() => {
+        Promise.all([
+            apiClient.get(getPicklistPath("workitem_status")).catch(() => ({ data: [] })),
+            apiClient.get(getPicklistPath("task_status")).catch(() => ({ data: [] })),
+        ]).then(([wiRes, taskRes]) => {
+            setWiStatusColorMap(buildStatusColorMap(wiRes.data));
+            setTaskStatusColorMap(buildStatusColorMap(taskRes.data));
+        });
+    }, []);
 
     const relatedWorkItem = task?.workItemDetails && typeof task.workItemDetails === "object" ? task.workItemDetails : null;
 
@@ -59,6 +129,7 @@ export default function TaskDetail() {
         setTask(updatedTask);
         setFormData(updatedTask);
         setEditMode(false);
+        setNotesRefreshKey((k) => k + 1);
     };
 
     const handleChange = (name, val) => {
@@ -77,6 +148,7 @@ export default function TaskDetail() {
             const updatedTask = await fetchTask(id, "workItemDetails");
             setTask(updatedTask);
             setFormData(updatedTask);
+            setNotesRefreshKey((k) => k + 1);
         } catch (error) {
             console.error("Failed to complete task:", error);
             throw error;
@@ -105,10 +177,43 @@ export default function TaskDetail() {
                         {/* Task Details */}
                         <div className="bg-white rounded-xl shadow-lg border border-gray-200 p-6">
                             <div className="flex items-center justify-between mb-4">
-                                <div>
+                                <div className="flex flex-col sm:flex-row sm:items-center sm:gap-2">
                                     <h1 className="text-xl sm:text-2xl font-bold text-gray-900">
                                         {task.task_type.name} #{task.id}
                                     </h1>
+                                    <div className="relative" ref={statusDropdownRef}>
+                                        <button
+                                            type="button"
+                                            onClick={() => setIsStatusDropdownOpen(!isStatusDropdownOpen)}
+                                            className={`${getStatusBadge(task.status).className} cursor-pointer hover:opacity-80 transition-opacity flex items-center gap-1`}
+                                        >
+                                            {getStatusBadge(task.status).label}
+                                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                                            </svg>
+                                        </button>
+
+                                        {isStatusDropdownOpen && (
+                                            <div className="absolute top-full left-0 mt-1 bg-white rounded-lg shadow-lg border border-gray-200 py-1 z-50 min-w-[150px]">
+                                                {statusOptions.map((option) => {
+                                                    const optionBadge = getStatusBadge(option.value);
+                                                    const isCurrentStatus = task.status === option.value;
+                                                    return (
+                                                        <button
+                                                            type="button"
+                                                            key={option.value}
+                                                            onClick={() => handleStatusSelect(option.value)}
+                                                            className={`w-full text-left px-4 py-2 hover:bg-gray-50 transition-colors ${isCurrentStatus ? 'bg-gray-50' : ''}`}
+                                                        >
+                                                            <span className={`${optionBadge.className} text-xs`}>
+                                                                {option.label}
+                                                            </span>
+                                                        </button>
+                                                    );
+                                                })}
+                                            </div>
+                                        )}
+                                    </div>
                                 </div>
                                 <div className="flex items-center gap-3">
                                     {task.status !== 'Done' && (
@@ -154,6 +259,7 @@ export default function TaskDetail() {
                                     const updatedTask = await fetchTask(id, "workItemDetails");
                                     setTask(updatedTask);
                                     setFormData(updatedTask);
+                                    setNotesRefreshKey((k) => k + 1);
                                 }}
                             />
 
@@ -178,13 +284,13 @@ export default function TaskDetail() {
                         </div>
 
                         {/* Activity Timeline */}
-                        <EnhancedActivityTimeline model="task" objectId={task.id} />
+                        <EnhancedActivityTimeline model="task" objectId={task.id} refreshKey={notesRefreshKey} statusColorMap={{...wiStatusColorMap, ...taskStatusColorMap}} />
                     </div>
 
                     {/* Right Sidebar */}
                     <div className="w-full xl:w-96 space-y-4 sm:space-y-6">
                         {/* Parent Work Item Card */}
-                        <ParentWorkItemCard workItem={relatedWorkItem} />
+                        <ParentWorkItemCard workItem={relatedWorkItem} statusColorMap={wiStatusColorMap} />
 
                         {/* Device Information Card */}
                         {relatedWorkItem?.deviceDetails && (

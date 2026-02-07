@@ -1,6 +1,7 @@
 import { Link } from "react-router-dom";
+import { getStatusStyle } from "../utils/statusColors";
 
-export default function ParentWorkItemCard({ workItem }) {
+export default function ParentWorkItemCard({ workItem, statusColorMap }) {
     if (!workItem) {
         return (
             <div className="bg-white rounded-xl shadow-lg border border-gray-200 p-6">
@@ -44,12 +45,7 @@ export default function ParentWorkItemCard({ workItem }) {
                 {workItem.status && (
                     <div>
                         <label className="block text-sm font-medium text-gray-600 mb-1">Status</label>
-                        <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                            workItem.status === 'Resolved' ? 'bg-green-100 text-green-800' :
-                            workItem.status === 'In Progress' ? 'bg-blue-100 text-blue-800' :
-                            workItem.status === 'New' ? 'bg-sky-100 text-sky-800' :
-                            'bg-gray-100 text-gray-800'
-                        }`}>
+                        <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getStatusStyle(workItem.status, statusColorMap)}`}>
                             {workItem.status}
                         </span>
                     </div>

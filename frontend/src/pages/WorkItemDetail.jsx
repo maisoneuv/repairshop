@@ -3,6 +3,9 @@ import { useParams, Link } from "react-router-dom";
 import { fetchSchema } from "../api/schema";
 import { fetchWorkItem, updateWorkItemField } from "../api/workItems";
 import { getSettingValue } from "../api/settings";
+import apiClient from "../api/apiClient";
+import { getPicklistPath } from "../api/autocompleteApi";
+import { buildStatusColorMap, getStatusStyle } from "../utils/statusColors";
 import WorkItemDetailHeader from "../components/WorkItemDetailHeader";
 import WorkItemHighlights from "../components/WorkItemHighlights";
 import WorkItemTabs from "../components/WorkItemTabs";
@@ -24,6 +27,9 @@ export default function WorkItemDetail() {
     const [editMode, setEditMode] = useState(false);
     const [isSaving, setIsSaving] = useState(false);
     const [showSummary, setShowSummary] = useState(false);
+    const [notesRefreshKey, setNotesRefreshKey] = useState(0);
+    const [wiStatusColorMap, setWiStatusColorMap] = useState({});
+    const [taskStatusColorMap, setTaskStatusColorMap] = useState({});
 
     useEffect(() => {
         async function load() {
@@ -52,6 +58,17 @@ export default function WorkItemDetail() {
             setShowSummary(enabled === true);
         }
         loadSummarySetting();
+    }, []);
+
+    // Fetch status color maps
+    useEffect(() => {
+        Promise.all([
+            apiClient.get(getPicklistPath("workitem_status")).catch(() => ({ data: [] })),
+            apiClient.get(getPicklistPath("task_status")).catch(() => ({ data: [] })),
+        ]).then(([wiRes, taskRes]) => {
+            setWiStatusColorMap(buildStatusColorMap(wiRes.data));
+            setTaskStatusColorMap(buildStatusColorMap(taskRes.data));
+        });
     }, []);
 
     const normalizeFieldValue = (name, value) => {
@@ -84,6 +101,7 @@ export default function WorkItemDetail() {
             'fulfillment_shop': 'fulfillment_shop_id',
             'pickup_point': 'pickup_point_id',
             'dropoff_point': 'dropoff_point_id',
+            'payment_register': 'payment_register_id',
         };
 
         if (foreignKeyMappings[name]) {
@@ -142,6 +160,7 @@ export default function WorkItemDetail() {
             console.log('Status updated successfully:', updated);
             setWorkItem((prev) => ({ ...prev, ...updated }));
             setFormData((prev) => ({ ...prev, ...updated }));
+            setNotesRefreshKey((k) => k + 1);
         } catch (err) {
             console.error("Failed to update status:", err);
             alert('Failed to update status. Please check the console for details.');
@@ -214,6 +233,7 @@ export default function WorkItemDetail() {
                     schema={schema}
                     onEdit={handleEdit}
                     onStatusChange={handleStatusChange}
+                    statusColorMap={wiStatusColorMap}
                 />
 
                 {/* Main Content Area */}
@@ -231,6 +251,7 @@ export default function WorkItemDetail() {
                                 device={workItem.deviceDetails}
                                 onEdit={() => console.log('Edit device')}
                                 onUpdated={handleDeviceUpdated}
+                                workItemId={workItem.id}
                             />
                         </div>
 
@@ -313,12 +334,7 @@ export default function WorkItemDetail() {
                                             >
                                                 {`#${task.id} ${task.task_type?.name}` || task.summary || `Task #${task.id}`}
                                             </Link>
-                                            <span className={`px-2 py-1 text-xs rounded-full ${
-                                                task.status === 'Done' ? 'bg-green-100 text-green-800' :
-                                                task.status === 'In progress' ? 'bg-blue-100 text-blue-800' :
-                                                task.status === 'Reopened' ? 'bg-yellow-100 text-yellow-800' :
-                                                'bg-gray-100 text-gray-800'
-                                            }`}>
+                                            <span className={`px-2 py-1 text-xs rounded-full ${getStatusStyle(task.status, taskStatusColorMap)}`}>
                                                 {task.status}
                                             </span>
                                         </div>
@@ -361,7 +377,7 @@ export default function WorkItemDetail() {
                         )}
 
                         {/* Activity Timeline */}
-                        <EnhancedActivityTimeline model="workitem" objectId={workItem.id} />
+                        <EnhancedActivityTimeline model="workitem" objectId={workItem.id} refreshKey={notesRefreshKey} statusColorMap={{...wiStatusColorMap, ...taskStatusColorMap}} />
                     </div>
                 </div>
             </div>

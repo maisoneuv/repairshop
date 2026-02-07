@@ -80,7 +80,7 @@ class WorkItemAdmin(TenantAwareImportExportAdmin):
 class PicklistValueAdmin(TenantAwareImportExportAdmin):
     """Admin interface for managing picklist values"""
 
-    list_display = ['category', 'name', 'value', 'tenant', 'sort_order',
+    list_display = ['category', 'name', 'value', 'color', 'tenant', 'sort_order',
                    'is_active', 'is_system', 'usage_count']
     list_filter = ['tenant', 'category', 'is_active', 'is_system']
     search_fields = ['name', 'value', 'category']
@@ -91,7 +91,7 @@ class PicklistValueAdmin(TenantAwareImportExportAdmin):
             'fields': ('tenant', 'category', 'name', 'value')
         }),
         ('Display & Ordering', {
-            'fields': ('sort_order', 'is_active')
+            'fields': ('color', 'sort_order', 'is_active')
         }),
         ('System', {
             'fields': ('is_system', 'created_date'),
