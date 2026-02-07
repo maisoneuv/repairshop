@@ -22,18 +22,6 @@ const WorkItemDetailLayout = [
         ]
     },
     {
-        section: "Assignment",
-        groups: [
-            {
-                fields: [
-                    { name: "owner", label: "Owner", type: "foreignkey", editable: true },
-                    { name: "technician", label: "Technician", type: "foreignkey", editable: true },
-                    { name: "due_date", label: "Due Date", type: "date", editable: true },
-                ]
-            }
-        ]
-    },
-    {
         section: "Financial Information",
         groups: [
             {
@@ -51,6 +39,18 @@ const WorkItemDetailLayout = [
                     { name: "prepaid_amount", label: "Prepaid Amount", type: "currency", editable: true },
                     { name: "payment_method", label: "Payment Method", type: "select", editable: true },
                     { name: "payment_register", label: "Cash Register", type: "foreignkey", editable: true },
+                ]
+            }
+        ]
+    },
+    {
+        section: "Assignment",
+        groups: [
+            {
+                fields: [
+                    { name: "owner", label: "Owner", type: "foreignkey", editable: true },
+                    { name: "technician", label: "Technician", type: "foreignkey", editable: true },
+                    { name: "due_date", label: "Due Date", type: "date", editable: true },
                 ]
             }
         ]
