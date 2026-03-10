@@ -62,6 +62,11 @@ class Command(BaseCommand):
             type=int,
             help='Optional: Link to TenantIntegration ID for bidirectional flows'
         )
+        parser.add_argument(
+            '--user',
+            type=str,
+            help='Optional: Email of user to link for action attribution'
+        )
 
     def handle(self, *args, **options):
         tenant_subdomain = options['tenant']
@@ -130,6 +135,20 @@ class Command(BaseCommand):
                     f'Integration with ID {integration_id} not found for tenant "{tenant.name}"'
                 )
 
+        # Validate user if provided
+        linked_user = None
+        user_email = options.get('user')
+        if user_email:
+            from django.contrib.auth import get_user_model
+            UserModel = get_user_model()
+            try:
+                linked_user = UserModel.objects.get(email=user_email, tenant=tenant)
+                self.stdout.write(f'✓ Linked User: {linked_user.email}')
+            except UserModel.DoesNotExist:
+                raise CommandError(
+                    f'User with email "{user_email}" not found for tenant "{tenant.name}"'
+                )
+
         # Generate the API key
         self.stdout.write('\n' + self.style.WARNING('Generating secure API key...'))
         plaintext_key, prefix, key_hash = APIKey.generate_key(environment=environment)
@@ -141,6 +160,7 @@ class Command(BaseCommand):
             key_hash=key_hash,
             prefix=prefix,
             role=role,
+            user=linked_user,
             integration=integration,
             expires_at=expires_at,
             notes=notes,
@@ -165,6 +185,8 @@ class Command(BaseCommand):
         self.stdout.write(f'Active:      {api_key.is_active}')
         if api_key.expires_at:
             self.stdout.write(f'Expires:     {api_key.expires_at.strftime("%Y-%m-%d")}')
+        if api_key.user:
+            self.stdout.write(f'User:        {api_key.user.email}')
         if api_key.integration:
             self.stdout.write(f'Integration: {api_key.integration.name}')
         self.stdout.write(f'Created:     {api_key.created_on.strftime("%Y-%m-%d %H:%M:%S")}')

@@ -16,6 +16,8 @@ import ProfilePage from "./pages/ProfilePage";
 import CashRegisterList from "./features/CashRegisters/CashRegisterList";
 import CashRegisterDetail from "./features/CashRegisters/CashRegisterDetail";
 import CashRegisterForm from "./features/CashRegisters/CashRegisterForm";
+import InventoryStock from "./features/Inventory/InventoryStock";
+import ReceiveDelivery from "./features/Inventory/ReceiveDelivery";
 import { useUser } from "./context/UserContext";
 
 function App() {
@@ -45,6 +47,9 @@ function App() {
                 <Route path="/tasks/all" element={<AllTasks />} />
                 <Route path="/tasks/my" element={<MyTasks />} />
                 <Route path="/tasks" element={<TaskList />} />
+                <Route path="/inventory" element={<InventoryStock />} />
+                <Route path="/inventory/receive" element={<ReceiveDelivery />} />
+                <Route path="/inventory/stock" element={<Navigate to="/inventory" replace />} />
                 <Route path="/cash-registers" element={<CashRegisterList />} />
                 <Route path="/cash-registers/new" element={<CashRegisterForm />} />
                 <Route path="/cash-registers/:id" element={<CashRegisterDetail />} />

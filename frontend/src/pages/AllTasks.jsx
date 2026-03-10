@@ -124,10 +124,10 @@ export default function AllTasks() {
 
     return (
         <div className="bg-white rounded-xl shadow-lg border border-gray-200">
-            <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
+            <div className="px-4 md:px-6 py-3 md:py-4 border-b border-gray-100 flex items-center justify-between">
                 <div>
-                    <h1 className="text-xl font-semibold text-gray-800">All Tasks</h1>
-                    <p className="text-sm text-gray-500">
+                    <h1 className="text-lg md:text-xl font-semibold text-gray-800">All Tasks</h1>
+                    <p className="text-xs md:text-sm text-gray-500">
                         All tasks in the system
                     </p>
                 </div>
@@ -141,16 +141,16 @@ export default function AllTasks() {
             </div>
 
             {/* Filters */}
-            <div className="px-6 py-3 border-b border-gray-100 flex items-center gap-4 bg-gray-50">
+            <div className="px-4 md:px-6 py-3 border-b border-gray-100 flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4 bg-gray-50">
                 <div className="flex items-center gap-2">
-                    <label htmlFor="status-filter" className="text-sm font-medium text-gray-600">
+                    <label htmlFor="status-filter" className="text-sm font-medium text-gray-600 whitespace-nowrap">
                         Status:
                     </label>
                     <select
                         id="status-filter"
                         value={statusFilter}
                         onChange={(e) => setStatusFilter(e.target.value)}
-                        className="px-3 py-1.5 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        className="flex-1 min-w-0 px-3 py-1.5 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                     >
                         <option value="__open__">Open (Not Done)</option>
                         <option value="__all__">All Statuses</option>
@@ -163,14 +163,14 @@ export default function AllTasks() {
                 </div>
 
                 <div className="flex items-center gap-2">
-                    <label htmlFor="assignee-filter" className="text-sm font-medium text-gray-600">
+                    <label htmlFor="assignee-filter" className="text-sm font-medium text-gray-600 whitespace-nowrap">
                         Assignee:
                     </label>
                     <select
                         id="assignee-filter"
                         value={assigneeFilter}
                         onChange={(e) => setAssigneeFilter(e.target.value)}
-                        className="px-3 py-1.5 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        className="flex-1 min-w-0 px-3 py-1.5 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                     >
                         <option value="">All Assignees</option>
                         {assigneeOptions.map((emp) => (
@@ -182,14 +182,49 @@ export default function AllTasks() {
                 </div>
             </div>
 
-            <div className="p-6">
+            <div className="p-4 md:p-6">
                 {error && (
                     <div className="mb-4 rounded-lg bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700">
                         {error}
                     </div>
                 )}
 
-                <div className="overflow-x-auto">
+                {/* Mobile card list */}
+                <div className="md:hidden space-y-3">
+                    {loading ? (
+                        <p className="py-10 text-center text-sm text-gray-500">Loading tasks...</p>
+                    ) : sortedTasks.length === 0 ? (
+                        <p className="py-10 text-center text-sm text-gray-500">No tasks found.</p>
+                    ) : (
+                        sortedTasks.map((task) => (
+                            <Link
+                                key={task.id}
+                                to={`/tasks/${task.id}`}
+                                className="block border border-gray-200 rounded-lg p-3 hover:bg-blue-50/50 active:bg-blue-50"
+                            >
+                                <div className="flex items-center justify-between mb-1.5">
+                                    <span className="text-sm font-medium text-blue-600">#{task.id}</span>
+                                    <span className={`inline-block px-2 py-0.5 rounded-full text-xs font-medium border ${getStatusStyle(task.status, statusColorMap)}`}>
+                                        {task.status || "-"}
+                                    </span>
+                                </div>
+                                <div className="flex items-center justify-between text-xs text-gray-600">
+                                    <span>{task.task_type?.name || "-"}</span>
+                                    <span>{task.assigned_employee?.name || "Unassigned"}</span>
+                                </div>
+                                {(task.work_item || task.device_name) && (
+                                    <div className="flex items-center justify-between text-xs text-gray-500 mt-1">
+                                        <span>{task.work_item?.reference_id || ""}</span>
+                                        <span>{task.device_name || ""}</span>
+                                    </div>
+                                )}
+                            </Link>
+                        ))
+                    )}
+                </div>
+
+                {/* Desktop table */}
+                <div className="hidden md:block overflow-x-auto">
                     <table className="min-w-full divide-y divide-gray-200 text-sm">
                         <thead className="bg-gray-50">
                             <tr>

@@ -41,9 +41,9 @@ export default function UserProfileDropdown() {
                 className="flex items-center space-x-2 px-3 py-2 rounded-lg hover:bg-gray-100 text-gray-700 transition-colors"
             >
                 <User className="w-5 h-5" />
-                <span className="text-sm font-medium">{displayName}</span>
+                <span className="hidden md:inline text-sm font-medium">{displayName}</span>
                 <svg
-                    className={`w-4 h-4 transition-transform ${isOpen ? "rotate-180" : ""}`}
+                    className={`hidden md:block w-4 h-4 transition-transform ${isOpen ? "rotate-180" : ""}`}
                     fill="none"
                     stroke="currentColor"
                     viewBox="0 0 24 24"

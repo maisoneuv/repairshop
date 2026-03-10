@@ -145,7 +145,7 @@ class APIKeyAdmin(TenantAwareImportExportAdmin):
         'modified_on',
         'created_by',
     )
-    autocomplete_fields = ['tenant', 'role', 'integration', 'created_by']
+    autocomplete_fields = ['tenant', 'role', 'integration', 'created_by', 'user']
 
     fieldsets = (
         (_('Identity'), {
@@ -154,6 +154,11 @@ class APIKeyAdmin(TenantAwareImportExportAdmin):
         (_('Permissions'), {
             'fields': ('role',),
             'description': 'Role determines what permissions this API key has'
+        }),
+        (_('Attribution (Optional)'), {
+            'fields': ('user',),
+            'description': 'Link a user for action attribution (e.g., note authorship). '
+                          'Permissions still come from the Role field above.'
         }),
         (_('Integration (Optional)'), {
             'fields': ('integration',),
