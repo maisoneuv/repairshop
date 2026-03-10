@@ -133,15 +133,24 @@ export default function WorkItemList() {
 
     return (
         <div className="bg-white rounded-xl shadow-lg border border-gray-200">
-            <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
-                <div>
-                    <h1 className="text-xl font-semibold text-gray-800">Work Items</h1>
-                    <p className="text-sm text-gray-500">
-                        {view === "my" ? "Items assigned to you" : "All work items for this tenant"}
-                    </p>
+            <div className="px-4 md:px-6 py-3 md:py-4 border-b border-gray-100">
+                <div className="flex items-center justify-between">
+                    <div>
+                        <h1 className="text-lg md:text-xl font-semibold text-gray-800">Work Items</h1>
+                        <p className="text-xs md:text-sm text-gray-500">
+                            {view === "my" ? "Items assigned to you" : "All work items for this tenant"}
+                        </p>
+                    </div>
+
+                    <Link
+                        to="/work-items/new"
+                        className="px-3 py-1.5 rounded-lg text-sm font-medium bg-blue-600 text-white hover:bg-blue-700"
+                    >
+                        Create New
+                    </Link>
                 </div>
 
-                <div className="flex gap-2">
+                <div className="flex gap-2 mt-3">
                     <button
                         type="button"
                         onClick={() => handleViewChange("all")}
@@ -151,7 +160,7 @@ export default function WorkItemList() {
                                 : "border-gray-200 text-gray-600 hover:border-blue-200 hover:text-blue-600"
                         }`}
                     >
-                        All Work Items
+                        All
                     </button>
                     <button
                         type="button"
@@ -163,28 +172,22 @@ export default function WorkItemList() {
                         }`}
                         disabled={!employee}
                     >
-                        My Work Items
+                        Mine
                     </button>
-                    <Link
-                        to="/work-items/new"
-                        className="px-3 py-1.5 rounded-lg text-sm font-medium bg-blue-600 text-white hover:bg-blue-700"
-                    >
-                        Create New
-                    </Link>
                 </div>
             </div>
 
             {/* Filters */}
-            <div className="px-6 py-3 border-b border-gray-100 flex items-center gap-4 bg-gray-50">
+            <div className="px-4 md:px-6 py-3 border-b border-gray-100 flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4 bg-gray-50">
                 <div className="flex items-center gap-2">
-                    <label htmlFor="status-filter" className="text-sm font-medium text-gray-600">
+                    <label htmlFor="status-filter" className="text-sm font-medium text-gray-600 whitespace-nowrap">
                         Status:
                     </label>
                     <select
                         id="status-filter"
                         value={statusFilter}
                         onChange={(e) => setStatusFilter(e.target.value)}
-                        className="px-3 py-1.5 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        className="flex-1 min-w-0 px-3 py-1.5 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                     >
                         <option value="__open__">Open (Not Resolved)</option>
                         <option value="__all__">All Statuses</option>
@@ -197,14 +200,14 @@ export default function WorkItemList() {
                 </div>
 
                 <div className="flex items-center gap-2">
-                    <label htmlFor="owner-filter" className="text-sm font-medium text-gray-600">
+                    <label htmlFor="owner-filter" className="text-sm font-medium text-gray-600 whitespace-nowrap">
                         Owner:
                     </label>
                     <select
                         id="owner-filter"
                         value={ownerFilter}
                         onChange={(e) => setOwnerFilter(e.target.value)}
-                        className="px-3 py-1.5 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        className="flex-1 min-w-0 px-3 py-1.5 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                     >
                         <option value="">All Owners</option>
                         {ownerOptions.map((emp) => (
@@ -216,14 +219,49 @@ export default function WorkItemList() {
                 </div>
             </div>
 
-            <div className="p-6">
+            <div className="p-4 md:p-6">
                 {error && (
                     <div className="mb-4 rounded-lg bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700">
                         {error}
                     </div>
                 )}
 
-                <div className="overflow-x-auto">
+                {/* Mobile card list */}
+                <div className="md:hidden space-y-3">
+                    {loading ? (
+                        <p className="py-10 text-center text-sm text-gray-500">Loading work items...</p>
+                    ) : sortedItems.length === 0 ? (
+                        <p className="py-10 text-center text-sm text-gray-500">No work items found.</p>
+                    ) : (
+                        sortedItems.map((item) => (
+                            <Link
+                                key={item.id}
+                                to={`/work-items/${item.id}`}
+                                className="block border border-gray-200 rounded-lg p-3 hover:bg-blue-50/50 active:bg-blue-50"
+                            >
+                                <div className="flex items-center justify-between mb-1.5">
+                                    <span className="text-sm font-medium text-blue-600">
+                                        {item.reference_id || `#${item.id}`}
+                                    </span>
+                                    <span className={`inline-block px-2 py-0.5 rounded-full text-xs font-medium border ${getStatusStyle(item.status, statusColorMap)}`}>
+                                        {item.status || "-"}
+                                    </span>
+                                </div>
+                                <div className="text-xs text-gray-600">
+                                    {item.device_name || "No device"}
+                                </div>
+                                {item.device_category_name && (
+                                    <div className="text-xs text-gray-500 mt-0.5">
+                                        {item.device_category_name}
+                                    </div>
+                                )}
+                            </Link>
+                        ))
+                    )}
+                </div>
+
+                {/* Desktop table */}
+                <div className="hidden md:block overflow-x-auto">
                     <table className="min-w-full divide-y divide-gray-200 text-sm">
                         <thead className="bg-gray-50">
                             <tr>

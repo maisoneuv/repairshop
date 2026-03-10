@@ -17,7 +17,8 @@ WorkItemViewSet,
 WorkItemSchemaView,
 TaskSchemaView,
 TaskViewSet,
-TaskTypeViewSet)
+TaskTypeViewSet,
+DashboardView)
 
 app_name = "tasks"
 
@@ -39,6 +40,7 @@ urlpatterns = [
     path('device-search', device_search, name="device_search"),
     path('api/schema/work-item/', WorkItemSchemaView.as_view(), name="work_item_schema"),
     path('api/schema/task/', TaskSchemaView.as_view(), name="task_schema"),
+    path('dashboard/', DashboardView.as_view(), name="dashboard"),
 ]
 
 # Router URLs come first so they take precedence

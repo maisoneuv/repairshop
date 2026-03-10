@@ -1,15 +1,18 @@
 from decimal import Decimal
+from datetime import timedelta
 
 from django.http import JsonResponse
 from django.shortcuts import render, redirect, reverse, get_object_or_404
+from django.contrib.contenttypes.models import ContentType
+from django.utils import timezone
 
 from customers.serializers import CustomerSerializer
-from service.models import CashTransaction, CashTransactionType, Employee
+from service.models import CashRegister, CashTransaction, CashTransactionType, Employee
 from service.serializers import EmployeeSerializer
 from .models import WorkItem, Task, TaskType
 from .forms import WorkItemForm, TaskForm
 from django.views.generic import TemplateView, ListView, DetailView, CreateView, UpdateView
-from django.db.models import Q, Sum
+from django.db.models import Q, Sum, Count
 from rest_framework import viewsets, filters, status
 from rest_framework.decorators import action
 import django_filters
@@ -21,7 +24,7 @@ from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated  # or AllowAny for dev
 from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework.exceptions import PermissionDenied
-
+from core.models import Note, PicklistValue
 
 from core.utils import get_model_schema
 
@@ -271,10 +274,7 @@ class WorkItemViewSet(viewsets.ModelViewSet):
     filter_backends = [filters.SearchFilter, DjangoFilterBackend]
     filterset_class = WorkItemFilter
     search_fields = [
-        "=reference_id",  # Exact match for reference_id
-        "customer__first_name",
-        "customer__last_name",
-        "customer__email",
+        "reference_id",  # Only allow searching by reference/RMA ID for autocomplete linking
     ]
 
     def get_queryset(self):
@@ -292,19 +292,28 @@ class WorkItemViewSet(viewsets.ModelViewSet):
             'fulfillment_shop'
         )
 
+        tenant = getattr(self.request, 'tenant', None)
+
         if user.is_superuser:
             return base_qs.all()
 
-        if not self.request.tenant:
+        if not tenant:
             return WorkItem.objects.none()
 
-        qs = base_qs.filter(tenant=self.request.tenant)
+        qs = base_qs.filter(tenant=tenant)
 
-        if user.has_permission('view_all_workitems', self.request.tenant):
+        # Allow search requests (used by the task form autocomplete) to skip user-level filtering
+        if self.request.query_params.get('search'):
             return qs
 
-        if user.has_permission('view_own_workitems', self.request.tenant):
-            return qs.filter(technician__user=user)
+        if user.has_permission('view_all_workitems', tenant):
+            return qs
+
+        if user.has_permission('view_own_workitems', tenant):
+            return qs.filter(
+                Q(technician__user=user) |
+                Q(owner__user=user)
+            )
 
         return WorkItem.objects.none()
 
@@ -908,3 +917,248 @@ class TaskTypeViewSet(viewsets.ModelViewSet):
         """Soft delete by marking as inactive instead of hard delete"""
         instance.is_active = False
         instance.save()
+
+
+class DashboardView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        tenant = getattr(request, 'tenant', None)
+        if not tenant:
+            return Response({'detail': 'Tenant not resolved'}, status=status.HTTP_400_BAD_REQUEST)
+
+        today = timezone.now().date()
+        week_start = today - timedelta(days=today.weekday())  # Monday
+        month_start = today.replace(day=1)
+
+        # Base querysets
+        wi_qs = WorkItem.objects.filter(tenant=tenant)
+        open_qs = wi_qs.filter(closed_date__isnull=True)
+        closed_qs = wi_qs.filter(closed_date__isnull=False)
+
+        # Find "ready for pickup" status value from picklist
+        ready_status = PicklistValue.objects.filter(
+            tenant=tenant, category='workitem_status', is_active=True,
+            name__icontains='ready'
+        ).values_list('value', flat=True).first()
+
+        # --- KPIs (single query with conditional aggregation) ---
+        kpi_filters = {
+            'total_open': Count('id'),
+            'overdue': Count('id', filter=Q(due_date__lt=today)),
+            'unassigned': Count('id', filter=Q(technician__isnull=True)),
+        }
+        if ready_status:
+            kpi_filters['ready_for_pickup'] = Count('id', filter=Q(status=ready_status))
+        kpis = open_qs.aggregate(**kpi_filters)
+        if not ready_status:
+            kpis['ready_for_pickup'] = 0
+
+        # --- Status Pipeline ---
+        status_counts = (
+            wi_qs.values('status')
+            .annotate(count=Count('id'))
+            .order_by('status')
+        )
+        picklist_map = {
+            pv.value: {'name': pv.name, 'color': pv.color, 'sort_order': pv.sort_order}
+            for pv in PicklistValue.objects.filter(
+                tenant=tenant, category='workitem_status', is_active=True
+            )
+        }
+        pipeline = []
+        for entry in status_counts:
+            sv = entry['status']
+            pv_info = picklist_map.get(sv, {})
+            pipeline.append({
+                'status': sv,
+                'name': pv_info.get('name', sv),
+                'color': pv_info.get('color', 'gray'),
+                'sort_order': pv_info.get('sort_order', 999),
+                'count': entry['count'],
+            })
+        pipeline.sort(key=lambda x: x['sort_order'])
+
+        # --- Needs Attention ---
+        overdue_items = list(
+            open_qs
+            .filter(due_date__lt=today)
+            .select_related('customer', 'technician__user')
+            .order_by('due_date')[:10]
+            .values(
+                'id', 'reference_id', 'status', 'due_date',
+                'customer__first_name', 'customer__last_name',
+                'technician__user__first_name', 'technician__user__last_name',
+            )
+        )
+        unassigned_items = list(
+            open_qs
+            .filter(technician__isnull=True)
+            .select_related('customer')
+            .order_by('-created_date')[:10]
+            .values(
+                'id', 'reference_id', 'status', 'created_date', 'due_date',
+                'customer__first_name', 'customer__last_name',
+            )
+        )
+
+        # --- Recent Notes (batch-fetch work item references) ---
+        workitem_ct = ContentType.objects.get_for_model(WorkItem)
+        task_ct = ContentType.objects.get_for_model(Task)
+        tenant_wi_ids = set(wi_qs.values_list('id', flat=True))
+        tenant_task_ids = set(Task.objects.filter(tenant=tenant).values_list('id', flat=True))
+
+        recent_notes_qs = (
+            Note.objects
+            .filter(
+                Q(content_type=workitem_ct, object_id__in=tenant_wi_ids) |
+                Q(content_type=task_ct, object_id__in=tenant_task_ids)
+            )
+            .select_related('author', 'content_type')
+            .order_by('-created_at')[:15]
+        )
+
+        # Collect IDs for batch lookup
+        wi_ids_from_notes = set()
+        task_ids_from_notes = set()
+        for note in recent_notes_qs:
+            if note.content_type_id == workitem_ct.id:
+                wi_ids_from_notes.add(note.object_id)
+            elif note.content_type_id == task_ct.id:
+                task_ids_from_notes.add(note.object_id)
+
+        # Batch fetch work item references
+        wi_ref_map = dict(
+            WorkItem.objects.filter(id__in=wi_ids_from_notes)
+            .values_list('id', 'reference_id')
+        )
+        # Batch fetch task -> work_item mappings
+        task_wi_map = dict(
+            Task.objects.filter(id__in=task_ids_from_notes, work_item__isnull=False)
+            .values_list('id', 'work_item_id')
+        )
+        # Fetch references for work items linked via tasks
+        extra_wi_ids = set(task_wi_map.values()) - wi_ids_from_notes
+        if extra_wi_ids:
+            wi_ref_map.update(dict(
+                WorkItem.objects.filter(id__in=extra_wi_ids)
+                .values_list('id', 'reference_id')
+            ))
+
+        recent_notes = []
+        for note in recent_notes_qs:
+            work_item_id = None
+            work_item_ref = None
+            if note.content_type_id == workitem_ct.id:
+                work_item_id = note.object_id
+                work_item_ref = wi_ref_map.get(note.object_id)
+            elif note.content_type_id == task_ct.id:
+                wi_id = task_wi_map.get(note.object_id)
+                if wi_id:
+                    work_item_id = wi_id
+                    work_item_ref = wi_ref_map.get(wi_id)
+
+            author_name = None
+            if note.author:
+                full = f"{note.author.first_name} {note.author.last_name}".strip()
+                author_name = full if full else note.author.email
+
+            recent_notes.append({
+                'id': note.id,
+                'content': note.content[:200],
+                'author_name': author_name,
+                'created_at': note.created_at.isoformat(),
+                'work_item_id': work_item_id,
+                'work_item_reference_id': work_item_ref,
+            })
+
+        # --- My Open Tasks ---
+        my_tasks = []
+        try:
+            employee = Employee.objects.get(user=request.user, tenant=tenant)
+            my_tasks_qs = (
+                Task.objects
+                .filter(tenant=tenant, assigned_employee=employee)
+                .exclude(status='Done')
+                .select_related('work_item', 'task_type')
+                .order_by('due_date', '-created_date')[:10]
+            )
+            for task in my_tasks_qs:
+                my_tasks.append({
+                    'id': task.id,
+                    'summary': task.summary,
+                    'status': task.status,
+                    'due_date': task.due_date.isoformat() if task.due_date else None,
+                    'task_type': task.task_type.name if task.task_type else None,
+                    'work_item_id': task.work_item_id,
+                    'work_item_reference_id': (
+                        task.work_item.reference_id if task.work_item else None
+                    ),
+                })
+        except Employee.DoesNotExist:
+            pass
+
+        # --- Financial Summary ---
+        # Cash register balances (annotated to avoid N+1)
+        registers = (
+            CashRegister.objects.filter(tenant=tenant, is_active=True)
+            .select_related('shop')
+            .annotate(transaction_total=Sum('transactions__amount'))
+        )
+        register_balances = []
+        for reg in registers:
+            balance = (reg.transaction_total or Decimal('0.00')) + reg.opening_balance
+            register_balances.append({
+                'id': reg.id,
+                'name': reg.name,
+                'shop_name': reg.shop.name,
+                'current_balance': str(balance),
+            })
+
+        # Revenue (single aggregate query)
+        revenue = closed_qs.aggregate(
+            today=Sum('final_price', filter=Q(closed_date__date__gte=today)),
+            week=Sum('final_price', filter=Q(closed_date__date__gte=week_start)),
+            month=Sum('final_price', filter=Q(closed_date__date__gte=month_start)),
+        )
+
+        financial = {
+            'register_balances': register_balances,
+            'revenue_today': str(revenue['today'] or Decimal('0.00')),
+            'revenue_week': str(revenue['week'] or Decimal('0.00')),
+            'revenue_month': str(revenue['month'] or Decimal('0.00')),
+        }
+
+        # --- Technician Workload ---
+        tech_workload = list(
+            open_qs
+            .filter(technician__isnull=False)
+            .values(
+                'technician__id',
+                'technician__user__first_name',
+                'technician__user__last_name',
+            )
+            .annotate(open_count=Count('id'))
+            .order_by('-open_count')
+        )
+        workload = [
+            {
+                'technician_id': tw['technician__id'],
+                'name': f"{tw['technician__user__first_name']} {tw['technician__user__last_name']}".strip(),
+                'open_count': tw['open_count'],
+            }
+            for tw in tech_workload
+        ]
+
+        return Response({
+            'kpis': kpis,
+            'pipeline': pipeline,
+            'needs_attention': {
+                'overdue': overdue_items,
+                'unassigned': unassigned_items,
+            },
+            'recent_notes': recent_notes,
+            'my_tasks': my_tasks,
+            'financial': financial,
+            'technician_workload': workload,
+        })

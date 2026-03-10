@@ -1,25 +1,17 @@
 from django import forms
-from .models import Device, Category, InventoryItem, InventoryBalance, PurchaseOrder, PurchaseOrderItem
-from django.contrib.admin.widgets import FilteredSelectMultiple
-
+from .models import Device, InventoryItem, InventoryBalance, PurchaseOrder, PurchaseOrderItem
 
 
 class DeviceForm(forms.ModelForm):
-    categories = forms.ModelMultipleChoiceField(
-        queryset=Category.objects.all(),
-        widget=FilteredSelectMultiple("Categories", is_stacked=False),
-        required=False
-    )
-
     class Meta:
         model = Device
-        fields = ["manufacturer", "model", "categories"]
+        fields = ["manufacturer", "model", "category"]
 
 
 class InventoryItemForm(forms.ModelForm):
     class Meta:
         model = InventoryItem
-        fields = ["name", "sku", "description"]
+        fields = ["name", "sku", "description", "type", "category"]
 
 
 class InventoryBalanceForm(forms.ModelForm):
@@ -32,6 +24,7 @@ class PurchaseOrderForm(forms.ModelForm):
     class Meta:
         model = PurchaseOrder
         fields = ["order_number", "order_amount", "supplier", "status", "tracking_number", "origin_work_item"]
+
 
 class PurchaseOrderItemForm(forms.ModelForm):
     class Meta:

@@ -4,14 +4,12 @@ from mptt.admin import DraggableMPTTAdmin
 from core.admin_mixins import TenantAwareImportExportAdmin, TenantAwareImportExportMixin
 
 from .models import (
-    AttributeDefinition,
     Category,
     Device,
     InventoryBalance,
     InventoryItem,
     InventoryList,
     InventoryTransaction,
-    PartAttributeValue,
     PurchaseOrder,
     PurchaseOrderItem,
     Supplier,
@@ -29,7 +27,7 @@ class CategoryAdmin(TenantAwareImportExportMixin, DraggableMPTTAdmin):
 
 @admin.register(Device)
 class DeviceAdmin(TenantAwareImportExportAdmin):
-    list_display = ('id','manufacturer', 'model', 'category')
+    list_display = ('id', 'manufacturer', 'model', 'category')
     search_fields = ('manufacturer', 'model')
     autocomplete_fields = ['category']
 
@@ -43,10 +41,10 @@ class InventoryListAdmin(TenantAwareImportExportAdmin):
 
 @admin.register(InventoryItem)
 class InventoryItemAdmin(TenantAwareImportExportAdmin):
-    list_display = ('name', 'sku', 'inventory_list', 'type')
+    list_display = ('name', 'sku', 'type', 'category')
     search_fields = ('name', 'sku')
-    list_filter = ('inventory_list',)
-    autocomplete_fields = ['inventory_list', 'parent_inventory_item']
+    list_filter = ('type', 'category')
+    autocomplete_fields = ['category']
 
 
 @admin.register(Supplier)
@@ -78,18 +76,5 @@ class InventoryTransactionAdmin(TenantAwareImportExportAdmin):
 
 @admin.register(InventoryBalance)
 class InventoryBalanceAdmin(TenantAwareImportExportAdmin):
-    list_display = ('inventory_item', 'inventory_list', 'current_quantity')
+    list_display = ('inventory_item', 'inventory_list', 'current_quantity', 'rack', 'shelf_slot')
     autocomplete_fields = ['inventory_item', 'inventory_list']
-
-
-@admin.register(AttributeDefinition)
-class AttributeDefinitionAdmin(TenantAwareImportExportAdmin):
-    list_display = ('name', 'data_type')
-    search_fields = ('name',)
-
-
-@admin.register(PartAttributeValue)
-class PartAttributeValueAdmin(TenantAwareImportExportAdmin):
-    list_display = ('part', 'attribute')
-    search_fields = ('part__name', 'attribute__name')
-    autocomplete_fields = ['part', 'attribute']

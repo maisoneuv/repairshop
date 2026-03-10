@@ -3,6 +3,7 @@ import UserProfileDropdown from "../components/UserProfileDropdown";
 import { useUser } from "../context/UserContext";
 import { useEffect, useState, useRef } from "react";
 import GlobalSearch from "../components/GlobalSearch/GlobalSearch";
+import SideNav from "../components/SideNav";
 
 export default function AppLayout() {
     const { user } = useUser();
@@ -12,6 +13,7 @@ export default function AppLayout() {
     const [taskMenuOpen, setTaskMenuOpen] = useState(false);
     const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
     const [mobileSearchOpen, setMobileSearchOpen] = useState(false);
+    const [sidebarCollapsed, setSidebarCollapsed] = useState(true);
     const workItemMenuRef = useRef(null);
     const taskMenuRef = useRef(null);
 
@@ -57,19 +59,26 @@ export default function AppLayout() {
         };
     }, [mobileSearchOpen]);
 
+    const contentOffsetClass = user ? (sidebarCollapsed ? "md:pl-20" : "md:pl-64") : "";
+
     return (
         <div className="min-h-screen text-gray-900" style={{backgroundColor: appBgColor}}>
             {user && (
+                <SideNav
+                    mobileOpen={mobileMenuOpen}
+                    onMobileClose={() => setMobileMenuOpen(false)}
+                    collapsed={sidebarCollapsed}
+                    onToggleCollapse={() => setSidebarCollapsed(prev => !prev)}
+                />
+            )}
+
+            <div className={`transition-all duration-200 ${contentOffsetClass}`}>
+                {user && (
                 <nav className="bg-white shadow-sm mb-6">
-                    <div className="max-w-7xl mx-auto px-4 md:px-6 py-3 md:py-4">
+                    <div className="w-full max-w-7xl mx-auto md:ml-0 md:mr-0 px-4 md:px-6 py-3 md:py-4">
                         <div className="flex items-center justify-between">
                             {/* Left: logo + mobile hamburger + desktop nav links */}
                             <div className="flex items-center">
-                                {/* Logo - always visible */}
-                                <div className="flex items-center">
-                                    <div className="w-6 h-6 bg-blue-600 rounded-sm mr-2"></div>
-                                </div>
-
                                 {/* Mobile hamburger button */}
                                 <button
                                     type="button"
@@ -166,13 +175,6 @@ export default function AppLayout() {
                                             </div>
                                         )}
                                     </div>
-                                    <button
-                                        type="button"
-                                        onClick={() => navigate("/cash-registers")}
-                                        className="text-gray-600 hover:text-blue-600 font-medium"
-                                    >
-                                        Cash Registers
-                                    </button>
                                 </div>
                             </div>
 
@@ -208,32 +210,6 @@ export default function AppLayout() {
                             </div>
                         </div>
 
-                        {/* Mobile navigation menu */}
-                        {mobileMenuOpen && (
-                            <div className="md:hidden border-t border-gray-100 mt-3 pt-3 space-y-1">
-                                <button
-                                    type="button"
-                                    onClick={() => { navigate("/work-items"); setMobileMenuOpen(false); }}
-                                    className="block w-full text-left px-3 py-2 text-gray-600 hover:text-blue-600 hover:bg-gray-50 rounded-lg font-medium"
-                                >
-                                    Work Items
-                                </button>
-                                <button
-                                    type="button"
-                                    onClick={() => { navigate("/tasks/all"); setMobileMenuOpen(false); }}
-                                    className="block w-full text-left px-3 py-2 text-gray-600 hover:text-blue-600 hover:bg-gray-50 rounded-lg font-medium"
-                                >
-                                    Tasks
-                                </button>
-                                <button
-                                    type="button"
-                                    onClick={() => { navigate("/cash-registers"); setMobileMenuOpen(false); }}
-                                    className="block w-full text-left px-3 py-2 text-gray-600 hover:text-blue-600 hover:bg-gray-50 rounded-lg font-medium"
-                                >
-                                    Cash Registers
-                                </button>
-                            </div>
-                        )}
                     </div>
                 </nav>
             )}
@@ -264,9 +240,10 @@ export default function AppLayout() {
                 </div>
             )}
 
-            <main className="max-w-7xl mx-auto px-4 md:px-6 pb-6">
+            <main className="w-full max-w-7xl mx-auto md:ml-0 md:mr-0 px-4 md:px-6 pb-6">
                 <Outlet />
             </main>
+            </div>
         </div>
     );
 }

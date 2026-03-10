@@ -33,6 +33,8 @@ export default function AutocompleteInput({
                                               allowCustomCreate,
                                               onCreateNewItem,
                                               placeholder = 'Start typing...',
+                                              className,
+                                              inputClassName,
                                           }) {
     const [query, setQuery] = useState("");
     const [results, setResults] = useState([]);
@@ -135,7 +137,7 @@ export default function AutocompleteInput({
     };
 
     return (
-        <div className="mb-6">
+        <div className={className !== undefined ? className : "mb-6"}>
             {label && (
                 <label className="block text-sm font-medium text-gray-700 mb-2">
                     {label}
@@ -145,7 +147,7 @@ export default function AutocompleteInput({
             <div className="relative">
             <input
                 type="text"
-                className="w-full px-3 py-2 border rounded focus:outline-none focus:ring-2 focus:ring-blue-400"
+                className={inputClassName || "w-full px-3 py-2 border rounded focus:outline-none focus:ring-2 focus:ring-blue-400"}
                 value={query}
                 placeholder={placeholder}
                 onChange={(e) => {

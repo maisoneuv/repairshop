@@ -227,6 +227,17 @@ class APIKey(TimeStampedModel):
         help_text="Role determines what permissions this API key has"
     )
 
+    # Optional user link for action attribution
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='api_keys',
+        help_text="Optional: User whose identity is used for action attribution (e.g., note authorship). "
+                  "Permissions still come from the 'role' field, not this user."
+    )
+
     # Optional integration link
     integration = models.ForeignKey(
         'integrations.TenantIntegration',
@@ -289,6 +300,14 @@ class APIKey(TimeStampedModel):
 
     def __str__(self):
         return f"{self.name} ({self.prefix}...)"
+
+    def clean(self):
+        super().clean()
+        if self.user and self.user.tenant_id and self.user.tenant_id != self.tenant_id:
+            from django.core.exceptions import ValidationError
+            raise ValidationError({
+                'user': 'Linked user must belong to the same tenant as the API key.'
+            })
 
     @staticmethod
     def generate_key(environment='live'):

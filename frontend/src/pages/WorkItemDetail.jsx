@@ -13,6 +13,7 @@ import CustomerCard from "../components/CustomerCard";
 import DeviceCard from "../components/DeviceCard";
 import RelatedList from "../components/RelatedList";
 import EnhancedActivityTimeline from "../components/EnhancedActivityTimeline";
+import WorkItemInventoryTab from "../features/Inventory/WorkItemInventoryTab";
 import TaskForm from "../features/Tasks/TaskForm";
 import ModelDetailLayout from "../components/ModelDetailLayout";
 import WorkitemDetailLayout from "../features/WorkItems/WorkitemDetailLayout";
@@ -310,17 +311,7 @@ export default function WorkItemDetail() {
                                     )}
 
                                     {activeTab === 'inventory' && (
-                                        <div className="bg-white rounded-xl shadow-lg border border-gray-200 p-8 text-center">
-                                            <div className="text-gray-400 mb-4">
-                                                <svg className="w-16 h-16 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M12 11V7" />
-                                                </svg>
-                                            </div>
-                                            <h3 className="text-lg font-semibold text-gray-900 mb-2">Inventory Management</h3>
-                                            <p className="text-gray-600">
-                                                Inventory tracking features will be available here.
-                                            </p>
-                                        </div>
+                                        <WorkItemInventoryTab workItemId={workItem.id} />
                                     )}
 
                                     {activeTab === 'documents' && (

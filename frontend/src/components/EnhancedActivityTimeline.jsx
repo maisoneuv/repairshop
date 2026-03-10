@@ -174,7 +174,7 @@ export default function EnhancedActivityTimeline({ model, objectId, refreshKey, 
                                                 </Link>
                                             )}
                                         </div>
-                                        <div className={`text-sm p-3 rounded-lg ${
+                                        <div className={`text-sm p-3 rounded-lg whitespace-pre-line ${
                                             isTaskRelated
                                                 ? 'bg-purple-50 text-gray-800'
                                                 : 'bg-gray-50 text-gray-700'

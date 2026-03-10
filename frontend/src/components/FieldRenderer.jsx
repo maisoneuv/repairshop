@@ -118,7 +118,7 @@ export default function FieldRenderer({ name, label, config, value, onChange, er
                 return {
                     path: "/api/tasks/work-items/",
                     param: "search",
-                    map: (data) => data?.results ?? [],
+                    map: (data) => (Array.isArray(data) ? data : (data?.results ?? [])),
                     detailPath: (id) => `/api/tasks/work-items/${id}/`,
                     display: (item) => {
                         if (!item) return "";

@@ -89,7 +89,7 @@ class APIKeyAuthentication(BaseAuthentication):
         api_keys = APIKey.objects.filter(
             prefix=prefix,
             is_active=True
-        ).select_related('tenant', 'role')
+        ).select_related('tenant', 'role', 'user')
 
         # Check each matching key (should only be one in practice)
         api_key = None
@@ -123,18 +123,28 @@ class APIKeyAuthentication(BaseAuthentication):
 
     def create_virtual_user(self, api_key):
         """
-        Create a virtual User object for the API key.
+        Return a user for the API key request.
 
-        This allows existing permission checks to work unchanged.
-        The virtual user has the API key's tenant and role permissions.
+        If the API key has a linked user, return that real user
+        (with permission override to use the API key's role).
+        Otherwise, create a virtual unsaved User as before.
 
         Args:
             api_key: APIKey instance
 
         Returns:
-            User: Virtual user object (not saved to database)
+            User: Real linked user or virtual user object
         """
-        # Create a virtual user (not saved to DB)
+        if api_key.user:
+            # Use the real user for proper FK attribution (e.g., Note.author)
+            user = api_key.user
+            user.is_api_key_user = True
+            user.api_key = api_key
+            # Permissions come from the API key's role, not the user's own roles
+            user.has_permission = lambda perm, tenant: api_key.has_permission(perm, tenant)
+            return user
+
+        # No linked user — create a virtual user (not saved to DB)
         user = User(
             email=f'api_key_{api_key.id}@system.local',
             username=f'api_key_{api_key.id}',
@@ -152,8 +162,6 @@ class APIKeyAuthentication(BaseAuthentication):
 
         # Override has_permission to use API key's role
         user.has_permission = lambda perm, tenant: api_key.has_permission(perm, tenant)
-
-        # User is already authenticated by default (is_authenticated is a read-only property)
 
         return user
 
