@@ -11,6 +11,7 @@ import ParentWorkItemCard from "../../components/ParentWorkItemCard";
 import DeviceCard from "../../components/DeviceCard";
 import EnhancedActivityTimeline from "../../components/EnhancedActivityTimeline";
 import CompleteTaskModal from "../../components/CompleteTaskModal";
+import CustomActionsTab from "../CustomActions/CustomActionsTab";
 
 const formatStatusLabel = (value) => {
     if (!value) return "Unknown";
@@ -282,6 +283,9 @@ export default function TaskDetail() {
                                 </div>
                             )}
                         </div>
+
+                        {/* Custom Actions */}
+                        <CustomActionsTab target="task" targetId={task.id} />
 
                         {/* Activity Timeline */}
                         <EnhancedActivityTimeline model="task" objectId={task.id} refreshKey={notesRefreshKey} statusColorMap={{...wiStatusColorMap, ...taskStatusColorMap}} />

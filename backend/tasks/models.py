@@ -175,6 +175,7 @@ class WorkItem(models.Model):
 
 class Task(models.Model):
     tenant = models.ForeignKey(Tenant, on_delete=models.CASCADE)
+    reference_id = models.CharField(max_length=50, blank=True, null=True)
     summary = models.TextField(blank=True, null=True)
     description = models.TextField(blank=True)
     work_item = models.ForeignKey(WorkItem, blank=True, null=True, on_delete=models.CASCADE, related_name="tasks")
@@ -187,12 +188,26 @@ class Task(models.Model):
     actual_duration = models.DurationField(null=True, blank=True, help_text="Calculated duration from creation to completion")
 
     def __str__(self):
-        return self.summary or (f"Task #{self.pk}" if self.pk else "Task")
+        return self.reference_id or self.summary or (f"Task #{self.pk}" if self.pk else "Task")
 
     def save(self, *args, **kwargs):
         """
-        Override save to calculate actual_duration when task is completed.
+        Override save to auto-generate reference_id and calculate actual_duration when task is completed.
         """
+        if not self.reference_id:
+            if not self.tenant_id:
+                raise ValueError("Cannot generate reference_id without tenant.")
+            max_id = Task.objects.filter(
+                tenant=self.tenant_id,
+                reference_id__startswith="T-"
+            ).annotate(
+                num=models.functions.Cast(
+                    models.functions.Substr(models.F('reference_id'), 3),
+                    models.IntegerField(),
+                )
+            ).aggregate(max_num=Max('num'))['max_num'] or 0
+            self.reference_id = f"T-{max_id + 1}"
+
         # If status is being changed to 'Done' and completed_date is not set
         if self.status == 'Done' and not self.completed_date:
             from django.utils import timezone
@@ -212,6 +227,9 @@ class Task(models.Model):
         super().save(*args, **kwargs)
 
     class Meta:
+        constraints = [
+            models.UniqueConstraint(fields=['tenant', 'reference_id'], name='unique_task_reference_per_tenant')
+        ]
         permissions = [
             ("view_all_tasks", "Can view all tasks in tenant"),
             ("view_own_tasks", "Can view own assigned tasks"),

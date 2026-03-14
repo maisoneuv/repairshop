@@ -297,6 +297,7 @@ class TaskSerializer(serializers.ModelSerializer):
         fields = "__all__"
         extra_kwargs = {
             "tenant": {"read_only": True},
+            "reference_id": {"read_only": True},
             "actual_duration": {"read_only": True},
             "completed_date": {"read_only": True},
             "summary": {"required": False, "allow_blank": True},

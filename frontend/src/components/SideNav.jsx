@@ -16,6 +16,7 @@ import {
     ChevronsLeft,
     ChevronsRight,
 } from "lucide-react";
+import GlobalActionsSection from "../features/CustomActions/GlobalActionsSection";
 
 const NAV_GROUPS = [
     {
@@ -375,6 +376,7 @@ export default function SideNav({ mobileOpen, onMobileClose, collapsed = false, 
                             })}
                         </div>
                     </div>
+                    <GlobalActionsSection collapsed={collapsed} />
                 </div>
                 <div className="p-3 border-t border-gray-100">
                     <button
@@ -444,6 +446,9 @@ export default function SideNav({ mobileOpen, onMobileClose, collapsed = false, 
                                         onNavigate={handleNavigate}
                                     />
                                 ))}
+                                <div className="px-2 pt-2">
+                                    <GlobalActionsSection collapsed={false} />
+                                </div>
                             </nav>
                         </motion.aside>
                     </>

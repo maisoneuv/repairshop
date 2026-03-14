@@ -19,6 +19,7 @@ import ModelDetailLayout from "../components/ModelDetailLayout";
 import WorkitemDetailLayout from "../features/WorkItems/WorkitemDetailLayout";
 import FormDocumentsSection from "../components/FormDocumentsSection";
 import WorkItemSummary from "../components/WorkItemSummary";
+import CustomActionsTab from "../features/CustomActions/CustomActionsTab";
 
 export default function WorkItemDetail() {
     const { id } = useParams();
@@ -316,6 +317,10 @@ export default function WorkItemDetail() {
 
                                     {activeTab === 'documents' && (
                                         <FormDocumentsSection workItemId={workItem.id} />
+                                    )}
+
+                                    {activeTab === 'actions' && (
+                                        <CustomActionsTab target="workitem" targetId={workItem.id} />
                                     )}
                                 </div>
                             )}
