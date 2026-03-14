@@ -662,16 +662,17 @@ class TaskFilter(django_filters.FilterSet):
 
     class Meta:
         model = Task
-        fields = ['work_item', 'assigned_employee', 'status', 'task_type']
+        fields = ['reference_id', 'work_item', 'assigned_employee', 'status', 'task_type']
 
 class TaskViewSet(viewsets.ModelViewSet):
     serializer_class = TaskSerializer
     filter_backends = [filters.SearchFilter, DjangoFilterBackend, filters.OrderingFilter]
     filterset_class = TaskFilter
     search_fields = [
+        'reference_id',
         'summary',
         'description',
-        'work_item__reference_id',  # Search by work item reference ID
+        'work_item__reference_id',
     ]
     ordering_fields = ['created_date', 'summary', 'status', 'assigned_employee', 'task_type__name']
     ordering = ["-created_date"]

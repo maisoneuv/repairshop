@@ -11,6 +11,8 @@ from django.utils import timezone
 from django.shortcuts import get_object_or_404
 
 from tasks.models import WorkItem
+from .models import CustomAction
+from core.models import UserRole
 
 logger = logging.getLogger(__name__)
 
@@ -112,3 +114,85 @@ class SummaryCallbackView(APIView):
                 'message': 'Summary generation failure recorded',
                 'error': error_message
             })
+
+
+class CustomActionListView(APIView):
+    """
+    List active custom actions visible to the current user for a given target.
+
+    GET /api/integrations/custom-actions/?target=workitem
+    GET /api/integrations/custom-actions/?target=task
+    """
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        target = request.query_params.get('target')
+        if target not in ('workitem', 'task', 'global'):
+            return Response(
+                {'error': 'target must be "workitem" or "task"'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        actions = CustomAction.objects.filter(
+            tenant=request.tenant,
+            target=target,
+            is_active=True,
+        )
+
+        # Filter by role: skip actions whose required_role the user doesn't have
+        visible = []
+        for action in actions:
+            if action.required_role is None:
+                visible.append(action)
+            elif UserRole.objects.filter(user=request.user, role=action.required_role).exists():
+                visible.append(action)
+
+        data = [
+            {
+                'id': a.id,
+                'name': a.name,
+                'show_text_input': a.show_text_input,
+                'text_input_label': a.text_input_label,
+            }
+            for a in visible
+        ]
+        return Response(data)
+
+
+class CustomActionExecuteView(APIView):
+    """
+    Execute a custom action for a specific record.
+
+    POST /api/integrations/custom-actions/<pk>/execute/
+    Body: {"target_id": 42, "user_input": "optional text"}
+    """
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, pk):
+        action = get_object_or_404(CustomAction, pk=pk, tenant=request.tenant, is_active=True)
+
+        # Re-check role gate
+        if action.required_role is not None:
+            if not UserRole.objects.filter(user=request.user, role=action.required_role).exists():
+                return Response(
+                    {'error': 'Permission denied'},
+                    status=status.HTTP_403_FORBIDDEN
+                )
+
+        user_input = request.data.get('user_input', '')
+
+        if action.target == 'global':
+            target_id = None
+        else:
+            target_id = request.data.get('target_id')
+            if not target_id:
+                return Response(
+                    {'error': 'target_id is required'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            target_id = int(target_id)
+
+        from integrations.tasks import execute_custom_action
+        execute_custom_action.delay(action.id, target_id, user_input)
+
+        return Response({'status': 'queued'}, status=status.HTTP_202_ACCEPTED)

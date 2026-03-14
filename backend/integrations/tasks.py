@@ -334,6 +334,133 @@ def send_integration_webhook(
         return {'status': 'error', 'message': error_msg}
 
 
+@shared_task(
+    bind=True,
+    autoretry_for=(requests.RequestException,),
+    retry_kwargs={'max_retries': 3, 'countdown': 30},
+    retry_backoff=True,
+    retry_jitter=True,
+    max_retries=3,
+)
+def execute_custom_action(self, action_id: int, target_id=None, user_input: str = ''):
+    """
+    Execute a custom action by sending an HTTP POST to the configured webhook URL.
+    Includes the full record payload (WorkItem or Task) plus the user-entered text.
+    """
+    from integrations.models import CustomAction, IntegrationRequestLog
+
+    try:
+        action = CustomAction.objects.get(id=action_id, is_active=True)
+    except CustomAction.DoesNotExist:
+        logger.error(f"CustomAction {action_id} not found or inactive")
+        return {'status': 'error', 'message': 'Action not found'}
+
+    # Build record payload
+    try:
+        if action.target == 'global':
+            payload = {}
+        elif action.include_record_details:
+            if action.target == 'workitem':
+                from tasks.models import WorkItem
+                from integrations.signals.workitem import build_workitem_payload
+                record = WorkItem.objects.get(pk=target_id, tenant=action.tenant)
+                payload = build_workitem_payload(record, 'custom_action')
+            else:
+                from tasks.models import Task
+                from integrations.signals.task import build_task_payload
+                record = Task.objects.get(pk=target_id, tenant=action.tenant)
+                payload = build_task_payload(record, 'custom_action')
+        else:
+            payload = {action.target: {'id': target_id}}
+    except Exception as exc:
+        logger.error(f"Failed to build payload for custom action {action_id}: {exc}")
+        return {'status': 'error', 'message': f'Failed to load record: {exc}'}
+
+    payload['event_type'] = 'custom_action'
+    payload['action'] = {'id': action.id, 'name': action.name}
+    payload['user_input'] = user_input
+
+    # Prepare headers
+    headers = {
+        'Content-Type': 'application/json',
+        'User-Agent': 'FixedService-Integration/1.0',
+    }
+    if action.headers:
+        headers.update(action.headers)
+
+    logger.info(
+        f"Executing custom action '{action.name}' for {action.target}:{target_id} "
+        f"(attempt {self.request.retries + 1})"
+    )
+
+    start_time = time.time()
+    response = None
+    response_data = None
+
+    try:
+        response = requests.post(
+            action.webhook_url,
+            json=payload,
+            headers=headers,
+            timeout=30,
+        )
+        response_time_ms = int((time.time() - start_time) * 1000)
+
+        try:
+            response_data = response.json()
+        except json.JSONDecodeError:
+            response_data = {'raw_response': response.text}
+
+        request_body, req_truncated = truncate_payload(payload)
+        response_body, resp_truncated = truncate_payload(response_data)
+
+        IntegrationRequestLog.objects.create(
+            tenant=action.tenant,
+            direction='outbound',
+            method='POST',
+            url=action.webhook_url,
+            request_headers=sanitize_headers(headers),
+            request_body=request_body,
+            request_body_truncated=req_truncated,
+            response_status_code=response.status_code,
+            response_headers=dict(response.headers),
+            response_body=response_body,
+            response_body_truncated=resp_truncated,
+            success=response.ok,
+            response_time_ms=response_time_ms,
+            integration=None,
+            integration_sync=None,
+            retry_number=self.request.retries,
+        )
+
+        response.raise_for_status()
+
+    except requests.RequestException as exc:
+        response_time_ms = int((time.time() - start_time) * 1000)
+        if response is None:
+            request_body, req_truncated = truncate_payload(payload)
+            IntegrationRequestLog.objects.create(
+                tenant=action.tenant,
+                direction='outbound',
+                method='POST',
+                url=action.webhook_url,
+                request_headers=sanitize_headers(headers),
+                request_body=request_body,
+                request_body_truncated=req_truncated,
+                response_status_code=None,
+                success=False,
+                error_message=str(exc),
+                response_time_ms=response_time_ms,
+                integration=None,
+                integration_sync=None,
+                retry_number=self.request.retries,
+            )
+        raise
+
+    logger.info(f"Custom action '{action.name}' completed successfully for {action.target}:{target_id}")
+    return {'status': 'success', 'action': action.name}
+
+
 @shared_task
 def retry_failed_syncs(max_retries=3):
     """

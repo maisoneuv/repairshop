@@ -310,3 +310,80 @@ class IntegrationRequestLog(models.Model):
     def __str__(self):
         status = self.response_status_code or 'N/A'
         return f"{self.direction} {self.method} {status} - {self.timestamp}"
+
+
+class CustomAction(models.Model):
+    """
+    Admin-configurable action buttons shown on WorkItem and Task detail pages.
+    When clicked, sends an HTTP POST to the configured webhook URL with full record data.
+    """
+
+    TARGET_CHOICES = [
+        ('workitem', 'Work Item'),
+        ('task', 'Task'),
+        ('global', 'Global (Side Menu)'),
+    ]
+
+    tenant = models.ForeignKey(
+        Tenant,
+        on_delete=models.CASCADE,
+        related_name='custom_actions'
+    )
+    name = models.CharField(
+        max_length=100,
+        help_text="Button label shown to users"
+    )
+    target = models.CharField(
+        max_length=20,
+        choices=TARGET_CHOICES,
+        help_text="Which detail page to show this button on"
+    )
+    webhook_url = models.URLField(
+        max_length=500,
+        help_text="URL to POST to when the button is clicked"
+    )
+    headers = models.JSONField(
+        default=dict,
+        blank=True,
+        help_text="Optional HTTP headers (e.g. {\"Authorization\": \"Bearer token\"})"
+    )
+    show_text_input = models.BooleanField(
+        default=False,
+        help_text="Show a text field above the button for users to enter additional context"
+    )
+    text_input_label = models.CharField(
+        max_length=100,
+        blank=True,
+        default='Additional notes',
+        help_text="Label/placeholder for the text input field"
+    )
+    include_record_details = models.BooleanField(
+        default=True,
+        help_text="Include full record data in the request body. If disabled, only record ID and user input are sent."
+    )
+    is_active = models.BooleanField(
+        default=True,
+        help_text="Enable/disable without deleting"
+    )
+    required_role = models.ForeignKey(
+        'core.Role',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='custom_actions',
+        help_text="If set, only users with this role can see and use this action"
+    )
+    sort_order = models.IntegerField(
+        default=0,
+        help_text="Display order (lower numbers appear first)"
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['sort_order', 'name']
+        indexes = [
+            models.Index(fields=['tenant', 'target', 'is_active']),
+        ]
+
+    def __str__(self):
+        return f"{self.name} ({self.get_target_display()}) — {self.tenant.name}"

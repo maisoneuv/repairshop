@@ -3,7 +3,7 @@ Django admin configuration for Integration models.
 """
 from django.contrib import admin
 from django.utils.html import format_html
-from .models import TenantIntegration, IntegrationSync, IntegrationRequestLog
+from .models import TenantIntegration, IntegrationSync, IntegrationRequestLog, CustomAction
 
 
 @admin.register(TenantIntegration)
@@ -285,3 +285,37 @@ class IntegrationRequestLogAdmin(admin.ModelAdmin):
     def has_delete_permission(self, request, obj=None):
         """Allow deletion for cleanup purposes."""
         return True
+
+
+@admin.register(CustomAction)
+class CustomActionAdmin(admin.ModelAdmin):
+    """Admin interface for configuring custom action buttons on detail pages."""
+
+    list_display = ['name', 'tenant', 'target', 'is_active_badge', 'required_role', 'sort_order', 'created_at']
+    list_filter = ['target', 'is_active', 'tenant']
+    search_fields = ['name', 'tenant__name', 'webhook_url']
+    readonly_fields = ['created_at']
+
+    fieldsets = (
+        ('Basic Information', {
+            'fields': ('tenant', 'name', 'target', 'is_active', 'sort_order', 'required_role')
+        }),
+        ('Webhook Configuration', {
+            'fields': ('webhook_url', 'headers', 'include_record_details'),
+            'description': 'Configure the webhook URL and optional HTTP headers (e.g., {"Authorization": "Bearer token"})'
+        }),
+        ('UI Configuration', {
+            'fields': ('show_text_input', 'text_input_label'),
+            'description': 'Optionally show a text field above the button for users to add context'
+        }),
+        ('Metadata', {
+            'fields': ('created_at',),
+            'classes': ('collapse',)
+        }),
+    )
+
+    def is_active_badge(self, obj):
+        if obj.is_active:
+            return format_html('<span style="color: green; font-weight: bold;">● Active</span>')
+        return format_html('<span style="color: red; font-weight: bold;">● Inactive</span>')
+    is_active_badge.short_description = 'Status'
