@@ -14,6 +14,10 @@ class DeviceSerializer(serializers.ModelSerializer):
         fields = ['id', 'manufacturer', 'model', 'category', 'category_name']
 
     def validate(self, data):
+        # On updates, skip create-only validation
+        if self.instance is not None:
+            return data
+
         request = self.context.get('request')
         unknown_manufacturer = request.data.get('unknown_manufacturer')
         unknown_model = request.data.get('unknown_model')
