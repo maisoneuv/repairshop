@@ -50,7 +50,7 @@ function SectionCard({ title, children, className = "" }) {
   return (
     <div className={`bg-white rounded-xl shadow-lg border border-gray-200 ${className}`}>
       <div className="px-4 md:px-6 py-3 md:py-4 border-b border-gray-100">
-        <h2 className="text-sm font-semibold text-gray-600 uppercase tracking-wider">
+        <h2 className="text-sm font-semibold text-gray-800 uppercase tracking-wider">
           {title}
         </h2>
       </div>
@@ -105,8 +105,10 @@ function NeedsAttentionCard({ data }) {
         </div>
       ) : (
         <>
-          <div className="flex gap-2 mb-4">
+          <div className="flex gap-2 mb-4" role="tablist" aria-label="Attention categories">
             <button
+              role="tab"
+              aria-selected={tab === "overdue"}
               onClick={() => setTab("overdue")}
               className={`px-3 py-1 rounded-full text-xs font-medium border transition-colors ${
                 tab === "overdue"
@@ -117,6 +119,8 @@ function NeedsAttentionCard({ data }) {
               Overdue ({data.overdue.length})
             </button>
             <button
+              role="tab"
+              aria-selected={tab === "unassigned"}
               onClick={() => setTab("unassigned")}
               className={`px-3 py-1 rounded-full text-xs font-medium border transition-colors ${
                 tab === "unassigned"

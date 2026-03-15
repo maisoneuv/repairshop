@@ -13,7 +13,7 @@ export default function AppLayout() {
     const [taskMenuOpen, setTaskMenuOpen] = useState(false);
     const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
     const [mobileSearchOpen, setMobileSearchOpen] = useState(false);
-    const [sidebarCollapsed, setSidebarCollapsed] = useState(true);
+    const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
     const workItemMenuRef = useRef(null);
     const taskMenuRef = useRef(null);
 
@@ -200,9 +200,10 @@ export default function AppLayout() {
                                 <button
                                     type="button"
                                     onClick={() => navigate("/work-items/new")}
+                                    aria-label="Create new work item"
                                     className="p-2 text-gray-600 hover:text-blue-600 border border-gray-200 rounded-lg hover:border-blue-200"
                                 >
-                                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <svg className="w-5 h-5" aria-hidden="true" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
                                     </svg>
                                 </button>

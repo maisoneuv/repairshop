@@ -52,9 +52,7 @@ export default function WorkItemForm({ onCreated }) {
     }, []);
 
     useEffect(() => {
-        console.log(currentTenant);
         if (!loading && employee) {
-            console.log(user);
             setFormData((prev) => ({
                 ...prev,
                 owner: employee.id,        // For validation (schema expects this)
@@ -111,7 +109,6 @@ export default function WorkItemForm({ onCreated }) {
 
     const handleSubmit = async (e) => {
         e.preventDefault();
-        console.log(formData);
 
         const tenantId = currentTenant?.id || null;
 
@@ -148,7 +145,6 @@ export default function WorkItemForm({ onCreated }) {
             newErrors.serial_number = "Please enter a serial number or check 'Device has no serial number'";
         }
 
-        console.log("newErrors", newErrors);
         if (Object.keys(newErrors).length > 0) {
             setFieldErrors(newErrors);
             const firstErrorField = Object.keys(newErrors)[0];
@@ -253,7 +249,6 @@ export default function WorkItemForm({ onCreated }) {
             }
             delete fullData.technician;
 
-            console.log(fullData);
             const newItem = await createWorkItem(fullData);
             onCreated?.(newItem);
             navigate(`/work-items/${newItem.id}`);

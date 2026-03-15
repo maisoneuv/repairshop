@@ -258,6 +258,8 @@ export default function SideNav({ mobileOpen, onMobileClose, collapsed = false, 
                                         type="button"
                                         key={item.key}
                                         onClick={() => navigate(item.path)}
+                                        title={collapsed ? item.label : undefined}
+                                        aria-label={collapsed ? item.label : undefined}
                                         className={`flex items-center gap-3 w-full px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
                                             collapsed ? "justify-center" : ""
                                         } ${
@@ -290,6 +292,8 @@ export default function SideNav({ mobileOpen, onMobileClose, collapsed = false, 
                                     <div key={group.key} className="rounded-xl">
                                         <button
                                             type="button"
+                                            title={collapsed ? group.label : undefined}
+                                            aria-label={collapsed ? group.label : undefined}
                                             onClick={() => {
                                                 if (collapsed) {
                                                     const first = group.children?.[0];
@@ -436,6 +440,26 @@ export default function SideNav({ mobileOpen, onMobileClose, collapsed = false, 
 
                             {/* Nav items */}
                             <nav className="flex-1 overflow-y-auto py-2 space-y-1">
+                                {/* Home link */}
+                                <div className="px-2">
+                                    {PRIMARY_LINKS.map((item) => {
+                                        const Icon = item.icon;
+                                        const active = location.pathname === item.path;
+                                        return (
+                                            <button
+                                                type="button"
+                                                key={item.key}
+                                                onClick={() => handleNavigate(item.path)}
+                                                className={`flex items-center gap-3 w-full px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
+                                                    active ? "text-blue-600 bg-blue-50" : "text-gray-700 hover:bg-gray-50"
+                                                }`}
+                                            >
+                                                <Icon className="w-5 h-5" />
+                                                {item.label}
+                                            </button>
+                                        );
+                                    })}
+                                </div>
                                 {NAV_GROUPS.map((group) => (
                                     <MobileNavGroup
                                         key={group.key}

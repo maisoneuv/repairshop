@@ -28,7 +28,7 @@ function ActionItem({ action, onExecute, state }) {
                 disabled={isLoading}
                 className="flex items-center gap-2 w-full px-2.5 py-2 rounded-md text-sm text-gray-700 hover:bg-gray-50 hover:text-gray-900 transition-colors disabled:opacity-50 text-left"
             >
-                <Zap className="w-3.5 h-3.5 text-indigo-500 shrink-0" />
+                <Zap className="w-3.5 h-3.5 text-blue-500 shrink-0" />
                 <span className="flex-1 truncate">{action.name}</span>
                 {isLoading && <span className="text-xs text-gray-400">Running…</span>}
                 {state === 'success' && <span className="text-xs text-green-600">Sent!</span>}
@@ -42,14 +42,14 @@ function ActionItem({ action, onExecute, state }) {
                         placeholder={action.text_input_label}
                         value={text}
                         onChange={e => setText(e.target.value)}
-                        className="w-full border border-gray-300 rounded-md px-2.5 py-1.5 text-xs text-gray-800 focus:outline-none focus:ring-1 focus:ring-indigo-500 resize-none"
+                        className="w-full border border-gray-300 rounded-md px-2.5 py-1.5 text-xs text-gray-800 focus:outline-none focus:ring-1 focus:ring-blue-500 resize-none"
                     />
                     <div className="flex gap-1.5">
                         <button
                             type="button"
                             onClick={handleRun}
                             disabled={isLoading}
-                            className="px-2.5 py-1 text-xs font-medium text-white bg-indigo-600 rounded hover:bg-indigo-700 disabled:opacity-50 transition-colors"
+                            className="px-2.5 py-1 text-xs font-medium text-white bg-blue-600 rounded hover:bg-blue-700 disabled:opacity-50 transition-colors"
                         >
                             {isLoading ? 'Running…' : 'Run'}
                         </button>

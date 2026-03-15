@@ -150,9 +150,11 @@ export default function WorkItemList() {
                     </Link>
                 </div>
 
-                <div className="flex gap-2 mt-3">
+                <div className="flex gap-2 mt-3" role="tablist" aria-label="Work item view">
                     <button
                         type="button"
+                        role="tab"
+                        aria-selected={view !== "my"}
                         onClick={() => handleViewChange("all")}
                         className={`px-3 py-1.5 rounded-lg text-sm font-medium border ${
                             view !== "my"
@@ -164,6 +166,8 @@ export default function WorkItemList() {
                     </button>
                     <button
                         type="button"
+                        role="tab"
+                        aria-selected={view === "my"}
                         onClick={() => handleViewChange("my")}
                         className={`px-3 py-1.5 rounded-lg text-sm font-medium border ${
                             view === "my"
@@ -269,8 +273,20 @@ export default function WorkItemList() {
                                     <th
                                         key={column.key}
                                         scope="col"
-                                        className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider cursor-pointer"
+                                        tabIndex={0}
+                                        aria-sort={
+                                            sortField === column.key
+                                                ? sortDirection === "asc" ? "ascending" : "descending"
+                                                : "none"
+                                        }
+                                        className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider cursor-pointer select-none focus:outline-none focus:ring-2 focus:ring-inset focus:ring-blue-500"
                                         onClick={() => handleSort(column.key)}
+                                        onKeyDown={(e) => {
+                                            if (e.key === "Enter" || e.key === " ") {
+                                                e.preventDefault();
+                                                handleSort(column.key);
+                                            }
+                                        }}
                                     >
                                         <span className="inline-flex items-center gap-1">
                                             {column.label}
@@ -279,6 +295,7 @@ export default function WorkItemList() {
                                                     className={`h-3 w-3 ${sortDirection === "asc" ? "transform rotate-180" : ""}`}
                                                     viewBox="0 0 20 20"
                                                     fill="currentColor"
+                                                    aria-hidden="true"
                                                 >
                                                     <path d="M6 8l4 4 4-4" />
                                                 </svg>

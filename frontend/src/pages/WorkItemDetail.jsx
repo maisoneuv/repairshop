@@ -238,7 +238,7 @@ export default function WorkItemDetail() {
         return (
             <div className="min-h-screen flex items-center justify-center">
                 <div className="text-center">
-                    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600 mx-auto mb-4"></div>
+                    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
                     <p className="text-gray-600">Loading work item...</p>
                 </div>
             </div>
@@ -345,7 +345,7 @@ export default function WorkItemDetail() {
                                         <div className="flex items-center justify-between">
                                             <Link
                                                 to={`/tasks/${task.id}`}
-                                                className="text-indigo-600 hover:text-indigo-800 font-medium text-sm transition-colors"
+                                                className="text-blue-600 hover:text-blue-800 font-medium text-sm transition-colors"
                                             >
                                                 {`#${task.id} ${task.task_type?.name}` || task.summary || `Task #${task.id}`}
                                             </Link>

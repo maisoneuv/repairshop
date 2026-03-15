@@ -81,8 +81,8 @@ export default function WorkItemDetailHeader({ workItem, schema, onEdit, onStatu
     };
 
     const formatCurrency = (amount) => {
-        if (!amount) return 'Not set';
-        return `$${parseFloat(amount).toFixed(2)}`;
+        if (amount == null || amount === '') return '—';
+        return parseFloat(amount).toLocaleString('pl-PL', { minimumFractionDigits: 2 }) + ' PLN';
     };
 
     const highlights = [
@@ -104,12 +104,12 @@ export default function WorkItemDetailHeader({ workItem, schema, onEdit, onStatu
         {
             label: 'Estimated Price',
             value: formatCurrency(workItem.estimated_price),
-            subValue: 'Subject to diagnosis'
+            subValue: workItem.estimated_price ? 'Subject to diagnosis' : ''
         },
         {
-            label: 'Already Paid',
+            label: 'Payment Received',
             value: formatCurrency(workItem.final_price),
-            subValue: workItem.payment_method || 'No payment recorded'
+            subValue: workItem.payment_method || 'None recorded'
         }
     ];
 
@@ -132,8 +132,8 @@ export default function WorkItemDetailHeader({ workItem, schema, onEdit, onStatu
                 <div className="flex-1">
                     <div className="flex flex-col gap-2">
                         <div className="flex flex-col sm:flex-row sm:items-center sm:gap-2">
-                            <h1 className="text-lg sm:text-xl font-bold mb-1 sm:mb-0 leading-tight">
-                                Work Item #{workItem.reference_id || workItem.id}
+                            <h1 className="text-xl sm:text-2xl font-bold mb-1 sm:mb-0 leading-tight tracking-tight">
+                                {workItem.reference_id || `#${workItem.id}`}
                             </h1>
                             <div className="flex flex-wrap gap-2">
                                 <div className="relative" ref={dropdownRef}>
@@ -187,7 +187,7 @@ export default function WorkItemDetailHeader({ workItem, schema, onEdit, onStatu
                     <button
                         onClick={onEdit}
                         type="button"
-                        className="text-sm text-blue-600 hover:underline"
+                        className="text-sm font-medium text-gray-700 border border-gray-300 rounded-lg px-3 py-1.5 hover:border-gray-400 hover:bg-gray-50 transition-colors"
                     >
                         Edit
                     </button>

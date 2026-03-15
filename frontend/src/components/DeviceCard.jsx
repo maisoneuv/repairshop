@@ -72,7 +72,7 @@ export default function DeviceCard({ device, serialNumber, onEdit, onUpdated, wo
                     {workItemId && !isAdding && (
                         <button
                             onClick={() => setIsAdding(true)}
-                            className="text-indigo-600 hover:text-indigo-800 font-medium text-sm transition-colors"
+                            className="text-blue-600 hover:text-blue-800 font-medium text-sm transition-colors"
                         >
                             Add Device
                         </button>
@@ -137,7 +137,7 @@ export default function DeviceCard({ device, serialNumber, onEdit, onUpdated, wo
                                 type="button"
                                 onClick={handleAddDevice}
                                 disabled={!selectedDevice || (!newSerialNumber && !noSerialNumber) || isSubmitting}
-                                className="text-sm px-3 py-1.5 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                className="text-sm px-3 py-1.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                             >
                                 {isSubmitting ? 'Saving...' : 'Save'}
                             </button>
@@ -201,7 +201,7 @@ export default function DeviceCard({ device, serialNumber, onEdit, onUpdated, wo
                 <h3 className="text-base font-semibold text-gray-900">Device</h3>
                 <button
                     onClick={handleEdit}
-                    className="text-indigo-600 hover:text-indigo-800 font-medium text-sm transition-colors"
+                    className="text-blue-600 hover:text-blue-800 font-medium text-sm transition-colors"
                 >
                     Edit
                 </button>

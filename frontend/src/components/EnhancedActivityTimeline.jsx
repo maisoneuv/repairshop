@@ -100,7 +100,7 @@ export default function EnhancedActivityTimeline({ model, objectId, refreshKey, 
             <form onSubmit={handleSubmit} className="mb-6">
                 <div className="mb-3">
                     <textarea
-                        className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-transparent resize-none"
+                        className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
                         rows="3"
                         placeholder="Add a note..."
                         value={newNote}
@@ -117,9 +117,9 @@ export default function EnhancedActivityTimeline({ model, objectId, refreshKey, 
                     <button
                         type="submit"
                         disabled={isSubmitting || !newNote.trim()}
-                        className="bg-indigo-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                        className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                     >
-                        {isSubmitting ? 'Posting...' : 'Post Note'}
+                        {isSubmitting ? 'Adding…' : 'Post Note'}
                     </button>
                 </div>
             </form>

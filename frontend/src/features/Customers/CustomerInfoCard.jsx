@@ -44,7 +44,7 @@ export default function CustomerInfoCard({ customer, onUpdated }) {
                     <p>
                         <a
                             href={`mailto:${customer.email}`}
-                            className="text-indigo-600 hover:text-indigo-800 transition-colors"
+                            className="text-blue-600 hover:text-blue-800 transition-colors"
                         >
                             {customer.email}
                         </a>
@@ -53,7 +53,7 @@ export default function CustomerInfoCard({ customer, onUpdated }) {
                         <p>
                             <a
                                 href={`tel:${customer.phone_number}`}
-                                className="text-indigo-600 hover:text-indigo-800 transition-colors"
+                                className="text-blue-600 hover:text-blue-800 transition-colors"
                             >
                                 {formatPhone(customer.phone_number)}
                             </a>

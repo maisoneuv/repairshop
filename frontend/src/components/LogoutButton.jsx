@@ -1,14 +1,15 @@
-import { useContext } from "react";
-import { Button } from "@chakra-ui/react";
-import { useUser} from "../context/UserContext";
+import { useUser } from "../context/UserContext";
 
 export default function LogoutButton() {
     const { logout } = useUser();
 
     return (
-        <Button colorScheme="blue" variant='outline' size='sm'
-                onClick={logout}>
+        <button
+            type="button"
+            onClick={logout}
+            className="px-3 py-1.5 text-sm font-medium text-blue-600 border border-blue-600 rounded-lg hover:bg-blue-50 transition-colors"
+        >
             Logout
-        </Button>
+        </button>
     );
 }

@@ -54,13 +54,13 @@ export default function CustomerCard({ customer, onEdit, onUpdated }) {
             <div className="flex items-center justify-between mb-3">
                 <Link
                     to={`/customers/${customer.id}`}
-                    className="text-base font-semibold text-gray-900 hover:text-indigo-600 transition-colors"
+                    className="text-base font-semibold text-gray-900 hover:text-blue-600 transition-colors"
                 >
                     Customer
                 </Link>
                 <button
                     onClick={handleEdit}
-                    className="text-indigo-600 hover:text-indigo-800 font-medium text-sm transition-colors"
+                    className="text-blue-600 hover:text-blue-800 font-medium text-sm transition-colors"
                 >
                     Edit
                 </button>
@@ -72,7 +72,7 @@ export default function CustomerCard({ customer, onEdit, onUpdated }) {
                     <label className="block text-sm font-medium text-gray-600 mb-1">Name</label>
                     <Link
                         to={`/customers/${customer.id}`}
-                        className="text-sm text-gray-900 font-medium hover:text-indigo-600 transition-colors inline-block"
+                        className="text-sm text-gray-900 font-medium hover:text-blue-600 transition-colors inline-block"
                     >
                         {customer.first_name} {customer.last_name}
                     </Link>
@@ -85,7 +85,7 @@ export default function CustomerCard({ customer, onEdit, onUpdated }) {
                         <div className="text-sm text-gray-900">
                             <a
                                 href={`mailto:${customer.email}`}
-                                className="text-indigo-600 hover:text-indigo-800 transition-colors"
+                                className="text-blue-600 hover:text-blue-800 transition-colors"
                             >
                                 {customer.email}
                             </a>
@@ -98,7 +98,7 @@ export default function CustomerCard({ customer, onEdit, onUpdated }) {
                             {customer.phone_number ? (
                                 <a
                                     href={`tel:${customer.phone_number}`}
-                                    className="text-indigo-600 hover:text-indigo-800 transition-colors"
+                                    className="text-blue-600 hover:text-blue-800 transition-colors"
                                 >
                                     {formatPhone(customer.phone_number)}
                                 </a>
