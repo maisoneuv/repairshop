@@ -594,8 +594,20 @@ class CategoryAPISearchView(generics.ListAPIView):
 
 
 class CategoryCreateListView(generics.ListCreateAPIView):
-    queryset = Category.objects.all()
     serializer_class = CategorySerializer
+
+    def get_queryset(self):
+        tenant = getattr(self.request, 'tenant', None)
+        if not tenant:
+            return Category.objects.none()
+        return Category.objects.filter(tenant=tenant)
+
+    def perform_create(self, serializer):
+        tenant = getattr(self.request, 'tenant', None)
+        if not tenant:
+            from rest_framework.exceptions import ValidationError
+            raise ValidationError({"detail": "Tenant required"})
+        serializer.save(tenant=tenant)
 
 
 # ── Legacy template views (kept for backward compatibility) ─────────────
