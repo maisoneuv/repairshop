@@ -34,6 +34,11 @@ export default function DeviceForm({ onSuccess }) {
     const handleSubmit = async (e) => {
         e.preventDefault();
 
+        if (!formData.category) {
+            setError("Category is required.");
+            return;
+        }
+
         const payload = {
             ...formData,
             model: unknownModel ? "" : formData.model,
@@ -106,13 +111,14 @@ export default function DeviceForm({ onSuccess }) {
             </div>
 
             <div>
-                <label className="block text-sm font-medium">Category</label>
+                <label className="block text-sm font-medium">Category <span className="text-red-500">*</span></label>
                 <AutocompleteInput
                     searchFn={searchCategories}
                     value={selectedCategory}
                     onSelect={(item) => {
                         setSelectedCategory(item);
                         handleChange({ target: { name: "category", value: item.id } });
+                        setError("");
                     }}
                     onCreateNewItem={async (name) => {
                         try {
