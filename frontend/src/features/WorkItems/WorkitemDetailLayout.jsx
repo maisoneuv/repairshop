@@ -44,18 +44,6 @@ const WorkItemDetailLayout = [
         ]
     },
     {
-        section: "Assignment",
-        groups: [
-            {
-                fields: [
-                    { name: "owner", label: "Owner", type: "foreignkey", editable: true },
-                    { name: "technician", label: "Technician", type: "foreignkey", editable: true },
-                    { name: "due_date", label: "Due Date", type: "date", editable: true },
-                ]
-            }
-        ]
-    },
-    {
         section: "Logistics & Fulfillment",
         groups: [
             {

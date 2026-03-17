@@ -932,16 +932,37 @@ class DashboardView(APIView):
         week_start = today - timedelta(days=today.weekday())  # Monday
         month_start = today.replace(day=1)
 
+        # Resolve current employee and role
+        try:
+            current_employee = Employee.objects.get(user=request.user, tenant=tenant)
+            is_manager = current_employee.role == 'Manager'
+        except Employee.DoesNotExist:
+            current_employee = None
+            is_manager = True
+
+        # Resolve status picklist values (single query)
+        status_pv_by_name = {
+            pv.name.lower(): pv.value
+            for pv in PicklistValue.objects.filter(
+                tenant=tenant, category='workitem_status', is_active=True
+            )
+        }
+        resolved_status = status_pv_by_name.get('resolved')
+        ready_status = status_pv_by_name.get('naprawione')
+
         # Base querysets
         wi_qs = WorkItem.objects.filter(tenant=tenant)
-        open_qs = wi_qs.filter(closed_date__isnull=True)
+        if resolved_status:
+            open_qs = wi_qs.exclude(status=resolved_status)
+        else:
+            open_qs = wi_qs.filter(closed_date__isnull=True)
         closed_qs = wi_qs.filter(closed_date__isnull=False)
 
-        # Find "ready for pickup" status value from picklist
-        ready_status = PicklistValue.objects.filter(
-            tenant=tenant, category='workitem_status', is_active=True,
-            name__icontains='ready'
-        ).values_list('value', flat=True).first()
+        # Role-based scoping: non-managers see only their own work items
+        if not is_manager and current_employee:
+            wi_qs = wi_qs.filter(technician=current_employee)
+            open_qs = open_qs.filter(technician=current_employee)
+            closed_qs = closed_qs.filter(technician=current_employee)
 
         # --- KPIs (single query with conditional aggregation) ---
         kpi_filters = {
@@ -1002,6 +1023,18 @@ class DashboardView(APIView):
                 'customer__first_name', 'customer__last_name',
             )
         )
+        overdue_tasks = list(
+            Task.objects
+            .filter(tenant=tenant, due_date__lt=today)
+            .exclude(status='Done')
+            .order_by('due_date')[:10]
+            .values(
+                'id', 'summary', 'status', 'due_date',
+                'work_item__id', 'work_item__reference_id',
+                'assigned_employee__user__first_name',
+                'assigned_employee__user__last_name',
+            )
+        )
 
         # --- Recent Notes (batch-fetch work item references) ---
         workitem_ct = ContentType.objects.get_for_model(WorkItem)
@@ -1016,7 +1049,7 @@ class DashboardView(APIView):
                 Q(content_type=task_ct, object_id__in=tenant_task_ids)
             )
             .select_related('author', 'content_type')
-            .order_by('-created_at')[:15]
+            .order_by('-created_at')[:30]
         )
 
         # Collect IDs for batch lookup
@@ -1075,11 +1108,10 @@ class DashboardView(APIView):
 
         # --- My Open Tasks ---
         my_tasks = []
-        try:
-            employee = Employee.objects.get(user=request.user, tenant=tenant)
+        if current_employee:
             my_tasks_qs = (
                 Task.objects
-                .filter(tenant=tenant, assigned_employee=employee)
+                .filter(tenant=tenant, assigned_employee=current_employee)
                 .exclude(status='Done')
                 .select_related('work_item', 'task_type')
                 .order_by('due_date', '-created_date')[:10]
@@ -1096,8 +1128,6 @@ class DashboardView(APIView):
                         task.work_item.reference_id if task.work_item else None
                     ),
                 })
-        except Employee.DoesNotExist:
-            pass
 
         # --- Financial Summary ---
         # Cash register balances (annotated to avoid N+1)
@@ -1130,25 +1160,48 @@ class DashboardView(APIView):
             'revenue_month': str(revenue['month'] or Decimal('0.00')),
         }
 
-        # --- Technician Workload ---
+        # --- Technician Workload (open tasks per assignee) ---
         tech_workload = list(
-            open_qs
-            .filter(technician__isnull=False)
+            Task.objects
+            .filter(tenant=tenant, assigned_employee__isnull=False)
+            .exclude(status='Done')
             .values(
-                'technician__id',
-                'technician__user__first_name',
-                'technician__user__last_name',
+                'assigned_employee__id',
+                'assigned_employee__user__first_name',
+                'assigned_employee__user__last_name',
             )
             .annotate(open_count=Count('id'))
             .order_by('-open_count')
         )
         workload = [
             {
-                'technician_id': tw['technician__id'],
-                'name': f"{tw['technician__user__first_name']} {tw['technician__user__last_name']}".strip(),
+                'technician_id': tw['assigned_employee__id'],
+                'name': f"{tw['assigned_employee__user__first_name']} {tw['assigned_employee__user__last_name']}".strip(),
                 'open_count': tw['open_count'],
             }
             for tw in tech_workload
+        ]
+
+        # --- Tasks Overdue Per Assignee ---
+        tasks_overdue_raw = list(
+            Task.objects
+            .filter(tenant=tenant, assigned_employee__isnull=False, due_date__lt=today)
+            .exclude(status='Done')
+            .values(
+                'assigned_employee__id',
+                'assigned_employee__user__first_name',
+                'assigned_employee__user__last_name',
+            )
+            .annotate(overdue_count=Count('id'))
+            .order_by('-overdue_count')
+        )
+        tasks_overdue_by_assignee = [
+            {
+                'employee_id': t['assigned_employee__id'],
+                'name': f"{t['assigned_employee__user__first_name']} {t['assigned_employee__user__last_name']}".strip(),
+                'overdue_count': t['overdue_count'],
+            }
+            for t in tasks_overdue_raw
         ]
 
         return Response({
@@ -1157,9 +1210,11 @@ class DashboardView(APIView):
             'needs_attention': {
                 'overdue': overdue_items,
                 'unassigned': unassigned_items,
+                'overdue_tasks': overdue_tasks,
             },
             'recent_notes': recent_notes,
             'my_tasks': my_tasks,
             'financial': financial,
             'technician_workload': workload,
+            'tasks_overdue_by_assignee': tasks_overdue_by_assignee,
         })

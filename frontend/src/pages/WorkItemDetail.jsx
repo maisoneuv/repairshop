@@ -175,16 +175,13 @@ export default function WorkItemDetail() {
 
     const handleStatusChange = async (newStatus) => {
         if (!workItem) return;
-        console.log('Updating status to:', newStatus);
         try {
             const updated = await updateWorkItemField(workItem.id, { status: newStatus });
-            console.log('Status updated successfully:', updated);
             setWorkItem((prev) => ({ ...prev, ...updated }));
             setFormData((prev) => ({ ...prev, ...updated }));
             setNotesRefreshKey((k) => k + 1);
         } catch (err) {
             console.error("Failed to update status:", err);
-            alert('Failed to update status. Please check the console for details.');
         }
     };
 
@@ -231,7 +228,6 @@ export default function WorkItemDetail() {
 
     const handleNewTask = () => {
         // TODO: Implement new task functionality
-        console.log("Create new task");
     };
 
     if (!schema || !workItem) {
@@ -270,7 +266,7 @@ export default function WorkItemDetail() {
                             />
                             <DeviceCard
                                 device={workItem.deviceDetails}
-                                onEdit={() => console.log('Edit device')}
+                                onEdit={() => {}}
                                 onUpdated={handleDeviceUpdated}
                                 workItemId={workItem.id}
                             />

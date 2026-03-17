@@ -140,7 +140,7 @@ export default function AutocompleteInput({
     return (
         <div className={className !== undefined ? className : "mb-6"}>
             {label && (
-                <label htmlFor={inputId} className="block text-sm font-medium text-gray-700 mb-2">
+                <label htmlFor={inputId} className="block text-sm font-medium text-gray-700 mb-1">
                     {label}
                     {required && <span className="text-red-500 ml-1">*</span>}
                 </label>
@@ -149,7 +149,7 @@ export default function AutocompleteInput({
             <input
                 id={inputId}
                 type="text"
-                className={inputClassName || "w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"}
+                className={inputClassName || "w-full border border-gray-300 rounded px-2.5 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-transparent"}
                 value={query}
                 placeholder={placeholder}
                 onChange={(e) => {

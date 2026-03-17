@@ -17,7 +17,7 @@ function timeAgo(isoString) {
 
 function formatDate(val) {
   if (!val) return "—";
-  return new Date(val).toLocaleDateString("pl-PL");
+  return new Date(val).toLocaleDateString();
 }
 
 /* ─── small presentational helpers ─── */
@@ -79,98 +79,161 @@ function StatusPipeline({ pipeline }) {
     <SectionCard title="Status Pipeline">
       <div className="flex gap-3 overflow-x-auto pb-1">
         {pipeline.map((s) => (
-          <div
+          <Link
             key={s.status}
-            className={`flex-shrink-0 px-4 py-2.5 rounded-lg border text-sm font-medium ${getStatusClasses(s.color)}`}
+            to={`/work-items?status=${encodeURIComponent(s.status)}`}
+            className={`flex-shrink-0 px-4 py-2.5 rounded-lg border text-sm font-medium hover:opacity-80 transition-opacity ${getStatusClasses(s.color)}`}
           >
             <span className="font-bold mr-1.5">{s.count}</span>
             {s.name}
-          </div>
+          </Link>
         ))}
       </div>
     </SectionCard>
   );
 }
 
-function NeedsAttentionCard({ data }) {
+function NeedsAttentionCard({ data, myTasks }) {
   const [tab, setTab] = useState("overdue");
-  const items = tab === "overdue" ? data.overdue : data.unassigned;
-  const isEmpty = data.overdue.length === 0 && data.unassigned.length === 0;
+
+  const tabs = [
+    { id: "overdue", label: `Overdue (${data.overdue.length})`, activeClass: "bg-rose-50 text-rose-700 border-rose-200" },
+    { id: "unassigned", label: `Unassigned (${data.unassigned.length})`, activeClass: "bg-amber-50 text-amber-700 border-amber-200" },
+    { id: "overdue_tasks", label: `Overdue Tasks (${data.overdue_tasks?.length ?? 0})`, activeClass: "bg-orange-50 text-orange-700 border-orange-200" },
+    { id: "my_tasks", label: `My Tasks (${myTasks?.length ?? 0})`, activeClass: "bg-blue-50 text-blue-700 border-blue-200" },
+  ];
+
+  const items = (tab === "overdue" || tab === "unassigned") ? (tab === "overdue" ? data.overdue : data.unassigned) : null;
+  const overdueTasks = tab === "overdue_tasks" ? (data.overdue_tasks ?? []) : null;
+  const tasks = tab === "my_tasks" ? (myTasks ?? []) : null;
 
   return (
     <SectionCard title="Needs Attention">
-      {isEmpty ? (
-        <div className="py-6 text-center">
-          <p className="text-emerald-600 font-medium text-sm">All clear — nothing needs attention</p>
-        </div>
-      ) : (
-        <>
-          <div className="flex gap-2 mb-4" role="tablist" aria-label="Attention categories">
-            <button
-              role="tab"
-              aria-selected={tab === "overdue"}
-              onClick={() => setTab("overdue")}
-              className={`px-3 py-1 rounded-full text-xs font-medium border transition-colors ${
-                tab === "overdue"
-                  ? "bg-rose-50 text-rose-700 border-rose-200"
-                  : "bg-gray-50 text-gray-500 border-gray-200 hover:bg-gray-100"
-              }`}
-            >
-              Overdue ({data.overdue.length})
-            </button>
-            <button
-              role="tab"
-              aria-selected={tab === "unassigned"}
-              onClick={() => setTab("unassigned")}
-              className={`px-3 py-1 rounded-full text-xs font-medium border transition-colors ${
-                tab === "unassigned"
-                  ? "bg-amber-50 text-amber-700 border-amber-200"
-                  : "bg-gray-50 text-gray-500 border-gray-200 hover:bg-gray-100"
-              }`}
-            >
-              Unassigned ({data.unassigned.length})
-            </button>
-          </div>
+      <div className="flex gap-2 mb-4" role="tablist" aria-label="Attention categories">
+        {tabs.map((t) => (
+          <button
+            key={t.id}
+            role="tab"
+            aria-selected={tab === t.id}
+            onClick={() => setTab(t.id)}
+            className={`px-3 py-1 rounded-full text-xs font-medium border transition-colors ${
+              tab === t.id ? t.activeClass : "bg-gray-50 text-gray-500 border-gray-200 hover:bg-gray-100"
+            }`}
+          >
+            {t.label}
+          </button>
+        ))}
+      </div>
 
-          {items.length === 0 ? (
-            <EmptyState message={`No ${tab} items`} />
-          ) : (
-            <ul className="space-y-2 max-h-64 overflow-y-auto">
-              {items.map((item) => {
-                const customerName = [item.customer__first_name, item.customer__last_name]
-                  .filter(Boolean)
-                  .join(" ");
-                return (
-                  <li key={item.id}>
-                    <Link
-                      to={`/work-items/${item.id}`}
-                      className="flex items-center justify-between py-2 px-3 rounded-lg hover:bg-gray-50 transition-colors"
-                    >
-                      <div className="min-w-0">
-                        <span className="text-sm font-medium text-blue-600">
-                          {item.reference_id}
+      {overdueTasks !== null ? (
+        overdueTasks.length === 0 ? (
+          <EmptyState message="No overdue tasks" />
+        ) : (
+          <ul className="space-y-2 max-h-64 overflow-y-auto">
+            {overdueTasks.map((task) => {
+              const assignee = [task.assigned_employee__user__first_name, task.assigned_employee__user__last_name]
+                .filter(Boolean).join(" ");
+              return (
+                <li key={task.id}>
+                  <Link
+                    to={`/tasks/${task.id}`}
+                    className="flex items-center justify-between py-2 px-3 rounded-lg hover:bg-gray-50 transition-colors"
+                  >
+                    <div className="min-w-0">
+                      <span className="text-sm font-medium text-gray-800 truncate">
+                        {task.summary || `Task #${task.id}`}
+                      </span>
+                      {task["work_item__reference_id"] && (
+                        <span className="text-xs text-blue-600 ml-2">{task["work_item__reference_id"]}</span>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-2 flex-shrink-0 ml-2">
+                      {assignee && (
+                        <span className="text-xs text-gray-500">{assignee}</span>
+                      )}
+                      {task.due_date && (
+                        <span className="text-xs text-rose-500 font-medium">
+                          Due {formatDate(task.due_date)}
                         </span>
-                        {customerName && (
-                          <span className="text-sm text-gray-500 ml-2">{customerName}</span>
-                        )}
-                      </div>
-                      <div className="text-xs text-gray-400 flex-shrink-0 ml-2">
-                        {tab === "overdue" && item.due_date && (
-                          <span className="text-rose-500 font-medium">
-                            Due {formatDate(item.due_date)}
-                          </span>
-                        )}
-                        {tab === "unassigned" && item.created_date && (
-                          <span>{timeAgo(item.created_date)}</span>
-                        )}
-                      </div>
-                    </Link>
-                  </li>
-                );
-              })}
-            </ul>
-          )}
-        </>
+                      )}
+                    </div>
+                  </Link>
+                </li>
+              );
+            })}
+          </ul>
+        )
+      ) : tasks !== null ? (
+        tasks.length === 0 ? (
+          <EmptyState message="No tasks assigned to you" />
+        ) : (
+          <ul className="space-y-2 max-h-64 overflow-y-auto">
+            {tasks.map((task) => (
+              <li key={task.id}>
+                <Link
+                  to={`/tasks/${task.id}`}
+                  className="flex items-center justify-between py-2 px-3 rounded-lg hover:bg-gray-50 transition-colors"
+                >
+                  <div className="min-w-0">
+                    <span className="text-sm font-medium text-gray-800 truncate">
+                      {task.summary || `Task #${task.id}`}
+                    </span>
+                    {task.work_item_reference_id && (
+                      <span className="text-xs text-blue-600 ml-2">{task.work_item_reference_id}</span>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-2 flex-shrink-0 ml-2">
+                    <span className="text-xs px-2 py-0.5 rounded-full bg-gray-100 text-gray-600 border border-gray-200">
+                      {task.status}
+                    </span>
+                    {task.due_date && (
+                      <span className={`text-xs ${new Date(task.due_date) < new Date() ? "text-rose-500 font-medium" : "text-gray-400"}`}>
+                        {formatDate(task.due_date)}
+                      </span>
+                    )}
+                  </div>
+                </Link>
+              </li>
+            ))}
+          </ul>
+        )
+      ) : items.length === 0 ? (
+        <EmptyState message={`No ${tab} items`} />
+      ) : (
+        <ul className="space-y-2 max-h-64 overflow-y-auto">
+          {items.map((item) => {
+            const customerName = [item.customer__first_name, item.customer__last_name]
+              .filter(Boolean)
+              .join(" ");
+            return (
+              <li key={item.id}>
+                <Link
+                  to={`/work-items/${item.id}`}
+                  className="flex items-center justify-between py-2 px-3 rounded-lg hover:bg-gray-50 transition-colors"
+                >
+                  <div className="min-w-0">
+                    <span className="text-sm font-medium text-blue-600">
+                      {item.reference_id}
+                    </span>
+                    {customerName && (
+                      <span className="text-sm text-gray-500 ml-2">{customerName}</span>
+                    )}
+                  </div>
+                  <div className="text-xs text-gray-400 flex-shrink-0 ml-2">
+                    {tab === "overdue" && item.due_date && (
+                      <span className="text-rose-500 font-medium">
+                        Due {formatDate(item.due_date)}
+                      </span>
+                    )}
+                    {tab === "unassigned" && item.created_date && (
+                      <span>{timeAgo(item.created_date)}</span>
+                    )}
+                  </div>
+                </Link>
+              </li>
+            );
+          })}
+        </ul>
       )}
     </SectionCard>
   );
@@ -213,97 +276,6 @@ function RecentNotesCard({ notes }) {
           </li>
         ))}
       </ul>
-    </SectionCard>
-  );
-}
-
-function MyOpenTasksCard({ tasks }) {
-  if (!tasks || tasks.length === 0) {
-    return (
-      <SectionCard title="My Open Tasks">
-        <EmptyState message="No tasks assigned to you" />
-      </SectionCard>
-    );
-  }
-  return (
-    <SectionCard title="My Open Tasks">
-      {/* Mobile cards */}
-      <div className="md:hidden space-y-2">
-        {tasks.map((task) => (
-          <Link
-            key={task.id}
-            to={`/tasks/${task.id}`}
-            className="block py-2 px-3 rounded-lg hover:bg-gray-50 transition-colors"
-          >
-            <div className="flex items-center justify-between">
-              <span className="text-sm font-medium text-gray-800 truncate">
-                {task.summary || `Task #${task.id}`}
-              </span>
-              {task.task_type && (
-                <span className="text-xs text-gray-400 ml-2 flex-shrink-0">{task.task_type}</span>
-              )}
-            </div>
-            <div className="flex items-center gap-2 mt-1">
-              <span className="text-xs px-2 py-0.5 rounded-full bg-gray-100 text-gray-600 border border-gray-200">
-                {task.status}
-              </span>
-              {task.work_item_reference_id && (
-                <span className="text-xs text-blue-600">{task.work_item_reference_id}</span>
-              )}
-              {task.due_date && (
-                <span className={`text-xs ${new Date(task.due_date) < new Date() ? "text-rose-500 font-medium" : "text-gray-400"}`}>
-                  Due {formatDate(task.due_date)}
-                </span>
-              )}
-            </div>
-          </Link>
-        ))}
-      </div>
-
-      {/* Desktop table */}
-      <table className="hidden md:table w-full text-sm">
-        <thead>
-          <tr className="text-left text-xs text-gray-500 uppercase tracking-wider">
-            <th className="pb-2 font-medium">Task</th>
-            <th className="pb-2 font-medium">Type</th>
-            <th className="pb-2 font-medium">Status</th>
-            <th className="pb-2 font-medium">Work Item</th>
-            <th className="pb-2 font-medium text-right">Due Date</th>
-          </tr>
-        </thead>
-        <tbody className="divide-y divide-gray-100">
-          {tasks.map((task) => (
-            <tr key={task.id} className="hover:bg-gray-50">
-              <td className="py-2">
-                <Link to={`/tasks/${task.id}`} className="text-blue-600 hover:underline">
-                  {task.summary || `Task #${task.id}`}
-                </Link>
-              </td>
-              <td className="py-2 text-gray-500">{task.task_type || "—"}</td>
-              <td className="py-2">
-                <span className="text-xs px-2 py-0.5 rounded-full bg-gray-100 text-gray-600 border border-gray-200">
-                  {task.status}
-                </span>
-              </td>
-              <td className="py-2">
-                {task.work_item_reference_id ? (
-                  <Link
-                    to={`/work-items/${task.work_item_id}`}
-                    className="text-blue-600 hover:underline text-xs"
-                  >
-                    {task.work_item_reference_id}
-                  </Link>
-                ) : (
-                  "—"
-                )}
-              </td>
-              <td className={`py-2 text-right ${task.due_date && new Date(task.due_date) < new Date() ? "text-rose-500 font-medium" : "text-gray-500"}`}>
-                {task.due_date ? formatDate(task.due_date) : "—"}
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
     </SectionCard>
   );
 }
@@ -352,6 +324,46 @@ function FinancialSummaryCard({ data }) {
   );
 }
 
+function TasksOverdueByAssigneeCard({ data }) {
+  if (!data || data.length === 0) {
+    return (
+      <SectionCard title="Tasks Overdue by Assignee">
+        <EmptyState message="No overdue tasks" />
+      </SectionCard>
+    );
+  }
+
+  const maxCount = Math.max(...data.map((d) => d.overdue_count), 1);
+
+  return (
+    <SectionCard title="Tasks Overdue by Assignee">
+      <ul className="space-y-3">
+        {data.map((assignee) => (
+          <li key={assignee.employee_id}>
+            <Link
+              to={`/tasks/all?assigned_employee=${assignee.employee_id}`}
+              className="block hover:opacity-80 transition-opacity"
+            >
+              <div className="flex items-center justify-between mb-1">
+                <span className="text-sm font-medium text-gray-700">{assignee.name}</span>
+                <span className="text-sm font-semibold text-rose-600">
+                  {assignee.overdue_count} overdue
+                </span>
+              </div>
+              <div className="w-full bg-gray-100 rounded-full h-2">
+                <div
+                  className="bg-rose-400 h-2 rounded-full transition-all"
+                  style={{ width: `${(assignee.overdue_count / maxCount) * 100}%` }}
+                />
+              </div>
+            </Link>
+          </li>
+        ))}
+      </ul>
+    </SectionCard>
+  );
+}
+
 function TechnicianWorkloadCard({ workload }) {
   if (!workload || workload.length === 0) {
     return (
@@ -368,18 +380,23 @@ function TechnicianWorkloadCard({ workload }) {
       <ul className="space-y-3">
         {workload.map((tech) => (
           <li key={tech.technician_id}>
-            <div className="flex items-center justify-between mb-1">
-              <span className="text-sm font-medium text-gray-700">{tech.name}</span>
-              <span className="text-sm font-semibold text-gray-800">
-                {tech.open_count} open
-              </span>
-            </div>
-            <div className="w-full bg-gray-100 rounded-full h-2">
-              <div
-                className="bg-blue-500 h-2 rounded-full transition-all"
-                style={{ width: `${(tech.open_count / maxCount) * 100}%` }}
-              />
-            </div>
+            <Link
+              to={`/tasks/all?assigned_employee=${tech.technician_id}`}
+              className="block hover:opacity-80 transition-opacity"
+            >
+              <div className="flex items-center justify-between mb-1">
+                <span className="text-sm font-medium text-gray-700">{tech.name}</span>
+                <span className="text-sm font-semibold text-gray-800">
+                  {tech.open_count} open
+                </span>
+              </div>
+              <div className="w-full bg-gray-100 rounded-full h-2">
+                <div
+                  className="bg-blue-500 h-2 rounded-full transition-all"
+                  style={{ width: `${(tech.open_count / maxCount) * 100}%` }}
+                />
+              </div>
+            </Link>
           </li>
         ))}
       </ul>
@@ -463,18 +480,19 @@ export default function Home() {
 
       {/* Needs Attention + Recent Notes */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <NeedsAttentionCard data={data.needs_attention} />
+        <NeedsAttentionCard data={data.needs_attention} myTasks={data.my_tasks} />
         <RecentNotesCard notes={data.recent_notes} />
       </div>
 
-      {/* My Open Tasks */}
-      <MyOpenTasksCard tasks={data.my_tasks} />
+      {/* Tasks Overdue by Assignee */}
+      <TasksOverdueByAssigneeCard data={data.tasks_overdue_by_assignee} />
 
       {/* Financial Summary + Technician Workload */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <FinancialSummaryCard data={data.financial} />
         <TechnicianWorkloadCard workload={data.technician_workload} />
       </div>
+
     </div>
   );
 }

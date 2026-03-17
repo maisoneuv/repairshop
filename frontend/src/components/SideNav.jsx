@@ -108,8 +108,9 @@ function MobileNavGroup({ group, isExpanded, onToggle, location, onNavigate }) {
             <button
                 type="button"
                 onClick={onToggle}
+                aria-expanded={isExpanded}
                 className={`flex items-center justify-between w-full px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
-                    active ? "text-blue-600 bg-blue-50" : "text-gray-700 hover:bg-gray-50"
+                    active ? "text-blue-600 bg-blue-50" : "text-white/80 hover:bg-white/[0.06] hover:text-white"
                 }`}
             >
                 <span className="flex items-center gap-3">
@@ -117,7 +118,7 @@ function MobileNavGroup({ group, isExpanded, onToggle, location, onNavigate }) {
                     {group.label}
                 </span>
                 <ChevronDown
-                    className={`w-4 h-4 transition-transform ${isExpanded ? "rotate-180" : ""}`}
+                    className={`w-4 h-4 text-white/45 transition-transform ${isExpanded ? "rotate-180" : ""}`}
                 />
             </button>
 
@@ -141,10 +142,10 @@ function MobileNavGroup({ group, isExpanded, onToggle, location, onNavigate }) {
                                         onClick={() => onNavigate(child.path, child.search)}
                                         className={`flex items-center gap-2 w-full px-3 py-2 rounded-md text-sm transition-colors ${
                                             childActive
-                                                ? "text-blue-600 font-medium bg-blue-50/70"
+                                                ? "text-white font-medium bg-white/20"
                                                 : child.accent
-                                                  ? "text-blue-600 font-medium hover:bg-gray-50"
-                                                  : "text-gray-600 hover:text-gray-900 hover:bg-gray-50"
+                                                  ? "text-blue-200 font-medium hover:bg-white/[0.06]"
+                                                  : "text-white/45 hover:text-white hover:bg-white/[0.06]"
                                         }`}
                                     >
                                         <ChildIcon className="w-4 h-4" />
@@ -221,23 +222,23 @@ export default function SideNav({ mobileOpen, onMobileClose, collapsed = false, 
         <>
             {/* Desktop sidebar */}
             <motion.aside
-                className="fixed left-0 hidden md:flex flex-col bg-white border-r border-gray-200 z-30"
+                className="fixed left-0 hidden md:flex flex-col bg-[#4e6998] border-r border-white/15 z-30"
                 style={{ top: 0, bottom: 0 }}
                 initial={false}
                 animate={{ width: collapsed ? 80 : 256 }}
                 transition={{ type: "tween", duration: 0.2, ease: "easeOut" }}
             >
-                <div className="px-3 pt-5 pb-4 border-b border-gray-100">
+                <div className="px-3 pt-5 pb-4 border-b border-white/15">
                     <div
                         className={`flex items-center gap-3 ${collapsed ? "justify-center" : ""}`}
                     >
-                        <div className="w-10 h-10 rounded-2xl bg-blue-600 text-white flex items-center justify-center text-lg font-semibold">
+                        <div className="w-10 h-10 rounded-2xl bg-white text-blue-600 flex items-center justify-center text-lg font-semibold">
                             {APP_NAME.charAt(0)}
                         </div>
                         {!collapsed && (
                             <div>
-                                <p className="text-base font-semibold text-gray-900">{APP_NAME}</p>
-                                <p className="text-xs text-gray-500">Workspace</p>
+                                <p className="text-base font-semibold text-white">{APP_NAME}</p>
+                                <p className="text-xs text-white/55">Workspace</p>
                             </div>
                         )}
                     </div>
@@ -245,7 +246,7 @@ export default function SideNav({ mobileOpen, onMobileClose, collapsed = false, 
                 <div className="flex-1 overflow-y-auto px-3 py-5 space-y-6">
                     <div>
                         {!collapsed && (
-                            <p className="text-xs font-semibold uppercase text-gray-400 tracking-wide px-2">
+                            <p className="text-xs font-semibold uppercase text-white/45 tracking-wide px-2">
                                 General
                             </p>
                         )}
@@ -264,8 +265,8 @@ export default function SideNav({ mobileOpen, onMobileClose, collapsed = false, 
                                             collapsed ? "justify-center" : ""
                                         } ${
                                             active
-                                                ? "bg-blue-50 text-blue-600"
-                                                : "text-gray-700 hover:bg-gray-50"
+                                                ? "bg-white/20 text-white"
+                                                : "text-white/80 hover:bg-white/[0.06] hover:text-white"
                                         }`}
                                     >
                                         <Icon className="w-5 h-5" />
@@ -278,7 +279,7 @@ export default function SideNav({ mobileOpen, onMobileClose, collapsed = false, 
 
                     <div>
                         {!collapsed && (
-                            <p className="text-xs font-semibold uppercase text-gray-400 tracking-wide px-2">
+                            <p className="text-xs font-semibold uppercase text-white/45 tracking-wide px-2">
                                 Navigation
                             </p>
                         )}
@@ -294,6 +295,7 @@ export default function SideNav({ mobileOpen, onMobileClose, collapsed = false, 
                                             type="button"
                                             title={collapsed ? group.label : undefined}
                                             aria-label={collapsed ? group.label : undefined}
+                                            aria-expanded={!collapsed ? isExpanded : undefined}
                                             onClick={() => {
                                                 if (collapsed) {
                                                     const first = group.children?.[0];
@@ -311,8 +313,8 @@ export default function SideNav({ mobileOpen, onMobileClose, collapsed = false, 
                                                 collapsed ? "justify-center" : "justify-between"
                                             } w-full px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
                                                 active
-                                                    ? "bg-blue-50 text-blue-600"
-                                                    : "text-gray-700 hover:bg-gray-50"
+                                                    ? "bg-white/20 text-white"
+                                                    : "text-white/80 hover:bg-white/[0.06] hover:text-white"
                                             }`}
                                         >
                                             <span
@@ -325,7 +327,7 @@ export default function SideNav({ mobileOpen, onMobileClose, collapsed = false, 
                                             </span>
                                             {!collapsed && (
                                                 <ChevronDown
-                                                    className={`w-4 h-4 transition-transform ${
+                                                    className={`w-4 h-4 text-white/45 transition-transform ${
                                                         isExpanded ? "rotate-180" : ""
                                                     }`}
                                                 />
@@ -361,10 +363,10 @@ export default function SideNav({ mobileOpen, onMobileClose, collapsed = false, 
                                                                 }
                                                                 className={`flex items-center gap-2 w-full px-2.5 py-1.5 rounded-md text-sm transition-colors ${
                                                                     childActive
-                                                                        ? "text-blue-600 font-medium bg-blue-50/80"
+                                                                        ? "text-white font-medium bg-white/20"
                                                                         : child.accent
-                                                                          ? "text-blue-600 font-medium hover:bg-blue-50/40"
-                                                                          : "text-gray-600 hover:text-gray-900 hover:bg-gray-50"
+                                                                          ? "text-blue-200 font-medium hover:bg-white/[0.06]"
+                                                                          : "text-white/45 hover:text-white hover:bg-white/[0.06]"
                                                                 }`}
                                                             >
                                                                 <ChildIcon className="w-4 h-4" />
@@ -382,11 +384,12 @@ export default function SideNav({ mobileOpen, onMobileClose, collapsed = false, 
                     </div>
                     <GlobalActionsSection collapsed={collapsed} />
                 </div>
-                <div className="p-3 border-t border-gray-100">
+                <div className="p-3 border-t border-white/15">
                     <button
                         type="button"
                         onClick={() => onToggleCollapse && onToggleCollapse()}
-                        className="w-full flex items-center justify-center px-3 py-2 rounded-lg text-sm font-medium text-gray-600 hover:text-blue-600 hover:bg-blue-50 transition-colors"
+                        aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+                        className="w-full flex items-center justify-center px-3 py-2 rounded-lg text-sm font-medium text-white/55 hover:text-white hover:bg-white/10 transition-colors"
                     >
                         {collapsed ? (
                             <ChevronsRight className="w-4 h-4" />
@@ -411,7 +414,7 @@ export default function SideNav({ mobileOpen, onMobileClose, collapsed = false, 
                         />
                         {/* Drawer panel */}
                         <motion.aside
-                            className="fixed left-0 top-0 h-full w-72 bg-white shadow-xl z-40 md:hidden flex flex-col"
+                            className="fixed left-0 top-0 h-full w-72 bg-[#4e6998] shadow-xl z-40 md:hidden flex flex-col"
                             initial={{ x: "-100%" }}
                             animate={{ x: 0 }}
                             exit={{ x: "-100%" }}
@@ -421,17 +424,17 @@ export default function SideNav({ mobileOpen, onMobileClose, collapsed = false, 
                             }}
                         >
                             {/* Header */}
-                            <div className="flex items-center justify-between px-4 py-4 border-b border-gray-100">
+                            <div className="flex items-center justify-between px-4 py-4 border-b border-white/15">
                                 <div className="flex items-center gap-2">
                                     <div className="w-8 h-8 bg-blue-600 rounded flex items-center justify-center text-white">
                                         <Home className="w-4 h-4" strokeWidth={2.5} />
                                     </div>
-                                    <span className="font-semibold text-gray-900">{APP_NAME}</span>
+                                    <span className="font-semibold text-white">{APP_NAME}</span>
                                 </div>
                                 <button
                                     type="button"
                                     onClick={onMobileClose}
-                                    className="p-1 text-gray-500 hover:text-gray-700"
+                                    className="p-1 text-white/55 hover:text-white"
                                     aria-label="Close menu"
                                 >
                                     <X className="w-5 h-5" />
@@ -451,7 +454,7 @@ export default function SideNav({ mobileOpen, onMobileClose, collapsed = false, 
                                                 key={item.key}
                                                 onClick={() => handleNavigate(item.path)}
                                                 className={`flex items-center gap-3 w-full px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
-                                                    active ? "text-blue-600 bg-blue-50" : "text-gray-700 hover:bg-gray-50"
+                                                    active ? "text-blue-600 bg-blue-50" : "text-white/80 hover:bg-white/[0.06] hover:text-white"
                                                 }`}
                                             >
                                                 <Icon className="w-5 h-5" />

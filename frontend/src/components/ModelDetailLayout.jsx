@@ -181,7 +181,7 @@ export default function ModelDetailLayout({
     };
 
     return (
-        <div className="space-y-6">
+        <div className="space-y-4">
             {layout.map((section) => (
                 <RecordSection key={section.section} title={section.section} editMode={editMode}>
                     {section.groups ? (

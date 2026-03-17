@@ -28,7 +28,7 @@ export default function WorkItemList() {
     // Filter state
     const [statusOptions, setStatusOptions] = useState([]);
     const [ownerOptions, setOwnerOptions] = useState([]);
-    const [statusFilter, setStatusFilter] = useState("__open__");
+    const [statusFilter, setStatusFilter] = useState(() => searchParams.get("status") || "__open__");
     const [ownerFilter, setOwnerFilter] = useState("");
 
     // Fetch filter options on mount
@@ -144,7 +144,7 @@ export default function WorkItemList() {
 
                     <Link
                         to="/work-items/new"
-                        className="px-3 py-1.5 rounded-lg text-sm font-medium bg-blue-600 text-white hover:bg-blue-700"
+                        className="px-3 py-1.5 rounded-lg text-sm font-medium bg-blue-600 text-white hover:bg-blue-700 transition-colors"
                     >
                         Create New
                     </Link>
@@ -292,9 +292,13 @@ export default function WorkItemList() {
                                             {column.label}
                                             {sortField === column.key && (
                                                 <svg
-                                                    className={`h-3 w-3 ${sortDirection === "asc" ? "transform rotate-180" : ""}`}
+                                                    className={`h-3 w-3 ${sortDirection === "asc" ? "rotate-180" : ""}`}
                                                     viewBox="0 0 20 20"
-                                                    fill="currentColor"
+                                                    fill="none"
+                                                    stroke="currentColor"
+                                                    strokeWidth="2"
+                                                    strokeLinecap="round"
+                                                    strokeLinejoin="round"
                                                     aria-hidden="true"
                                                 >
                                                     <path d="M6 8l4 4 4-4" />

@@ -2,8 +2,8 @@ import React from "react";
 import AutocompleteInput from "./AutocompleteInput";
 import apiClient from "../api/apiClient";
 
-const LABEL_CLASS = "block text-sm font-medium text-gray-700 mb-2";
-const INPUT_CLASS = "w-full border border-gray-300 rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent";
+const LABEL_CLASS = "block text-sm font-medium text-gray-700 mb-1";
+const INPUT_CLASS = "w-full border border-gray-300 rounded px-2.5 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-transparent";
 
 const toStartCase = (raw) =>
     raw
@@ -40,7 +40,7 @@ export default function FieldRenderer({ name, label, config, value, onChange, er
                     value={value || ""}
                     onChange={handleChange}
                     className={INPUT_CLASS}
-                    rows={3}
+                    rows={2}
                 />
                 {error && <p className="text-sm text-red-600 mt-1">{error}</p>}
             </div>
