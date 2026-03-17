@@ -26,7 +26,7 @@ export default function ParentWorkItemCard({ workItem, statusColorMap }) {
                 <h3 className="text-lg font-semibold text-gray-900">Parent Work Item</h3>
                 <Link
                     to={`/work-items/${workItem.id}`}
-                    className="text-indigo-600 hover:text-indigo-800 font-medium text-sm transition-colors"
+                    className="text-blue-600 hover:text-blue-800 font-medium text-sm transition-colors"
                 >
                     View Full Details
                 </Link>

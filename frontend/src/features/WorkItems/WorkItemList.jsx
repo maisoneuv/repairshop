@@ -28,7 +28,7 @@ export default function WorkItemList() {
     // Filter state
     const [statusOptions, setStatusOptions] = useState([]);
     const [ownerOptions, setOwnerOptions] = useState([]);
-    const [statusFilter, setStatusFilter] = useState("__open__");
+    const [statusFilter, setStatusFilter] = useState(() => searchParams.get("status") || "__open__");
     const [ownerFilter, setOwnerFilter] = useState("");
 
     // Fetch filter options on mount
@@ -144,15 +144,17 @@ export default function WorkItemList() {
 
                     <Link
                         to="/work-items/new"
-                        className="px-3 py-1.5 rounded-lg text-sm font-medium bg-blue-600 text-white hover:bg-blue-700"
+                        className="px-3 py-1.5 rounded-lg text-sm font-medium bg-blue-600 text-white hover:bg-blue-700 transition-colors"
                     >
                         Create New
                     </Link>
                 </div>
 
-                <div className="flex gap-2 mt-3">
+                <div className="flex gap-2 mt-3" role="tablist" aria-label="Work item view">
                     <button
                         type="button"
+                        role="tab"
+                        aria-selected={view !== "my"}
                         onClick={() => handleViewChange("all")}
                         className={`px-3 py-1.5 rounded-lg text-sm font-medium border ${
                             view !== "my"
@@ -164,6 +166,8 @@ export default function WorkItemList() {
                     </button>
                     <button
                         type="button"
+                        role="tab"
+                        aria-selected={view === "my"}
                         onClick={() => handleViewChange("my")}
                         className={`px-3 py-1.5 rounded-lg text-sm font-medium border ${
                             view === "my"
@@ -269,16 +273,33 @@ export default function WorkItemList() {
                                     <th
                                         key={column.key}
                                         scope="col"
-                                        className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider cursor-pointer"
+                                        tabIndex={0}
+                                        aria-sort={
+                                            sortField === column.key
+                                                ? sortDirection === "asc" ? "ascending" : "descending"
+                                                : "none"
+                                        }
+                                        className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider cursor-pointer select-none focus:outline-none focus:ring-2 focus:ring-inset focus:ring-blue-500"
                                         onClick={() => handleSort(column.key)}
+                                        onKeyDown={(e) => {
+                                            if (e.key === "Enter" || e.key === " ") {
+                                                e.preventDefault();
+                                                handleSort(column.key);
+                                            }
+                                        }}
                                     >
                                         <span className="inline-flex items-center gap-1">
                                             {column.label}
                                             {sortField === column.key && (
                                                 <svg
-                                                    className={`h-3 w-3 ${sortDirection === "asc" ? "transform rotate-180" : ""}`}
+                                                    className={`h-3 w-3 ${sortDirection === "asc" ? "rotate-180" : ""}`}
                                                     viewBox="0 0 20 20"
-                                                    fill="currentColor"
+                                                    fill="none"
+                                                    stroke="currentColor"
+                                                    strokeWidth="2"
+                                                    strokeLinecap="round"
+                                                    strokeLinejoin="round"
+                                                    aria-hidden="true"
                                                 >
                                                     <path d="M6 8l4 4 4-4" />
                                                 </svg>

@@ -37,6 +37,11 @@ export default function WorkItemForm({ onCreated }) {
     const [selectedAsset, setSelectedAsset] = useState(null);
     const [selectedTechnician, setSelectedTechnician] = useState(null);
     const [selectedOwner, setSelectedOwner] = useState(null);
+    const [isSubmitting, setIsSubmitting] = useState(false);
+    const [submitSuccess, setSubmitSuccess] = useState(false);
+    const [collapsedSections, setCollapsedSections] = useState(
+        () => new Set(WorkItemFormLayout.filter(s => s.collapsedByDefault).map(s => s.label))
+    );
 
     const { employee, loading, currentTenant, user } = useUser();
 
@@ -52,9 +57,7 @@ export default function WorkItemForm({ onCreated }) {
     }, []);
 
     useEffect(() => {
-        console.log(currentTenant);
         if (!loading && employee) {
-            console.log(user);
             setFormData((prev) => ({
                 ...prev,
                 owner: employee.id,        // For validation (schema expects this)
@@ -109,9 +112,17 @@ export default function WorkItemForm({ onCreated }) {
         setFormData((prev) => ({ ...prev, [name]: value }));
     };
 
+    const toggleSection = (label) => {
+        setCollapsedSections((prev) => {
+            const next = new Set(prev);
+            if (next.has(label)) next.delete(label);
+            else next.add(label);
+            return next;
+        });
+    };
+
     const handleSubmit = async (e) => {
         e.preventDefault();
-        console.log(formData);
 
         const tenantId = currentTenant?.id || null;
 
@@ -148,7 +159,6 @@ export default function WorkItemForm({ onCreated }) {
             newErrors.serial_number = "Please enter a serial number or check 'Device has no serial number'";
         }
 
-        console.log("newErrors", newErrors);
         if (Object.keys(newErrors).length > 0) {
             setFieldErrors(newErrors);
             const firstErrorField = Object.keys(newErrors)[0];
@@ -253,12 +263,15 @@ export default function WorkItemForm({ onCreated }) {
             }
             delete fullData.technician;
 
-            console.log(fullData);
+            setIsSubmitting(true);
             const newItem = await createWorkItem(fullData);
             onCreated?.(newItem);
-            navigate(`/work-items/${newItem.id}`);
+            setSubmitSuccess(true);
+            setTimeout(() => navigate(`/work-items/${newItem.id}`), 700);
         } catch (err) {
             setError(typeof err === "string" ? err : JSON.stringify(err));
+        } finally {
+            setIsSubmitting(false);
         }
     };
 
@@ -267,30 +280,48 @@ export default function WorkItemForm({ onCreated }) {
     return (
         <>
 
-            <div className="flex gap-6 items-start w-full">
+            <div className="flex flex-col lg:flex-row gap-6 lg:items-start w-full">
                 <div className="flex-1">
                     <form
                         onSubmit={handleSubmit}
                         noValidate
-                        className="space-y-6"
+                        className="space-y-3"
                     >
-                        {WorkItemFormLayout.map((section) => (
+                        {WorkItemFormLayout.map((section) => {
+                            const isCollapsed = collapsedSections.has(section.label);
+                            return (
                             <div
                                 key={section.label}
-                                className="bg-white rounded-xl shadow-lg border border-gray-200 overflow-visible"
+                                className="bg-white rounded-lg shadow border border-gray-200 overflow-visible"
                             >
-                                <div className="px-6 py-4 border-b border-gray-100">
+                                <div className="px-4 py-2.5 border-b border-gray-100">
                                     <div className="flex items-center justify-between">
-                                        <h2 className="text-base font-semibold text-gray-800">
-                                            {section.label}
-                                        </h2>
+                                        <button
+                                            type="button"
+                                            onClick={() => toggleSection(section.label)}
+                                            className="flex items-center gap-2 text-left"
+                                            aria-expanded={!isCollapsed}
+                                        >
+                                            <h2 className="text-sm font-semibold text-gray-700">
+                                                {section.label}
+                                            </h2>
+                                            <svg
+                                                className={`w-4 h-4 text-gray-400 transition-transform ${isCollapsed ? "" : "rotate-180"}`}
+                                                aria-hidden="true"
+                                                fill="none"
+                                                stroke="currentColor"
+                                                viewBox="0 0 24 24"
+                                            >
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                                            </svg>
+                                        </button>
                                         {section.label === "Logistics" && (
                                             <div className="flex bg-gray-100 p-1 rounded-lg">
                                                 <button
                                                     type="button"
-                                                    className={`px-4 py-2 rounded-md text-sm font-medium transition-all ${
+                                                    className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all ${
                                                         formData.intake_method === 'walk_in'
-                                                            ? 'bg-blue-600 text-white shadow-md'
+                                                            ? 'bg-blue-600 text-white shadow-sm'
                                                             : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
                                                     }`}
                                                     onClick={() => handleFieldChange('intake_method', 'walk_in')}
@@ -299,9 +330,9 @@ export default function WorkItemForm({ onCreated }) {
                                                 </button>
                                                 <button
                                                     type="button"
-                                                    className={`px-4 py-2 rounded-md text-sm font-medium transition-all ${
+                                                    className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all ${
                                                         formData.intake_method === 'courier'
-                                                            ? 'bg-blue-600 text-white shadow-md'
+                                                            ? 'bg-blue-600 text-white shadow-sm'
                                                             : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
                                                     }`}
                                                     onClick={() => handleFieldChange('intake_method', 'courier')}
@@ -312,8 +343,8 @@ export default function WorkItemForm({ onCreated }) {
                                         )}
                                     </div>
                                 </div>
-                                <div className="p-6">
-                                    <div className="grid grid-cols-6 gap-6">
+                                {!isCollapsed && <div className="p-4">
+                                    <div className="grid grid-cols-6 gap-4">
                                         {section.fields.map(({ name, width, label }) => {
                                             const widthClass = {
                                                 full: "col-span-6",
@@ -368,7 +399,7 @@ export default function WorkItemForm({ onCreated }) {
                                             if (name === "customer_asset") {
                                                 return (
                                                     <div className={widthClass} key={name}>
-                                                        <div className="grid grid-cols-2 gap-4">
+                                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                                                             <div>
                                                                 <DeviceAutocomplete
                                                                     value={selectedDevice}
@@ -386,12 +417,12 @@ export default function WorkItemForm({ onCreated }) {
                                                                 />
                                                             </div>
                                                             <div>
-                                                                <label className="block text-sm font-medium text-gray-700 mb-2">
+                                                                <label className="block text-sm font-medium text-gray-700 mb-1">
                                                                     Serial Number {!noSerialNumber && <span className="text-red-500">*</span>}
                                                                 </label>
                                                                 <input
                                                                     type="text"
-                                                                    className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
+                                                                    className={`w-full px-2.5 py-1.5 text-sm border rounded focus:ring-1 focus:ring-blue-500 focus:border-transparent ${
                                                                         noSerialNumber ? 'bg-gray-100 cursor-not-allowed' : 'border-gray-300'
                                                                     } ${fieldErrors?.serial_number ? 'border-red-500' : ''}`}
                                                                     value={serialNumber}
@@ -403,7 +434,7 @@ export default function WorkItemForm({ onCreated }) {
                                                                     placeholder="Enter serial number"
                                                                     disabled={noSerialNumber}
                                                                 />
-                                                                <div className="mt-2">
+                                                                <div className="mt-1.5">
                                                                     <label className="flex items-center space-x-2 cursor-pointer">
                                                                         <input
                                                                             type="checkbox"
@@ -532,9 +563,10 @@ export default function WorkItemForm({ onCreated }) {
                                             );
                                         })}
                                     </div>
-                                </div>
+                                </div>}
                             </div>
-                        ))}
+                            );
+                        })}
 
                         {error && (
                             <div className="bg-red-50 border border-red-200 rounded-lg p-4">
@@ -545,15 +577,37 @@ export default function WorkItemForm({ onCreated }) {
                         <div className="flex justify-end">
                             <button
                                 type="submit"
-                                className="bg-blue-600 text-white px-6 py-3 rounded-lg font-medium hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 shadow-lg transition-colors"
+                                disabled={isSubmitting || submitSuccess}
+                                className={`flex items-center gap-2 px-5 py-2 rounded-lg text-sm font-medium focus:outline-none focus:ring-2 focus:ring-offset-2 shadow transition-all duration-200 active:scale-[0.98] disabled:cursor-not-allowed ${
+                                    submitSuccess
+                                        ? 'bg-green-600 text-white focus:ring-green-500 scale-[1.02]'
+                                        : 'bg-blue-600 text-white hover:bg-blue-700 focus:ring-blue-500'
+                                }`}
                             >
-                                Create Work Item
+                                {submitSuccess ? (
+                                    <>
+                                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
+                                        </svg>
+                                        Created
+                                    </>
+                                ) : isSubmitting ? (
+                                    <>
+                                        <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24" aria-hidden="true">
+                                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                                        </svg>
+                                        Creating…
+                                    </>
+                                ) : (
+                                    'Create Work Item'
+                                )}
                             </button>
                         </div>
                     </form>
                 </div>
 
-                <div className="w-80 space-y-4">
+                <div className="w-full lg:w-80 space-y-4">
                     <CustomerInfoCard
                         customer={selectedCustomer}
                         onUpdated={(updated) => {

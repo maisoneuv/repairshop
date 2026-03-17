@@ -55,7 +55,7 @@ export default function CustomerDetail() {
         return (
             <div className="min-h-screen flex items-center justify-center">
                 <div className="text-center">
-                    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600 mx-auto mb-4"></div>
+                    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
                     <p className="text-gray-600">Loading customer...</p>
                 </div>
             </div>
@@ -67,7 +67,7 @@ export default function CustomerDetail() {
             <div className="min-h-screen flex items-center justify-center">
                 <div className="text-center">
                     <p className="text-gray-600">Customer not found</p>
-                    <Link to="/" className="text-indigo-600 hover:underline mt-4 inline-block">
+                    <Link to="/" className="text-blue-600 hover:underline mt-4 inline-block">
                         Go back home
                     </Link>
                 </div>
@@ -132,7 +132,7 @@ export default function CustomerDetail() {
                                     {customer.email ? (
                                         <a
                                             href={`mailto:${customer.email}`}
-                                            className="text-indigo-600 hover:text-indigo-800 transition-colors"
+                                            className="text-blue-600 hover:text-blue-800 transition-colors"
                                         >
                                             {customer.email}
                                         </a>
@@ -150,7 +150,7 @@ export default function CustomerDetail() {
                                     {customer.phone_number ? (
                                         <a
                                             href={`tel:${customer.phone_number}`}
-                                            className="text-indigo-600 hover:text-indigo-800 transition-colors"
+                                            className="text-blue-600 hover:text-blue-800 transition-colors"
                                         >
                                             {customer.phone_number}
                                         </a>
@@ -208,7 +208,7 @@ export default function CustomerDetail() {
                                                 {customer.email ? (
                                                     <a
                                                         href={`mailto:${customer.email}`}
-                                                        className="text-indigo-600 hover:text-indigo-800 transition-colors"
+                                                        className="text-blue-600 hover:text-blue-800 transition-colors"
                                                     >
                                                         {customer.email}
                                                     </a>
@@ -224,7 +224,7 @@ export default function CustomerDetail() {
                                                 {customer.phone_number ? (
                                                     <a
                                                         href={`tel:${customer.phone_number}`}
-                                                        className="text-indigo-600 hover:text-indigo-800 transition-colors"
+                                                        className="text-blue-600 hover:text-blue-800 transition-colors"
                                                     >
                                                         {customer.phone_number}
                                                     </a>
@@ -323,7 +323,7 @@ export default function CustomerDetail() {
                                             className="block border border-gray-200 rounded-lg p-4 hover:bg-gray-50 transition-colors"
                                         >
                                             <div className="flex items-center justify-between mb-2">
-                                                <span className="font-medium text-indigo-600 hover:text-indigo-800">
+                                                <span className="font-medium text-blue-600 hover:text-blue-800">
                                                     {item.reference_id || `#${item.id}`}
                                                 </span>
                                                 <span className={`px-2 py-1 text-xs rounded-full font-medium ${getStatusStyle(item.status, statusColorMap)}`}>

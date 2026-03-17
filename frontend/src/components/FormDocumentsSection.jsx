@@ -200,7 +200,7 @@ export default function FormDocumentsSection({ workItemId }) {
                     value={selectedFormType}
                     onChange={(e) => setSelectedFormType(e.target.value)}
                     disabled={availableFormTypes.length === 0 || isGenerating}
-                    className="block rounded-lg border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 text-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="block rounded-lg border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-sm disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                     {availableFormTypes.length === 0 ? (
                         <option value="">No templates available</option>
@@ -215,7 +215,7 @@ export default function FormDocumentsSection({ workItemId }) {
                 <button
                     onClick={handleGenerate}
                     disabled={isGenerating || availableFormTypes.length === 0}
-                    className={`inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-lg shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 ${
+                    className={`inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-lg shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 ${
                         isGenerating || availableFormTypes.length === 0 ? 'opacity-50 cursor-not-allowed' : ''
                     }`}
                 >
@@ -314,7 +314,7 @@ export default function FormDocumentsSection({ workItemId }) {
                                     {document.status === 'success' && (
                                         <button
                                             onClick={() => handleDownload(document.id, document.file_path.split('/').pop())}
-                                            className="inline-flex items-center px-3 py-2 border border-gray-300 shadow-sm text-xs font-medium rounded-lg text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors"
+                                            className="inline-flex items-center px-3 py-2 border border-gray-300 shadow-sm text-xs font-medium rounded-lg text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors"
                                         >
                                             <svg
                                                 className="-ml-0.5 mr-1.5 h-4 w-4"

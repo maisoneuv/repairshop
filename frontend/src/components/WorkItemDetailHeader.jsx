@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect, useMemo } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
 import { getStatusStyle } from '../utils/statusColors';
 
 const normalizeKey = (value) => {
@@ -21,6 +22,7 @@ const formatStatusLabel = (value) => {
 
 export default function WorkItemDetailHeader({ workItem, schema, onEdit, onStatusChange, statusColorMap }) {
     const [isStatusDropdownOpen, setIsStatusDropdownOpen] = useState(false);
+    const [statusUpdated, setStatusUpdated] = useState(false);
     const dropdownRef = useRef(null);
 
     // Build STATUS_OPTIONS dynamically from schema
@@ -42,13 +44,18 @@ export default function WorkItemDetailHeader({ workItem, schema, onEdit, onStatu
                 setIsStatusDropdownOpen(false);
             }
         };
+        const handleEscape = (event) => {
+            if (event.key === 'Escape') setIsStatusDropdownOpen(false);
+        };
 
         if (isStatusDropdownOpen) {
             document.addEventListener('mousedown', handleClickOutside);
+            document.addEventListener('keydown', handleEscape);
         }
 
         return () => {
             document.removeEventListener('mousedown', handleClickOutside);
+            document.removeEventListener('keydown', handleEscape);
         };
     }, [isStatusDropdownOpen]);
 
@@ -63,6 +70,8 @@ export default function WorkItemDetailHeader({ workItem, schema, onEdit, onStatu
         if (onStatusChange) {
             try {
                 await onStatusChange(newStatus);
+                setStatusUpdated(true);
+                setTimeout(() => setStatusUpdated(false), 1500);
             } catch (err) {
                 console.error('Failed to update status:', err);
             }
@@ -81,8 +90,8 @@ export default function WorkItemDetailHeader({ workItem, schema, onEdit, onStatu
     };
 
     const formatCurrency = (amount) => {
-        if (!amount) return 'Not set';
-        return `$${parseFloat(amount).toFixed(2)}`;
+        if (amount == null || amount === '') return '—';
+        return parseFloat(amount).toLocaleString(undefined, { minimumFractionDigits: 2 }) + ' PLN';
     };
 
     const highlights = [
@@ -93,7 +102,7 @@ export default function WorkItemDetailHeader({ workItem, schema, onEdit, onStatu
         },
         {
             label: 'Owner',
-            value: workItem.owner?.name || 'Unknown',
+            value: workItem.owner?.name || 'Unassigned',
             subValue: workItem.owner?.email || ''
         },
         {
@@ -104,12 +113,12 @@ export default function WorkItemDetailHeader({ workItem, schema, onEdit, onStatu
         {
             label: 'Estimated Price',
             value: formatCurrency(workItem.estimated_price),
-            subValue: 'Subject to diagnosis'
+            subValue: workItem.estimated_price ? 'Subject to diagnosis' : ''
         },
         {
-            label: 'Already Paid',
+            label: 'Payment Received',
             value: formatCurrency(workItem.final_price),
-            subValue: workItem.payment_method || 'No payment recorded'
+            subValue: workItem.payment_method || 'None recorded'
         }
     ];
 
@@ -132,16 +141,20 @@ export default function WorkItemDetailHeader({ workItem, schema, onEdit, onStatu
                 <div className="flex-1">
                     <div className="flex flex-col gap-2">
                         <div className="flex flex-col sm:flex-row sm:items-center sm:gap-2">
-                            <h1 className="text-lg sm:text-xl font-bold mb-1 sm:mb-0 leading-tight">
-                                Work Item #{workItem.reference_id || workItem.id}
+                            <h1 className="text-xl sm:text-2xl font-bold mb-1 sm:mb-0 leading-tight tracking-tight">
+                                {workItem.reference_id || `#${workItem.id}`}
                             </h1>
                             <div className="flex flex-wrap gap-2">
                                 <div className="relative" ref={dropdownRef}>
-                                    <button
+                                    <motion.button
                                         type="button"
                                         onClick={handleStatusClick}
                                         disabled={!onStatusChange}
-                                        className={`${statusBadge.className} ${onStatusChange ? 'cursor-pointer hover:opacity-80 transition-opacity' : 'cursor-default'} flex items-center gap-1`}
+                                        aria-haspopup="listbox"
+                                        aria-expanded={isStatusDropdownOpen}
+                                        className={`${statusBadge.className} transition-colors duration-300 ${onStatusChange ? 'cursor-pointer hover:opacity-80' : 'cursor-default'} flex items-center gap-1`}
+                                        animate={statusUpdated ? { scale: [1, 1.07, 1] } : {}}
+                                        transition={{ duration: 0.3, ease: "easeOut" }}
                                     >
                                         {statusBadge.label}
                                         {onStatusChange && (
@@ -149,7 +162,24 @@ export default function WorkItemDetailHeader({ workItem, schema, onEdit, onStatu
                                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
                                             </svg>
                                         )}
-                                    </button>
+                                    </motion.button>
+
+                                    <AnimatePresence>
+                                        {statusUpdated && (
+                                            <motion.span
+                                                initial={{ opacity: 0, scale: 0.4 }}
+                                                animate={{ opacity: 1, scale: 1 }}
+                                                exit={{ opacity: 0, scale: 0.4 }}
+                                                transition={{ duration: 0.2, ease: "easeOut" }}
+                                                className="absolute -top-1.5 -right-1.5 flex items-center justify-center w-4 h-4 bg-green-500 rounded-full shadow-sm pointer-events-none"
+                                                aria-hidden="true"
+                                            >
+                                                <svg className="w-2.5 h-2.5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                                                </svg>
+                                            </motion.span>
+                                        )}
+                                    </AnimatePresence>
 
                                     {isStatusDropdownOpen && (
                                         <div className="absolute top-full left-0 mt-1 bg-white rounded-lg shadow-lg border border-gray-200 py-1 z-50 min-w-[150px]">
@@ -187,7 +217,7 @@ export default function WorkItemDetailHeader({ workItem, schema, onEdit, onStatu
                     <button
                         onClick={onEdit}
                         type="button"
-                        className="text-sm text-blue-600 hover:underline"
+                        className="text-sm font-medium text-gray-700 border border-gray-300 rounded-lg px-3 py-1.5 hover:border-gray-400 hover:bg-gray-50 transition-colors active:scale-[0.97] active:transition-none"
                     >
                         Edit
                     </button>

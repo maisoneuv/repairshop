@@ -2,7 +2,8 @@ import React from "react";
 import AutocompleteInput from "./AutocompleteInput";
 import apiClient from "../api/apiClient";
 
-const LABEL_CLASS = "block text-sm font-medium text-gray-700 mb-2";
+const LABEL_CLASS = "block text-sm font-medium text-gray-700 mb-1";
+const INPUT_CLASS = "w-full border border-gray-300 rounded px-2.5 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-transparent";
 
 const toStartCase = (raw) =>
     raw
@@ -18,16 +19,12 @@ export default function FieldRenderer({ name, label, config, value, onChange, er
     const displayLabel =
         label || config?.label ? resolvedLabel : toStartCase(resolvedLabel || name);
 
-    // useEffect(() => {
-    //     console.log("Schema for", name, config);
-    // }, [name, config]);
-
     const handleChange = (e) => {
         onChange(name, e.target.value);
     };
 
     const renderLabel = () => (
-        <label className={LABEL_CLASS}>
+        <label htmlFor={name} className={LABEL_CLASS}>
             {displayLabel}
             {isRequired && <span className="text-red-500 ml-1">*</span>}
         </label>
@@ -38,11 +35,12 @@ export default function FieldRenderer({ name, label, config, value, onChange, er
             <div>
                 {renderLabel()}
                 <textarea
+                    id={name}
                     name={name}
                     value={value || ""}
                     onChange={handleChange}
-                    className="w-full border rounded px-3 py-2"
-                    rows={3}
+                    className={INPUT_CLASS}
+                    rows={2}
                 />
                 {error && <p className="text-sm text-red-600 mt-1">{error}</p>}
             </div>
@@ -54,11 +52,12 @@ export default function FieldRenderer({ name, label, config, value, onChange, er
             <div>
                 {renderLabel()}
                 <input
+                    id={name}
                     type="date"
                     name={name}
                     value={value || ""}
                     onChange={handleChange}
-                    className="w-full border rounded px-3 py-2"
+                    className={INPUT_CLASS}
                 />
                 {error && <p className="text-sm text-red-600 mt-1">{error}</p>}
             </div>
@@ -70,10 +69,11 @@ export default function FieldRenderer({ name, label, config, value, onChange, er
             <div>
                 {renderLabel()}
                 <select
+                    id={name}
                     name={name}
                     value={value || ""}
                     onChange={handleChange}
-                    className="w-full border rounded px-3 py-2"
+                    className={INPUT_CLASS}
                 >
                     <option value="">-- Select --</option>
                     {config.choices.map(([val, choiceLabel]) => (
@@ -133,7 +133,6 @@ export default function FieldRenderer({ name, label, config, value, onChange, er
                     path: "/api/tasks/task-types/",
                     param: "search",
                     listPath: "/api/tasks/task-types/",
-                    // TaskType API returns plain array, not paginated response
                     map: (data) => Array.isArray(data) ? data : (data?.results ?? []),
                     detailPath: (id) => `/api/tasks/task-types/${id}/`,
                     display: (item) => item?.name || `#${item.id}`,
@@ -190,7 +189,6 @@ export default function FieldRenderer({ name, label, config, value, onChange, er
                 }
             }
 
-            // If no detailPath but we have a listPath, try to fetch from list
             if (searchConfig?.listPath && fetchAllFn) {
                 try {
                     const allItems = await fetchAllFn();
@@ -209,11 +207,8 @@ export default function FieldRenderer({ name, label, config, value, onChange, er
                 ? searchConfig.display
                 : (item) => item.name || item.email || `#${item.id}`;
 
-        // Handle custom create for task types
         const handleCustomCreate = searchConfig?.allowCustomCreate
             ? (newName) => {
-                // For TaskType, we'll just pass the name as a special value
-                // The backend will handle creating the task type
                 onChange(name, { _customCreate: true, name: newName });
             }
             : undefined;
@@ -239,11 +234,12 @@ export default function FieldRenderer({ name, label, config, value, onChange, er
         <div>
             {renderLabel()}
             <input
+                id={name}
                 type="text"
                 name={name}
                 value={value || ""}
                 onChange={handleChange}
-                className="w-full border rounded px-3 py-2"
+                className={INPUT_CLASS}
             />
             {error && <p className="text-sm text-red-600 mt-1">{error}</p>}
         </div>
