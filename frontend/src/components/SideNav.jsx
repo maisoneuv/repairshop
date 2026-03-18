@@ -68,6 +68,7 @@ const NAV_GROUPS = [
 ];
 
 const APP_NAME = import.meta.env.VITE_APP_NAME || "Fixed Service";
+const sidebarBgColor = import.meta.env.VITE_APP_SIDEBAR_COLOR || '#4e6998';
 
 const PRIMARY_LINKS = [
     {
@@ -222,8 +223,8 @@ export default function SideNav({ mobileOpen, onMobileClose, collapsed = false, 
         <>
             {/* Desktop sidebar */}
             <motion.aside
-                className="fixed left-0 hidden md:flex flex-col bg-[#4e6998] border-r border-white/15 z-30"
-                style={{ top: 0, bottom: 0 }}
+                className="fixed left-0 hidden md:flex flex-col border-r border-white/15 z-30"
+                style={{ backgroundColor: sidebarBgColor, top: 0, bottom: 0 }}
                 initial={false}
                 animate={{ width: collapsed ? 80 : 256 }}
                 transition={{ type: "tween", duration: 0.2, ease: "easeOut" }}
@@ -414,7 +415,8 @@ export default function SideNav({ mobileOpen, onMobileClose, collapsed = false, 
                         />
                         {/* Drawer panel */}
                         <motion.aside
-                            className="fixed left-0 top-0 h-full w-72 bg-[#4e6998] shadow-xl z-40 md:hidden flex flex-col"
+                            className="fixed left-0 top-0 h-full w-72 shadow-xl z-40 md:hidden flex flex-col"
+                            style={{ backgroundColor: sidebarBgColor }}
                             initial={{ x: "-100%" }}
                             animate={{ x: 0 }}
                             exit={{ x: "-100%" }}
