@@ -575,6 +575,8 @@ def manufacturer_search(request):
     query = request.GET.get("q", "").lower()
     manufacturers = (
         Device.objects.values_list("manufacturer", flat=True)
+        .exclude(manufacturer__isnull=True)
+        .exclude(manufacturer="")
         .distinct()
         .order_by("manufacturer")
     )
