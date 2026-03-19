@@ -1,119 +1,118 @@
 import { useState } from 'react';
 import apiClient from '../api/apiClient';
 import AutocompleteInput from './AutocompleteInput';
-import { buildSearchFn, getCategorySearchPath, getManufacturerSearchPath } from '../api/autocompleteApi';
+import {
+    buildSearchFn,
+    getCategorySearchPath,
+    getManufacturerSearchPath,
+    getDeviceSearchPath,
+} from '../api/autocompleteApi';
 import { createCategory } from '../api/categories';
 
 const searchCategories = buildSearchFn(getCategorySearchPath);
 const searchManufacturers = buildSearchFn(getManufacturerSearchPath);
+const searchDevices = buildSearchFn(getDeviceSearchPath);
+
+function deviceDisplayName(device) {
+    if (!device) return 'No device';
+    const parts = [device.manufacturer, device.model].filter(Boolean);
+    return parts.join(' · ') || `Device #${device.id}`;
+}
 
 export default function AssetForm({ initialData, mode = 'edit', submitLabel = 'Save', onSuccess }) {
     const deviceInfo = initialData?.device || {};
 
-    const [formData, setFormData] = useState({
-        serial_number: initialData?.serial_number || '',
+    // 'view' | 'change' | 'change-create' | 'edit'
+    const [deviceMode, setDeviceMode] = useState('view');
+
+    // Currently selected device (FK target) — may differ from deviceInfo after user picks a new one
+    const [selectedDevice, setSelectedDevice] = useState(deviceInfo);
+
+    // Fields for editing the current device record
+    const [editDeviceFields, setEditDeviceFields] = useState({
         manufacturer: deviceInfo.manufacturer || '',
         model: deviceInfo.model || '',
         category: deviceInfo.category || null,
     });
-    const [selectedCategory, setSelectedCategory] = useState(
+    const [editSelectedCategory, setEditSelectedCategory] = useState(
         deviceInfo.category ? { id: deviceInfo.category, name: deviceInfo.category_name } : null
     );
+
+    // Fields for creating a new device
+    const [newDeviceFields, setNewDeviceFields] = useState({
+        manufacturer: '',
+        model: '',
+        category: null,
+    });
+    const [newSelectedCategory, setNewSelectedCategory] = useState(null);
+
+    const [serialNumber, setSerialNumber] = useState(initialData?.serial_number || '');
     const [isSubmitting, setIsSubmitting] = useState(false);
+    const [isCreatingDevice, setIsCreatingDevice] = useState(false);
     const [error, setError] = useState('');
-    const [showConfirmModal, setShowConfirmModal] = useState(false);
-
-    const handleChange = (e) => {
-        const { name, value } = e.target;
-        setFormData((prev) => ({ ...prev, [name]: value }));
-    };
-
-    // Check if device fields have changed
-    const hasDeviceChanges = () => {
-        const originalCategory = deviceInfo.category || null;
-        const currentCategory = formData.category || null;
-
-        return (
-            formData.manufacturer !== (deviceInfo.manufacturer || '') ||
-            formData.model !== (deviceInfo.model || '') ||
-            currentCategory !== originalCategory
-        );
-    };
 
     const handleSubmit = async (e) => {
         e.preventDefault();
-
-        // If device fields changed, show confirmation modal
-        if (hasDeviceChanges()) {
-            setShowConfirmModal(true);
-            return;
-        }
-
-        // Otherwise, proceed with save
         await performSave();
     };
 
     const performSave = async () => {
         setIsSubmitting(true);
         setError('');
-        setShowConfirmModal(false);
 
         try {
-            const deviceChanged = hasDeviceChanges();
-            let updatedAsset;
-            let deviceUpdateSuccess = false;
+            const deviceFKChanged = selectedDevice?.id !== deviceInfo.id;
+            const isEditingDevice = deviceMode === 'edit';
 
-            // Update device if it changed
-            if (deviceChanged && deviceInfo.id) {
-                const devicePayload = {
-                    manufacturer: formData.manufacturer,
-                    model: formData.model,
-                    category: formData.category || null,
-                };
-
+            if (deviceFKChanged) {
+                // Change FK — PATCH asset with new device_id
+                await apiClient.patch(`/api/customers/api/assets/${initialData.id}/`, {
+                    serial_number: serialNumber,
+                    device_id: selectedDevice.id,
+                });
+            } else if (isEditingDevice) {
+                // Edit device record — PATCH Device (propagates to all assets), then PATCH asset serial
                 try {
-                    await apiClient.patch(
-                        `/api/inventory/api/devices/${deviceInfo.id}/`,
-                        devicePayload
-                    );
-                    deviceUpdateSuccess = true;
+                    await apiClient.patch(`/api/inventory/api/devices/${deviceInfo.id}/`, {
+                        manufacturer: editDeviceFields.manufacturer,
+                        model: editDeviceFields.model,
+                        category: editDeviceFields.category || null,
+                    });
                 } catch (deviceErr) {
                     console.error('Failed to update device:', deviceErr);
                     setError(deviceErr.response?.data?.detail || 'Failed to update device information');
                     setIsSubmitting(false);
                     return;
                 }
+                await apiClient.patch(`/api/customers/api/assets/${initialData.id}/`, {
+                    serial_number: serialNumber,
+                });
+            } else {
+                // Serial number only
+                await apiClient.patch(`/api/customers/api/assets/${initialData.id}/`, {
+                    serial_number: serialNumber,
+                });
             }
 
-            // Update asset (serial number)
-            const assetPayload = {
-                serial_number: formData.serial_number,
-            };
-
-            await apiClient.patch(
-                `/api/customers/api/assets/${initialData.id}/`,
-                assetPayload
-            );
-
-            // Always fetch fresh data to ensure we have complete asset details with device info
+            // Fetch fresh data
+            let updatedAsset;
             try {
-                const detailedResponse = await apiClient.get(
-                    `/api/customers/api/assets/${initialData.id}/`
-                );
+                const detailedResponse = await apiClient.get(`/api/customers/api/assets/${initialData.id}/`);
                 updatedAsset = detailedResponse.data;
             } catch (fetchErr) {
-                // If fetching fails, construct the updated asset manually
-                console.warn('Could not fetch updated asset details, using cached data:', fetchErr);
+                console.warn('Could not fetch updated asset details:', fetchErr);
                 updatedAsset = {
                     ...initialData,
-                    serial_number: formData.serial_number,
-                    device: deviceUpdateSuccess ? {
-                        ...initialData.device,
-                        manufacturer: formData.manufacturer,
-                        model: formData.model,
-                        category: formData.category || null,
-                        category_name: selectedCategory?.name || null,
-                    } : initialData.device
+                    serial_number: serialNumber,
+                    device: deviceFKChanged
+                        ? selectedDevice
+                        : isEditingDevice
+                        ? {
+                              ...initialData.device,
+                              ...editDeviceFields,
+                              category_name: editSelectedCategory?.name || null,
+                          }
+                        : initialData.device,
                 };
             }
 
@@ -128,45 +127,249 @@ export default function AssetForm({ initialData, mode = 'edit', submitLabel = 'S
         }
     };
 
+    const handleCreateDevice = async () => {
+        if (!newDeviceFields.manufacturer && !newDeviceFields.model) {
+            setError('Please enter at least a manufacturer or model name.');
+            return;
+        }
+        setIsCreatingDevice(true);
+        setError('');
+        try {
+            const response = await apiClient.post('/api/inventory/api/devices/', {
+                manufacturer: newDeviceFields.manufacturer,
+                model: newDeviceFields.model,
+                category: newDeviceFields.category || null,
+            });
+            setSelectedDevice(response.data);
+            setDeviceMode('view');
+            setNewDeviceFields({ manufacturer: '', model: '', category: null });
+            setNewSelectedCategory(null);
+        } catch (err) {
+            console.error('Failed to create device:', err);
+            setError(err.response?.data?.detail || 'Failed to create device');
+        } finally {
+            setIsCreatingDevice(false);
+        }
+    };
+
+    const enterEditMode = () => {
+        setEditDeviceFields({
+            manufacturer: selectedDevice?.manufacturer || '',
+            model: selectedDevice?.model || '',
+            category: selectedDevice?.category || null,
+        });
+        setEditSelectedCategory(
+            selectedDevice?.category
+                ? { id: selectedDevice.category, name: selectedDevice.category_name }
+                : null
+        );
+        setDeviceMode('edit');
+    };
+
+    const showSaveButton = deviceMode === 'view' || deviceMode === 'edit';
+
     return (
-        <>
-            <form onSubmit={handleSubmit} className="space-y-3">
-                {error && (
-                    <div className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg p-3">
-                        {error}
+        <form onSubmit={handleSubmit} className="space-y-3">
+            {error && (
+                <div className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg p-3">
+                    {error}
+                </div>
+            )}
+
+            {/* Device Section */}
+            <div className="border-b border-gray-200 pb-3">
+                <h4 className="text-sm font-semibold text-gray-700 mb-3">Device</h4>
+
+                {/* VIEW MODE */}
+                {deviceMode === 'view' && (
+                    <div>
+                        <div className="text-sm font-medium text-gray-900 mb-2">
+                            {deviceDisplayName(selectedDevice)}
+                            {selectedDevice?.category_name && (
+                                <span className="ml-2 text-xs text-gray-500 font-normal">
+                                    ({selectedDevice.category_name})
+                                </span>
+                            )}
+                        </div>
+                        <div className="flex gap-3">
+                            <button
+                                type="button"
+                                onClick={() => setDeviceMode('change')}
+                                className="text-xs text-blue-600 hover:text-blue-800 underline"
+                            >
+                                Change device
+                            </button>
+                            <span className="text-xs text-gray-300">|</span>
+                            <button
+                                type="button"
+                                onClick={enterEditMode}
+                                className="text-xs text-gray-500 hover:text-gray-700 underline"
+                            >
+                                Edit device name
+                            </button>
+                        </div>
                     </div>
                 )}
 
-                {/* Device Information Section */}
-                <div className="border-b border-gray-200 pb-3">
-                    <h4 className="text-sm font-semibold text-gray-700 mb-3">Device Information</h4>
+                {/* CHANGE MODE — search for existing device */}
+                {deviceMode === 'change' && (
+                    <div className="space-y-2">
+                        <AutocompleteInput
+                            searchFn={searchDevices}
+                            value={null}
+                            onSelect={(device) => {
+                                setSelectedDevice(device);
+                                setDeviceMode('view');
+                            }}
+                            displayField={(item) => deviceDisplayName(item)}
+                            placeholder="Search by manufacturer or model..."
+                            className=""
+                        />
+                        <div className="flex items-center gap-3">
+                            <button
+                                type="button"
+                                onClick={() => setDeviceMode('change-create')}
+                                className="text-xs text-blue-600 hover:text-blue-800"
+                            >
+                                + Create new device
+                            </button>
+                            <span className="text-xs text-gray-300">|</span>
+                            <button
+                                type="button"
+                                onClick={() => setDeviceMode('view')}
+                                className="text-xs text-gray-500 hover:text-gray-700 underline"
+                            >
+                                Cancel
+                            </button>
+                        </div>
+                    </div>
+                )}
+
+                {/* CHANGE-CREATE MODE — create a new device */}
+                {deviceMode === 'change-create' && (
                     <div className="space-y-3">
+                        <p className="text-xs text-gray-500">Enter details for the new device:</p>
+
                         <div>
                             <label className="block text-sm font-medium text-gray-700 mb-1">
                                 Manufacturer
                             </label>
                             <AutocompleteInput
                                 searchFn={searchManufacturers}
-                                value={formData.manufacturer}
-                                onSelect={(item) => setFormData((prev) => ({ ...prev, manufacturer: item.name }))}
-                                onCreateNewItem={(customValue) => setFormData((prev) => ({ ...prev, manufacturer: customValue }))}
+                                value={newDeviceFields.manufacturer}
+                                onSelect={(item) =>
+                                    setNewDeviceFields((prev) => ({ ...prev, manufacturer: item.name }))
+                                }
+                                onCreateNewItem={(v) =>
+                                    setNewDeviceFields((prev) => ({ ...prev, manufacturer: v }))
+                                }
                                 displayField={(item) => item?.name || ''}
                                 placeholder="e.g., Apple, Samsung"
                                 allowCustomCreate
+                                className=""
                             />
                         </div>
 
                         <div>
-                            <label htmlFor="model" className="block text-sm font-medium text-gray-700 mb-1">
+                            <label className="block text-sm font-medium text-gray-700 mb-1">
                                 Model
                             </label>
                             <input
                                 type="text"
-                                id="model"
-                                name="model"
-                                value={formData.model}
-                                onChange={handleChange}
-                                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                value={newDeviceFields.model}
+                                onChange={(e) =>
+                                    setNewDeviceFields((prev) => ({ ...prev, model: e.target.value }))
+                                }
+                                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
+                                placeholder="e.g., iPhone 12, Galaxy S21"
+                            />
+                        </div>
+
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">
+                                Category
+                            </label>
+                            <AutocompleteInput
+                                searchFn={searchCategories}
+                                value={newSelectedCategory}
+                                onSelect={(item) => {
+                                    setNewSelectedCategory(item);
+                                    setNewDeviceFields((prev) => ({ ...prev, category: item?.id || null }));
+                                }}
+                                onCreateNewItem={async (name) => {
+                                    try {
+                                        const newCategory = await createCategory(name);
+                                        setNewSelectedCategory(newCategory);
+                                        setNewDeviceFields((prev) => ({ ...prev, category: newCategory.id }));
+                                    } catch (err) {
+                                        console.error('Failed to create category:', err);
+                                    }
+                                }}
+                                displayField={(item) => item?.name || ''}
+                                placeholder="Search or create category..."
+                                allowCustomCreate
+                                className=""
+                            />
+                        </div>
+
+                        <div className="flex gap-2">
+                            <button
+                                type="button"
+                                onClick={handleCreateDevice}
+                                disabled={isCreatingDevice}
+                                className="px-3 py-1.5 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50"
+                            >
+                                {isCreatingDevice ? 'Adding...' : 'Add device'}
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => setDeviceMode('change')}
+                                className="px-3 py-1.5 border border-gray-300 text-gray-700 text-sm rounded-lg hover:bg-gray-50 transition-colors"
+                            >
+                                Back
+                            </button>
+                        </div>
+                    </div>
+                )}
+
+                {/* EDIT MODE — fix device name/details, propagates to all assets */}
+                {deviceMode === 'edit' && (
+                    <div className="space-y-3">
+                        <div className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg p-2">
+                            These changes will update <strong>all assets and work items</strong> using this device.
+                        </div>
+
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">
+                                Manufacturer
+                            </label>
+                            <AutocompleteInput
+                                searchFn={searchManufacturers}
+                                value={editDeviceFields.manufacturer}
+                                onSelect={(item) =>
+                                    setEditDeviceFields((prev) => ({ ...prev, manufacturer: item.name }))
+                                }
+                                onCreateNewItem={(v) =>
+                                    setEditDeviceFields((prev) => ({ ...prev, manufacturer: v }))
+                                }
+                                displayField={(item) => item?.name || ''}
+                                placeholder="e.g., Apple, Samsung"
+                                allowCustomCreate
+                                className=""
+                            />
+                        </div>
+
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">
+                                Model
+                            </label>
+                            <input
+                                type="text"
+                                value={editDeviceFields.model}
+                                onChange={(e) =>
+                                    setEditDeviceFields((prev) => ({ ...prev, model: e.target.value }))
+                                }
+                                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
                                 placeholder="e.g., iPhone 13, Galaxy S21"
                             />
                         </div>
@@ -177,16 +380,19 @@ export default function AssetForm({ initialData, mode = 'edit', submitLabel = 'S
                             </label>
                             <AutocompleteInput
                                 searchFn={searchCategories}
-                                value={selectedCategory}
+                                value={editSelectedCategory}
                                 onSelect={(item) => {
-                                    setSelectedCategory(item);
-                                    setFormData((prev) => ({ ...prev, category: item?.id || null }));
+                                    setEditSelectedCategory(item);
+                                    setEditDeviceFields((prev) => ({ ...prev, category: item?.id || null }));
                                 }}
                                 onCreateNewItem={async (name) => {
                                     try {
                                         const newCategory = await createCategory(name);
-                                        setSelectedCategory(newCategory);
-                                        setFormData((prev) => ({ ...prev, category: newCategory.id }));
+                                        setEditSelectedCategory(newCategory);
+                                        setEditDeviceFields((prev) => ({
+                                            ...prev,
+                                            category: newCategory.id,
+                                        }));
                                     } catch (err) {
                                         console.error('Failed to create category:', err);
                                     }
@@ -194,30 +400,41 @@ export default function AssetForm({ initialData, mode = 'edit', submitLabel = 'S
                                 displayField={(item) => item?.name || ''}
                                 placeholder="Search or create category..."
                                 allowCustomCreate
+                                className=""
                             />
                         </div>
-                    </div>
-                </div>
 
-                {/* Asset Information Section */}
+                        <button
+                            type="button"
+                            onClick={() => setDeviceMode('view')}
+                            className="text-xs text-gray-500 hover:text-gray-700 underline"
+                        >
+                            Cancel edit
+                        </button>
+                    </div>
+                )}
+            </div>
+
+            {/* Asset Information Section */}
+            <div>
+                <h4 className="text-sm font-semibold text-gray-700 mb-3">Asset Information</h4>
                 <div>
-                    <h4 className="text-sm font-semibold text-gray-700 mb-3">Asset Information</h4>
-                    <div>
-                        <label htmlFor="serial_number" className="block text-sm font-medium text-gray-700 mb-1">
-                            Serial Number
-                        </label>
-                        <input
-                            type="text"
-                            id="serial_number"
-                            name="serial_number"
-                            value={formData.serial_number}
-                            onChange={handleChange}
-                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                            placeholder="Enter serial number"
-                        />
-                    </div>
+                    <label htmlFor="serial_number" className="block text-sm font-medium text-gray-700 mb-1">
+                        Serial Number
+                    </label>
+                    <input
+                        type="text"
+                        id="serial_number"
+                        name="serial_number"
+                        value={serialNumber}
+                        onChange={(e) => setSerialNumber(e.target.value)}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        placeholder="Enter serial number"
+                    />
                 </div>
+            </div>
 
+            {showSaveButton && (
                 <button
                     type="submit"
                     disabled={isSubmitting}
@@ -225,54 +442,7 @@ export default function AssetForm({ initialData, mode = 'edit', submitLabel = 'S
                 >
                     {isSubmitting ? 'Saving...' : submitLabel}
                 </button>
-            </form>
-
-            {/* Confirmation Modal */}
-            {showConfirmModal && (
-                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-                    <div className="bg-white rounded-lg shadow-xl max-w-md w-full mx-4">
-                        <div className="p-6">
-                            <div className="flex items-start">
-                                <div className="flex-shrink-0">
-                                    <svg className="h-6 w-6 text-yellow-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-                                    </svg>
-                                </div>
-                                <div className="ml-3 flex-1">
-                                    <h3 className="text-lg font-medium text-gray-900 mb-2">
-                                        Update Device Information?
-                                    </h3>
-                                    <p className="text-sm text-gray-600 mb-4">
-                                        You've modified device information (manufacturer, model, and/or category).
-                                        These changes will affect <strong>all work items and assets</strong> that use this device.
-                                    </p>
-                                    <p className="text-sm text-gray-600">
-                                        Are you sure you want to continue?
-                                    </p>
-                                </div>
-                            </div>
-                        </div>
-                        <div className="bg-gray-50 px-6 py-3 flex gap-3 justify-end rounded-b-lg">
-                            <button
-                                type="button"
-                                onClick={() => setShowConfirmModal(false)}
-                                disabled={isSubmitting}
-                                className="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-100 transition-colors disabled:opacity-50"
-                            >
-                                Cancel
-                            </button>
-                            <button
-                                type="button"
-                                onClick={performSave}
-                                disabled={isSubmitting}
-                                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                            >
-                                {isSubmitting ? 'Saving...' : 'Yes, Update All'}
-                            </button>
-                        </div>
-                    </div>
-                </div>
             )}
-        </>
+        </form>
     );
 }
