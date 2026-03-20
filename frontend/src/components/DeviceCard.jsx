@@ -47,19 +47,6 @@ export default function DeviceCard({ device, serialNumber, onEdit, onUpdated, wo
         }
     };
 
-    const getWarrantyStatus = (warranty) => {
-        if (!warranty) return { status: 'Unknown', color: 'gray' };
-
-        const status = warranty.toLowerCase();
-        if (status === 'active' || status === 'valid') {
-            return { status: 'Active', color: 'green' };
-        } else if (status === 'expired') {
-            return { status: 'Expired', color: 'red' };
-        } else {
-            return { status: warranty, color: 'gray' };
-        }
-    };
-
     // Handle both old structure (device directly) and new structure (deviceDetails with nested device)
     const deviceInfo = device?.device || device;
     const assetSerialNumber = device?.serial_number || serialNumber;
@@ -88,7 +75,7 @@ export default function DeviceCard({ device, serialNumber, onEdit, onUpdated, wo
                             placeholder="Search device..."
                         />
                         <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">
+                            <label className="block text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">
                                 Serial Number {!noSerialNumber && <span className="text-red-500">*</span>}
                             </label>
                             <input
@@ -157,13 +144,11 @@ export default function DeviceCard({ device, serialNumber, onEdit, onUpdated, wo
                         </Modal>
                     </div>
                 ) : (
-                    <p className="text-gray-500 text-sm">No device information available</p>
+                    <p className="text-sm text-gray-400">No device information available</p>
                 )}
             </div>
         );
     }
-
-    const warranty = getWarrantyStatus(deviceInfo.warranty);
 
     // If editing, show the form
     if (isEditing && device) {
@@ -195,6 +180,15 @@ export default function DeviceCard({ device, serialNumber, onEdit, onUpdated, wo
         );
     }
 
+    const Field = ({ label, value, mono = false }) => (
+        <div className="flex items-baseline justify-between py-2.5 border-b border-gray-50 last:border-0">
+            <span className="text-xs font-medium text-gray-500 uppercase tracking-wide shrink-0 w-28">{label}</span>
+            <span className={`text-sm text-gray-900 text-right ${mono ? 'font-mono' : ''}`}>
+                {value || <span className="text-gray-400">—</span>}
+            </span>
+        </div>
+    );
+
     return (
         <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
             <div className="flex items-center justify-between mb-3">
@@ -207,76 +201,14 @@ export default function DeviceCard({ device, serialNumber, onEdit, onUpdated, wo
                 </button>
             </div>
 
-            <div className="space-y-0">
-                {/* Manufacturer */}
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-2 md:gap-4 py-2">
-                    <label className="text-sm text-gray-600 font-medium">Manufacturer</label>
-                    <div className="md:col-span-2">
-                        <p className="text-sm text-gray-900 px-2 py-1">
-                            {deviceInfo.manufacturer}
-                        </p>
-                    </div>
-                </div>
-
-                {/* Model */}
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-2 md:gap-4 py-2">
-                    <label className="text-sm text-gray-600 font-medium">Model</label>
-                    <div className="md:col-span-2">
-                        <p className="text-sm text-gray-900 px-2 py-1">
-                            {deviceInfo.model}
-                        </p>
-                    </div>
-                </div>
-
-                {/* Serial Number */}
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-2 md:gap-4 py-2">
-                    <label className="text-sm text-gray-600 font-medium">Serial Number</label>
-                    <div className="md:col-span-2">
-                        <p className="text-sm text-gray-900 font-mono px-2 py-1">
-                            {assetSerialNumber || 'Not provided'}
-                        </p>
-                    </div>
-                </div>
-
-                {/* Category */}
-                {deviceInfo.category_name && (
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-2 md:gap-4 py-2">
-                        <label className="text-sm text-gray-600 font-medium">Category</label>
-                        <div className="md:col-span-2">
-                            <p className="text-sm text-gray-900 px-2 py-1">{deviceInfo.category_name}</p>
-                        </div>
-                    </div>
-                )}
-
-                {/* Storage */}
-                {deviceInfo.storage && (
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-2 md:gap-4 py-2">
-                        <label className="text-sm text-gray-600 font-medium">Storage</label>
-                        <div className="md:col-span-2">
-                            <p className="text-sm text-gray-900 px-2 py-1">{deviceInfo.storage}</p>
-                        </div>
-                    </div>
-                )}
-
-                {/* Color */}
-                {deviceInfo.color && (
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-2 md:gap-4 py-2">
-                        <label className="text-sm text-gray-600 font-medium">Color</label>
-                        <div className="md:col-span-2">
-                            <p className="text-sm text-gray-900 px-2 py-1">{deviceInfo.color}</p>
-                        </div>
-                    </div>
-                )}
-
-                {/* IMEI */}
-                {deviceInfo.imei && (
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-2 md:gap-4 py-2">
-                        <label className="text-sm text-gray-600 font-medium">IMEI</label>
-                        <div className="md:col-span-2">
-                            <p className="text-sm text-gray-900 font-mono px-2 py-1">{deviceInfo.imei}</p>
-                        </div>
-                    </div>
-                )}
+            <div>
+                <Field label="Manufacturer" value={deviceInfo.manufacturer} />
+                <Field label="Model" value={deviceInfo.model} />
+                <Field label="Serial No." value={assetSerialNumber} mono />
+                {deviceInfo.category_name && <Field label="Category" value={deviceInfo.category_name} />}
+                {deviceInfo.storage && <Field label="Storage" value={deviceInfo.storage} />}
+                {deviceInfo.color && <Field label="Color" value={deviceInfo.color} />}
+                {deviceInfo.imei && <Field label="IMEI" value={deviceInfo.imei} mono />}
             </div>
         </div>
     );
