@@ -12,7 +12,7 @@ export default function CustomerCard({ customer, onEdit, onUpdated }) {
         return (
             <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
                 <h3 className="text-base font-semibold text-gray-900 mb-2">Customer</h3>
-                <p className="text-gray-500 text-sm">No customer information available</p>
+                <p className="text-gray-400 text-sm">No customer information available</p>
             </div>
         );
     }
@@ -66,75 +66,71 @@ export default function CustomerCard({ customer, onEdit, onUpdated }) {
                 </button>
             </div>
 
-            <div className="space-y-2">
-                {/* Customer Name */}
-                <div>
-                    <label className="block text-sm font-medium text-gray-600 mb-1">Name</label>
+            <div className="divide-y divide-gray-100">
+                {/* Name */}
+                <div className="pb-3">
+                    <label className="block text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">Name</label>
                     <Link
                         to={`/customers/${customer.id}`}
-                        className="text-sm text-gray-900 font-medium hover:text-blue-600 transition-colors inline-block"
+                        className="text-sm text-gray-900 font-medium hover:text-blue-600 transition-colors"
                     >
                         {customer.first_name} {customer.last_name}
                     </Link>
                 </div>
 
-                {/* Contact Information */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                {/* Contact */}
+                <div className="py-3 space-y-2">
                     <div>
-                        <label className="block text-sm font-medium text-gray-600 mb-1">Email</label>
-                        <div className="text-sm text-gray-900">
+                        <label className="block text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">Email</label>
+                        {customer.email ? (
                             <a
                                 href={`mailto:${customer.email}`}
-                                className="text-blue-600 hover:text-blue-800 transition-colors"
+                                className="text-sm text-blue-600 hover:text-blue-800 transition-colors"
                             >
                                 {customer.email}
                             </a>
-                        </div>
-                    </div>
-
-                    <div>
-                        <label className="block text-sm font-medium text-gray-600 mb-1">Phone</label>
-                        <div className="text-sm text-gray-900">
-                            {customer.phone_number ? (
-                                <a
-                                    href={`tel:${customer.phone_number}`}
-                                    className="text-blue-600 hover:text-blue-800 transition-colors"
-                                >
-                                    {formatPhone(customer.phone_number)}
-                                </a>
-                            ) : (
-                                <span className="text-gray-500">No phone on file</span>
-                            )}
-                        </div>
-                    </div>
-                </div>
-
-                {/* Address */}
-                <div>
-                    <label className="block text-sm font-medium text-gray-600 mb-1">Address</label>
-                    <div className="text-sm text-gray-900">
-                        {customer.address ? (
-                            <div className="space-y-1">
-                                <p>{customer.address.street} {customer.address.building_number}</p>
-                                {customer.address.apartment_number && (
-                                    <p>Apt {customer.address.apartment_number}</p>
-                                )}
-                                <p>{customer.address.city}, {customer.address.postal_code}</p>
-                                {customer.address.country && <p>{customer.address.country}</p>}
-                            </div>
                         ) : (
-                            <span className="text-gray-500">No address on file</span>
+                            <span className="text-sm text-gray-400">—</span>
+                        )}
+                    </div>
+                    <div>
+                        <label className="block text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">Phone</label>
+                        {customer.phone_number ? (
+                            <a
+                                href={`tel:${customer.phone_number}`}
+                                className="text-blue-600 hover:text-blue-800 transition-colors font-semibold"
+                                style={{ fontSize: "15px" }}
+                            >
+                                {formatPhone(customer.phone_number)}
+                            </a>
+                        ) : (
+                            <span className="text-sm text-gray-400">—</span>
                         )}
                     </div>
                 </div>
 
-                {/* Additional Customer Info */}
+                {/* Address */}
+                <div className="pt-3">
+                    <label className="block text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">Address</label>
+                    {customer.address ? (
+                        <div className="text-sm text-gray-900 space-y-0.5">
+                            <p>{customer.address.street} {customer.address.building_number}</p>
+                            {customer.address.apartment_number && (
+                                <p>Apt {customer.address.apartment_number}</p>
+                            )}
+                            <p>{customer.address.city}, {customer.address.postal_code}</p>
+                            {customer.address.country && <p>{customer.address.country}</p>}
+                        </div>
+                    ) : (
+                        <span className="text-sm text-gray-400">No address on file</span>
+                    )}
+                </div>
+
+                {/* Notes */}
                 {customer.notes && (
-                    <div>
-                        <label className="block text-sm font-medium text-gray-600 mb-1">Notes</label>
-                        <p className="text-gray-900 text-sm bg-gray-50 p-3 rounded-lg">
-                            {customer.notes}
-                        </p>
+                    <div className="pt-3">
+                        <label className="block text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">Notes</label>
+                        <p className="text-sm text-gray-700 bg-gray-50 px-3 py-2 rounded-lg">{customer.notes}</p>
                     </div>
                 )}
             </div>
