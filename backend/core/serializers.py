@@ -40,10 +40,15 @@ class AddressSerializer(serializers.ModelSerializer):
         fields = ["street", "city", "postal_code", "country", "building_number", "apartment_number"]
 
 class UserSerializer(serializers.ModelSerializer):
+    has_pin = serializers.SerializerMethodField()
+
     class Meta:
         model = User
-        fields = ['id', 'email', 'is_active', 'is_staff', 'is_superuser', 'name', 'first_name', 'last_name']
-        read_only_fields = ['id', 'is_superuser']
+        fields = ['id', 'email', 'is_active', 'is_staff', 'is_superuser', 'name', 'first_name', 'last_name', 'has_pin']
+        read_only_fields = ['id', 'is_superuser', 'has_pin']
+
+    def get_has_pin(self, obj):
+        return bool(obj.pin_hash)
 
 class PermissionSerializer(serializers.ModelSerializer):
     content_type = serializers.StringRelatedField()

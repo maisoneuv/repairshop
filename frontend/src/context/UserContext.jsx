@@ -1,4 +1,4 @@
-import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
+import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import apiClient from "../api/apiClient"; // axios instance with withCredentials=true (recommended)
 import { useNavigate } from "react-router-dom";
 import {getCSRFToken} from "../utils/csrf";
@@ -100,6 +100,9 @@ export function UserProvider({ children }) {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
     const [activeTenant, setActiveTenant] = useState(null);
+    const [isLocked, setIsLocked] = useState(false);
+    const [tenantSettings, setTenantSettings] = useState({ logout_on_inactivity: false, inactivity_timeout_minutes: 10 });
+    const inactivityTimer = useRef(null);
 
     useEffect(() => {
         try {
@@ -133,6 +136,17 @@ export function UserProvider({ children }) {
         const fallback = import.meta.env.VITE_DEFAULT_TENANT || null;
         return fallback || null;
     };
+
+    const fetchTenantSettings = useCallback(async () => {
+        try {
+            const { data } = await apiClient.get("/api/core/settings/merged/");
+            const s = data?.settings || {};
+            setTenantSettings({
+                logout_on_inactivity: s.logout_on_inactivity?.value ?? false,
+                inactivity_timeout_minutes: s.inactivity_timeout_minutes?.value ?? 10,
+            });
+        } catch (_) {}
+    }, []);
 
     const hydrateFromMe = useCallback(async () => {
         setLoading(true);
@@ -176,8 +190,68 @@ export function UserProvider({ children }) {
 
     useEffect(() => {
         hydrateFromMe();
+        fetchTenantSettings();
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
+
+    // Shared lock trigger used by both inactivity and visibility effects
+    const triggerLock = useCallback(async () => {
+        try {
+            const csrfToken = getCSRFToken();
+            await apiClient.post("/api/core/logout/", {}, {
+                headers: { 'X-CSRFToken': csrfToken },
+                withCredentials: true,
+            });
+        } catch (_) {}
+        setUser(null);
+        setEmployee(null);
+        setPermissions([]);
+        setIsLocked(true);
+    }, []);
+
+    // Inactivity lock — fires after N minutes of no mouse/keyboard/touch
+    useEffect(() => {
+        if (!user || !tenantSettings.logout_on_inactivity) return;
+
+        const timeoutMs = tenantSettings.inactivity_timeout_minutes * 60 * 1000;
+
+        const resetTimer = () => {
+            clearTimeout(inactivityTimer.current);
+            inactivityTimer.current = setTimeout(triggerLock, timeoutMs);
+        };
+
+        const events = ['mousemove', 'keydown', 'touchstart', 'click'];
+        events.forEach(e => document.addEventListener(e, resetTimer, { passive: true }));
+        resetTimer();
+
+        return () => {
+            clearTimeout(inactivityTimer.current);
+            events.forEach(e => document.removeEventListener(e, resetTimer));
+        };
+    }, [user, tenantSettings.logout_on_inactivity, tenantSettings.inactivity_timeout_minutes, triggerLock]);
+
+    // Visibility lock — covers OS screen lock (Ctrl+Cmd+Q) and computer sleep
+    // Uses a 10-second threshold to ignore quick tab switches
+    useEffect(() => {
+        if (!user || !tenantSettings.logout_on_inactivity) return;
+
+        let hiddenAt = null;
+        const LOCK_THRESHOLD_MS = 10_000;
+
+        const onVisibilityChange = () => {
+            if (document.visibilityState === 'hidden') {
+                hiddenAt = Date.now();
+            } else if (document.visibilityState === 'visible' && hiddenAt !== null) {
+                if (Date.now() - hiddenAt >= LOCK_THRESHOLD_MS) {
+                    triggerLock();
+                }
+                hiddenAt = null;
+            }
+        };
+
+        document.addEventListener('visibilitychange', onVisibilityChange);
+        return () => document.removeEventListener('visibilitychange', onVisibilityChange);
+    }, [user, tenantSettings.logout_on_inactivity, triggerLock]);
 
     // Public helpers
     const isAuthenticated = !!user; // IMPORTANT: do NOT gate on `employee`
@@ -195,7 +269,35 @@ export function UserProvider({ children }) {
         await hydrateFromMe();
     }, [hydrateFromMe]);
 
+    const lockScreen = useCallback(async () => {
+        // Manually triggered lock (e.g. "Lock" button in nav)
+        try {
+            const csrfToken = getCSRFToken();
+            await apiClient.post("/api/core/logout/", {}, {
+                headers: { 'X-CSRFToken': csrfToken },
+                withCredentials: true,
+            });
+        } catch (_) {}
+        setUser(null);
+        setEmployee(null);
+        setPermissions([]);
+        setIsLocked(true);
+    }, []);
+
+    const unlockScreen = useCallback(async () => {
+        // Called after successful quick-login from lock screen
+        setIsLocked(false);
+        await hydrateFromMe();
+    }, [hydrateFromMe]);
+
+    const dismissLock = useCallback(() => {
+        // Called when user chooses "Use full login" — just clears the overlay,
+        // user is already null so router will redirect to /login
+        setIsLocked(false);
+    }, []);
+
     const logout = useCallback(async () => {
+        clearTimeout(inactivityTimer.current);
         try {
             const csrfToken = getCSRFToken();
             await apiClient.post("/api/core/logout/",
@@ -213,6 +315,7 @@ export function UserProvider({ children }) {
         setPermissions([]);
         setAvailableTenants([]);
         setCurrentTenant(null);
+        setIsLocked(false);
         storeTenant(null);
         navigate("/login");
     }, [navigate]);
@@ -241,6 +344,8 @@ export function UserProvider({ children }) {
         availableTenants, // array of normalized tenants
         loading,
         error,
+        isLocked,
+        tenantSettings,
 
         // derived
         isAuthenticated,
@@ -249,10 +354,14 @@ export function UserProvider({ children }) {
 
         // actions
         refresh: hydrateFromMe,
+        refreshSettings: fetchTenantSettings,
         switchTenant,
         login,
         logout,
-    }), [user, employee, permissions, currentTenant, availableTenants, loading, error, isAuthenticated, hydrateFromMe, switchTenant, login, logout]);
+        lockScreen,
+        unlockScreen,
+        dismissLock,
+    }), [user, employee, permissions, currentTenant, availableTenants, loading, error, isLocked, tenantSettings, isAuthenticated, hydrateFromMe, fetchTenantSettings, switchTenant, login, logout, lockScreen, unlockScreen, dismissLock]);
 
     return <UserContext.Provider value={value}>{children}</UserContext.Provider>;
 }
