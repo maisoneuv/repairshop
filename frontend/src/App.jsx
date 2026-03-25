@@ -18,12 +18,16 @@ import CashRegisterDetail from "./features/CashRegisters/CashRegisterDetail";
 import CashRegisterForm from "./features/CashRegisters/CashRegisterForm";
 import InventoryStock from "./features/Inventory/InventoryStock";
 import ReceiveDelivery from "./features/Inventory/ReceiveDelivery";
+import SettingsPage from "./pages/SettingsPage";
+import LockScreen from "./components/LockScreen";
 import { useUser } from "./context/UserContext";
 
 function App() {
-    const { user, loading } = useUser();
+    const { user, loading, isLocked } = useUser();
 
     if (loading) return null;
+
+    if (isLocked) return <LockScreen />;
 
     if (!user) {
         return (
@@ -55,6 +59,7 @@ function App() {
                 <Route path="/cash-registers/:id" element={<CashRegisterDetail />} />
                 <Route path="/search" element={<SearchResults />} />
                 <Route path="/profile" element={<ProfilePage />} />
+                <Route path="/settings" element={<SettingsPage />} />
             </Route>
             <Route path="/login" element={<Navigate to="/" replace />} />
         </Routes>

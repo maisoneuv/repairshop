@@ -1,8 +1,12 @@
+from datetime import timedelta
 from django.contrib.auth import authenticate, login, logout
+from django.contrib.auth.hashers import make_password, check_password
+from django.db import models as db_models
 from django.http import JsonResponse
+from django.utils import timezone
 from django.shortcuts import render
 from django.views.generic import ListView
-from rest_framework.decorators import api_view
+from rest_framework.decorators import api_view, permission_classes
 from rest_framework.exceptions import PermissionDenied
 from rest_framework.generics import ListAPIView
 from rest_framework.filters import SearchFilter
@@ -249,6 +253,8 @@ def login_view(request):
     print(user)
     if user is not None:
         login(request, user)
+        user.last_full_login_at = timezone.now()
+        user.save(update_fields=['last_full_login_at'])
         return JsonResponse({"success": True})
     return JsonResponse({"error": "Invalid credentials"}, status=status.HTTP_401_UNAUTHORIZED)
 
@@ -257,6 +263,109 @@ def login_view(request):
 def logout_view(request):
     logout(request)
     return JsonResponse({"success": True})
+
+
+@api_view(['POST'])
+@permission_classes([])
+def quick_login_view(request):
+    """Authenticate via user_id + PIN. Used by the lock screen."""
+    user_id = request.data.get('user_id')
+    pin = request.data.get('pin', '')
+
+    if not user_id or not pin:
+        return JsonResponse({"error": "user_id and pin required"}, status=status.HTTP_400_BAD_REQUEST)
+
+    tenant = getattr(request, 'tenant', None)
+    if not tenant:
+        return JsonResponse({"error": "Tenant not resolved"}, status=status.HTTP_400_BAD_REQUEST)
+
+    try:
+        user = User.objects.get(pk=user_id, is_active=True)
+    except User.DoesNotExist:
+        return JsonResponse({"error": "Invalid credentials"}, status=status.HTTP_401_UNAUTHORIZED)
+
+    # Allow users in this tenant, or superusers with no tenant
+    if user.tenant is not None and user.tenant != tenant:
+        return JsonResponse({"error": "Invalid credentials"}, status=status.HTTP_401_UNAUTHORIZED)
+
+    if not user.pin_hash or not check_password(pin, user.pin_hash):
+        return JsonResponse({"error": "Invalid credentials"}, status=status.HTTP_401_UNAUTHORIZED)
+
+    if not user.last_full_login_at or timezone.now() - user.last_full_login_at > timedelta(hours=24):
+        return JsonResponse({"error": "full_login_required"}, status=status.HTTP_403_FORBIDDEN)
+
+    login(request, user)
+    return JsonResponse({"success": True})
+
+
+@api_view(['POST'])
+def set_my_pin_view(request):
+    """Set or clear the current user's PIN. Body: {pin: "1234"} or {pin: ""} to clear."""
+    pin = request.data.get('pin', '')
+
+    if pin and (not pin.isdigit() or not (4 <= len(pin) <= 6)):
+        return JsonResponse({"error": "PIN must be 4–6 digits"}, status=status.HTTP_400_BAD_REQUEST)
+
+    user = request.user
+    user.pin_hash = make_password(pin) if pin else ''
+    user.save(update_fields=['pin_hash'])
+    return JsonResponse({"success": True, "has_pin": bool(pin)})
+
+
+@api_view(['POST'])
+def set_user_pin_view(request, user_id):
+    """Admin: set or clear PIN for any user in this tenant."""
+    if not request.user.is_staff and not request.user.has_permission('manage_users', request.tenant):
+        raise PermissionDenied("You do not have permission to manage user PINs.")
+
+    tenant = getattr(request, 'tenant', None)
+    if not tenant:
+        return JsonResponse({"error": "Tenant not resolved"}, status=status.HTTP_400_BAD_REQUEST)
+
+    try:
+        user = User.objects.get(pk=user_id)
+    except User.DoesNotExist:
+        return JsonResponse({"error": "User not found"}, status=status.HTTP_404_NOT_FOUND)
+
+    # Security: only allow setting PINs for users in this tenant, or superusers (tenant=null)
+    if user.tenant is not None and user.tenant != tenant:
+        return JsonResponse({"error": "User not found"}, status=status.HTTP_404_NOT_FOUND)
+
+    pin = request.data.get('pin', '')
+    if pin and (not pin.isdigit() or not (4 <= len(pin) <= 6)):
+        return JsonResponse({"error": "PIN must be 4–6 digits"}, status=status.HTTP_400_BAD_REQUEST)
+
+    user.pin_hash = make_password(pin) if pin else ''
+    user.save(update_fields=['pin_hash'])
+    return JsonResponse({"success": True, "has_pin": bool(pin)})
+
+
+@api_view(['GET'])
+@permission_classes([])
+def list_pinned_users_view(request):
+    """Return all active tenant users who have a PIN set (for lock screen tiles).
+    Public endpoint — only exposes names/initials, no sensitive data.
+    Requires tenant context (X-Tenant header or subdomain) but not authentication."""
+    tenant = getattr(request, 'tenant', None)
+    if not tenant:
+        return JsonResponse({"error": "Tenant not resolved"}, status=status.HTTP_400_BAD_REQUEST)
+
+    users = User.objects.filter(
+        db_models.Q(tenant=tenant) | db_models.Q(tenant__isnull=True),
+        is_active=True
+    ).exclude(pin_hash='')
+
+    def initials(user):
+        parts = [user.first_name, user.last_name]
+        result = ''.join(p[0].upper() for p in parts if p)
+        return result or user.email[:2].upper()
+
+    return JsonResponse({
+        "users": [
+            {"id": u.id, "name": u.name or f"{u.first_name} {u.last_name}".strip() or u.email, "initials": initials(u)}
+            for u in users
+        ]
+    })
 
 
 class GlobalSearchView(APIView):
@@ -365,11 +474,16 @@ class SettingViewSet(viewsets.ModelViewSet):
             # No tenant context - return only globals
             return Setting.objects.filter(tenant__isnull=True)
 
+    def _require_manage_users(self, request):
+        if not request.user.is_superuser and not request.user.has_permission('manage_users', request.tenant):
+            raise PermissionDenied('You need the manage_users permission to modify settings.')
+
     def perform_create(self, serializer):
         """Create a tenant-specific setting."""
         tenant = getattr(self.request, 'tenant', None)
         if not tenant:
             raise PermissionDenied('Tenant context required to create settings.')
+        self._require_manage_users(self.request)
         serializer.save(tenant=tenant)
 
     def perform_update(self, serializer):
@@ -383,6 +497,7 @@ class SettingViewSet(viewsets.ModelViewSet):
         if tenant and instance.tenant_id != tenant.id:
             raise PermissionDenied('Cannot modify settings from another tenant.')
 
+        self._require_manage_users(self.request)
         serializer.save()
 
     def perform_destroy(self, instance):
@@ -394,6 +509,7 @@ class SettingViewSet(viewsets.ModelViewSet):
         if tenant and instance.tenant_id != tenant.id:
             raise PermissionDenied('Cannot delete settings from another tenant.')
 
+        self._require_manage_users(self.request)
         instance.delete()
 
     @action(detail=False, methods=['get'])
