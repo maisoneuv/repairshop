@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useUser } from "../context/UserContext";
-import { User, LogOut, Settings } from "lucide-react";
+import { User, LogOut, Lock, Settings } from "lucide-react";
 
 function getDisplayName(user) {
     if (user.first_name || user.last_name) {
@@ -11,7 +11,7 @@ function getDisplayName(user) {
 }
 
 export default function UserProfileDropdown() {
-    const { user, logout } = useUser();
+    const { user, logout, lockScreen } = useUser();
     const navigate = useNavigate();
     const [isOpen, setIsOpen] = useState(false);
     const dropdownRef = useRef(null);
@@ -75,6 +75,17 @@ export default function UserProfileDropdown() {
                     >
                         <Settings className="w-4 h-4" />
                         Settings
+                    </button>
+                    <button
+                        type="button"
+                        onClick={() => {
+                            lockScreen();
+                            setIsOpen(false);
+                        }}
+                        className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-blue-50 flex items-center gap-2"
+                    >
+                        <Lock className="w-4 h-4" />
+                        Lock screen
                     </button>
                     <div className="border-t border-gray-100" />
                     <button
