@@ -53,6 +53,7 @@ class User(AbstractUser, PermissionsMixin):
     phone_number = models.CharField(max_length=9, null=True, blank=True, validators=[phone_regex])
     pin_hash = models.CharField(max_length=128, blank=True, default='')
     last_full_login_at = models.DateTimeField(null=True, blank=True)
+    last_activity_at = models.DateTimeField(null=True, blank=True)
 
     objects = UserManager()
     USERNAME_FIELD = 'email'

@@ -179,11 +179,16 @@ export function UserProvider({ children }) {
             setLoading(false);
         } catch (err) {
             console.error("/employee/me failed", err);
+            const status = err?.response?.status;
+            if (status === 401 || status === 403) {
+                // Genuine auth failure — clear state and let router redirect to /login
+                setUser(null);
+                setEmployee(null);
+                setPermissions([]);
+                setAvailableTenants([]);
+            }
+            // Transient errors (5xx, network, timeout): preserve existing user state
             setError(err);
-            setUser(null);
-            setEmployee(null);
-            setPermissions([]);
-            setAvailableTenants([]);
             setLoading(false);
         }
     }, []);
@@ -195,14 +200,8 @@ export function UserProvider({ children }) {
     }, []);
 
     // Shared lock trigger used by both inactivity and visibility effects
-    const triggerLock = useCallback(async () => {
-        try {
-            const csrfToken = getCSRFToken();
-            await apiClient.post("/api/core/logout/", {}, {
-                headers: { 'X-CSRFToken': csrfToken },
-                withCredentials: true,
-            });
-        } catch (_) {}
+    const triggerLock = useCallback(() => {
+        // Session stays alive on the server — lock screen is UI-only
         setUser(null);
         setEmployee(null);
         setPermissions([]);
@@ -253,6 +252,29 @@ export function UserProvider({ children }) {
         return () => document.removeEventListener('visibilitychange', onVisibilityChange);
     }, [user, tenantSettings.logout_on_inactivity, triggerLock]);
 
+    // Session health check — fires whenever the tab becomes visible.
+    // Independent of logout_on_inactivity: this detects genuine server-side session
+    // expiry while the tab was in the background, without kicking out active users.
+    useEffect(() => {
+        const handleVisibilityChange = async () => {
+            if (document.visibilityState !== 'visible') return;
+            try {
+                await apiClient.get('/api/core/session-ping/');
+            } catch (err) {
+                if (err?.response?.status === 401) {
+                    setUser(null);
+                    setEmployee(null);
+                    setPermissions([]);
+                    setIsLocked(false);
+                }
+                // All other errors: ignore — assume session still valid
+            }
+        };
+
+        document.addEventListener('visibilitychange', handleVisibilityChange);
+        return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
+    }, []);
+
     // Public helpers
     const isAuthenticated = !!user; // IMPORTANT: do NOT gate on `employee`
 
@@ -269,15 +291,9 @@ export function UserProvider({ children }) {
         await hydrateFromMe();
     }, [hydrateFromMe]);
 
-    const lockScreen = useCallback(async () => {
+    const lockScreen = useCallback(() => {
         // Manually triggered lock (e.g. "Lock" button in nav)
-        try {
-            const csrfToken = getCSRFToken();
-            await apiClient.post("/api/core/logout/", {}, {
-                headers: { 'X-CSRFToken': csrfToken },
-                withCredentials: true,
-            });
-        } catch (_) {}
+        // Session stays alive on the server — lock screen is UI-only
         setUser(null);
         setEmployee(null);
         setPermissions([]);
