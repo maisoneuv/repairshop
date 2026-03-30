@@ -24,6 +24,7 @@ urlpatterns = [
     path("users/me/pin/", set_my_pin_view, name="set-my-pin"),
     path("users/<int:user_id>/pin/", set_user_pin_view, name="set-user-pin"),
     path("users/pinned/", list_pinned_users_view, name="list-pinned-users"),
+    path("session-ping/", session_ping, name="session-ping"),
     path("search/", GlobalSearchView.as_view(), name="global-search"),
     path("picklist/<str:category>/", PicklistValuesView.as_view(), name="picklist-values"),
 ]

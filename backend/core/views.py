@@ -291,11 +291,29 @@ def quick_login_view(request):
     if not user.pin_hash or not check_password(pin, user.pin_hash):
         return JsonResponse({"error": "Invalid credentials"}, status=status.HTTP_401_UNAUTHORIZED)
 
-    if not user.last_full_login_at or timezone.now() - user.last_full_login_at > timedelta(hours=24):
-        return JsonResponse({"error": "full_login_required"}, status=status.HTTP_403_FORBIDDEN)
+    # If a session is already active (Fix 2: lockScreen no longer calls logout),
+    # the session itself proves continuity — skip the inactivity check entirely.
+    already_authed = request.user.is_authenticated
+
+    if not already_authed:
+        # No active session — require recent activity within the inactivity window.
+        inactivity_limit = timedelta(hours=8)
+        last_activity = user.last_activity_at
+
+        if not last_activity or timezone.now() - last_activity > inactivity_limit:
+            return JsonResponse({"error": "full_login_required"}, status=status.HTTP_403_FORBIDDEN)
 
     login(request, user)
     return JsonResponse({"success": True})
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def session_ping(request):
+    """Lightweight endpoint for the frontend visibility handler to check session health.
+    Returns 200 if the session is valid, 401 if not (handled by DRF automatically).
+    The UpdateLastActivityMiddleware updates last_activity_at on this request."""
+    return JsonResponse({"ok": True})
 
 
 @api_view(['POST'])
