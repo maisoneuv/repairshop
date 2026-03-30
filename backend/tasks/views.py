@@ -27,6 +27,8 @@ from rest_framework.exceptions import PermissionDenied
 from core.models import Note, PicklistValue
 
 from core.utils import get_model_schema
+from drf_spectacular.utils import extend_schema, extend_schema_view, OpenApiParameter
+from drf_spectacular.types import OpenApiTypes
 
 
 # def work_item_list(request):
@@ -269,6 +271,23 @@ class WorkItemFilter(django_filters.FilterSet):
         model = WorkItem
         fields = ['customer', 'customer_asset', 'status', 'type', 'owner', 'technician']
 
+_WORK_ITEM_LOOKUP_PARAM = OpenApiParameter(
+    name="id",
+    location=OpenApiParameter.PATH,
+    type=OpenApiTypes.STR,
+    description="Work item primary key (integer) or reference ID (e.g. `RMA-5`). "
+                "If the value is non-numeric it is treated as a reference ID lookup.",
+)
+
+
+@extend_schema_view(
+    retrieve=extend_schema(tags=["Work Items"], parameters=[_WORK_ITEM_LOOKUP_PARAM]),
+    update=extend_schema(tags=["Work Items"], parameters=[_WORK_ITEM_LOOKUP_PARAM]),
+    partial_update=extend_schema(tags=["Work Items"], parameters=[_WORK_ITEM_LOOKUP_PARAM]),
+    destroy=extend_schema(tags=["Work Items"], parameters=[_WORK_ITEM_LOOKUP_PARAM]),
+    list=extend_schema(tags=["Work Items"]),
+    create=extend_schema(tags=["Work Items"]),
+)
 class WorkItemViewSet(viewsets.ModelViewSet):
     serializer_class = WorkItemSerializer
     filter_backends = [filters.SearchFilter, DjangoFilterBackend]
@@ -276,6 +295,16 @@ class WorkItemViewSet(viewsets.ModelViewSet):
     search_fields = [
         "reference_id",  # Only allow searching by reference/RMA ID for autocomplete linking
     ]
+
+    def get_object(self):
+        lookup = self.kwargs.get(self.lookup_field)
+        # If the lookup value looks like a reference ID (e.g. RMA-1), filter by reference_id
+        if lookup and not lookup.isdigit():
+            queryset = self.filter_queryset(self.get_queryset())
+            obj = get_object_or_404(queryset, reference_id=lookup)
+            self.check_object_permissions(self.request, obj)
+            return obj
+        return super().get_object()
 
     def get_queryset(self):
         user = self.request.user
