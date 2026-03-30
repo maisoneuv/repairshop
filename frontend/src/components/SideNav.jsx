@@ -230,8 +230,9 @@ export default function SideNav({ mobileOpen, onMobileClose, collapsed = false, 
                 transition={{ type: "tween", duration: 0.2, ease: "easeOut" }}
             >
                 <div className="px-3 pt-5 pb-4 border-b border-white/15">
-                    <div
-                        className={`flex items-center gap-3 ${collapsed ? "justify-center" : ""}`}
+                    <button
+                        onClick={() => navigate("/")}
+                        className={`flex items-center gap-3 w-full text-left ${collapsed ? "justify-center" : ""}`}
                     >
                         <div className="w-10 h-10 rounded-2xl bg-white text-blue-600 flex items-center justify-center text-lg font-semibold">
                             {APP_NAME.charAt(0)}
@@ -242,7 +243,7 @@ export default function SideNav({ mobileOpen, onMobileClose, collapsed = false, 
                                 <p className="text-xs text-white/55">Workspace</p>
                             </div>
                         )}
-                    </div>
+                    </button>
                 </div>
                 <div className="flex-1 overflow-y-auto px-3 py-5 space-y-6">
                     <div>
