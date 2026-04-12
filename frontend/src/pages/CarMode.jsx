@@ -184,9 +184,9 @@ export default function CarMode() {
     }
 
     const btnBase =
-        "w-full py-4 rounded-2xl text-xl font-bold transition-colors focus:outline-none focus:ring-4";
+        "w-full py-5 rounded-2xl text-2xl font-bold transition-colors focus:outline-none focus:ring-4";
     const inputDark =
-        "w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-blue-500";
+        "w-full bg-gray-700 border border-gray-600 rounded-xl px-4 py-4 text-xl text-white focus:outline-none focus:ring-2 focus:ring-blue-500";
 
     return (
         <div className="min-h-screen bg-gray-900 text-white flex flex-col p-6">
@@ -232,7 +232,7 @@ export default function CarMode() {
                     </form>
 
                     <div>
-                        <h2 className="text-lg font-semibold text-gray-400 mb-3">
+                        <h2 className="text-xl font-semibold text-gray-300 mb-3">
                             Oczekujące połączenia ({pendingCalls.length})
                         </h2>
                         {pendingCalls.length === 0 ? (
@@ -252,7 +252,7 @@ export default function CarMode() {
                                             <div className="text-2xl font-bold text-white">
                                                 {call.phone_number}
                                             </div>
-                                            <div className="text-sm text-gray-400 mt-1">
+                                            <div className="text-lg text-gray-400 mt-1">
                                                 {call.customer_name
                                                     ? `Klient: ${call.customer_name}`
                                                     : call.lead_name
@@ -276,13 +276,13 @@ export default function CarMode() {
                 <div className="flex-1 flex flex-col gap-6">
                     {/* Customer/Lead card */}
                     <div className="bg-gray-800 rounded-2xl px-6 py-6">
-                        <div className="text-sm text-gray-400 mb-1 uppercase tracking-wide">
+                        <div className="text-base text-gray-400 mb-1 uppercase tracking-wide font-medium">
                             {foundData.type === "customer" ? "Klient" : "Lead"}
                         </div>
-                        <div className="text-3xl font-bold text-white mb-2">
+                        <div className="text-4xl font-bold text-white mb-2">
                             {foundData.name || "—"}
                         </div>
-                        <div className="text-xl text-gray-300">
+                        <div className="text-2xl text-gray-300">
                             {activeCall?.phone_number || foundData.phone || "—"}
                         </div>
 
@@ -290,36 +290,46 @@ export default function CarMode() {
                         {foundData.type === "customer" && (
                             <>
                                 {foundData.active_work_items?.length > 0 ? (
-                                    <div className="mt-4">
-                                        <div className="text-xs text-gray-500 uppercase tracking-wide mb-2">
+                                    <div className="mt-5">
+                                        <div className="text-base text-gray-400 uppercase tracking-wide font-medium mb-3">
                                             Aktywne zgłoszenia
                                         </div>
-                                        <div className="space-y-1">
+                                        <div className="space-y-2">
                                             {foundData.active_work_items.map((wi) => (
                                                 <button
                                                     key={wi.id}
                                                     onClick={() => navigate(`/work-items/${wi.id}`)}
-                                                    className="block w-full text-left text-sm text-blue-400 hover:text-blue-300 py-1"
+                                                    className="block w-full text-left bg-gray-700 hover:bg-gray-600 rounded-xl px-5 py-4 transition-colors"
                                                 >
-                                                    {wi.reference_id} · {wi.status}
-                                                    {wi.device_model ? ` · ${wi.device_model}` : ""}
+                                                    <div className="text-xl font-bold text-blue-400">
+                                                        {wi.reference_id}
+                                                    </div>
+                                                    <div className="text-base text-gray-300 mt-0.5">
+                                                        {wi.status}{wi.device_model ? ` · ${wi.device_model}` : ""}
+                                                    </div>
                                                 </button>
                                             ))}
                                         </div>
                                     </div>
                                 ) : foundData.latest_closed_work_item ? (
-                                    <div className="mt-4 text-sm text-gray-400">
-                                        Ostatnie zamknięte:{" "}
+                                    <div className="mt-5">
+                                        <div className="text-base text-gray-400 uppercase tracking-wide font-medium mb-3">
+                                            Ostatnie zamknięte zgłoszenie
+                                        </div>
                                         <button
                                             onClick={() =>
                                                 navigate(`/work-items/${foundData.latest_closed_work_item.id}`)
                                             }
-                                            className="text-gray-300 hover:text-white"
+                                            className="block w-full text-left bg-gray-700 hover:bg-gray-600 rounded-xl px-5 py-4 transition-colors"
                                         >
-                                            {foundData.latest_closed_work_item.reference_id}
-                                            {foundData.latest_closed_work_item.device_model
-                                                ? ` · ${foundData.latest_closed_work_item.device_model}`
-                                                : ""}
+                                            <div className="text-xl font-bold text-gray-300">
+                                                {foundData.latest_closed_work_item.reference_id}
+                                            </div>
+                                            {foundData.latest_closed_work_item.device_model && (
+                                                <div className="text-base text-gray-400 mt-0.5">
+                                                    {foundData.latest_closed_work_item.device_model}
+                                                </div>
+                                            )}
                                         </button>
                                     </div>
                                 ) : null}
@@ -329,13 +339,13 @@ export default function CarMode() {
 
                     {/* Lead inline edit — imię, nazwisko, sprzęt */}
                     {foundData.type === "lead" && (
-                        <div className="bg-gray-800 rounded-2xl px-6 py-5 space-y-3">
-                            <div className="text-xs text-gray-500 uppercase tracking-wide">
+                        <div className="bg-gray-800 rounded-2xl px-6 py-5 space-y-4">
+                            <div className="text-base text-gray-400 uppercase tracking-wide font-medium">
                                 Dane leada
                             </div>
-                            <div className="grid grid-cols-2 gap-3">
+                            <div className="grid grid-cols-2 gap-4">
                                 <div>
-                                    <label className="block text-xs text-gray-400 mb-1">Imię</label>
+                                    <label className="block text-base text-gray-400 mb-2">Imię</label>
                                     <input
                                         value={leadEdits.first_name ?? ""}
                                         onChange={(e) =>
@@ -345,7 +355,7 @@ export default function CarMode() {
                                     />
                                 </div>
                                 <div>
-                                    <label className="block text-xs text-gray-400 mb-1">Nazwisko</label>
+                                    <label className="block text-base text-gray-400 mb-2">Nazwisko</label>
                                     <input
                                         value={leadEdits.last_name ?? ""}
                                         onChange={(e) =>
@@ -356,7 +366,7 @@ export default function CarMode() {
                                 </div>
                             </div>
                             <div>
-                                <label className="block text-xs text-gray-400 mb-1">Opis sprzętu</label>
+                                <label className="block text-base text-gray-400 mb-2">Opis sprzętu</label>
                                 <input
                                     value={leadEdits.device_description ?? ""}
                                     onChange={(e) =>
@@ -373,7 +383,7 @@ export default function CarMode() {
 
                     {/* Call notes */}
                     <div>
-                        <label className="block text-sm text-gray-400 mb-1">
+                        <label className="block text-base text-gray-400 mb-2 font-medium">
                             Notatki z rozmowy
                         </label>
                         <textarea
@@ -381,7 +391,7 @@ export default function CarMode() {
                             onChange={(e) => setCallNotes(e.target.value)}
                             placeholder="Opcjonalne notatki..."
                             rows={3}
-                            className="w-full bg-gray-800 border border-gray-600 rounded-xl px-4 py-3 text-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
+                            className="w-full bg-gray-800 border border-gray-600 rounded-xl px-4 py-4 text-xl text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
                         />
                     </div>
 
@@ -407,32 +417,32 @@ export default function CarMode() {
             {/* NOT FOUND VIEW */}
             {view === "notFound" && (
                 <div className="flex-1 flex flex-col gap-6">
-                    <div className="bg-gray-800 rounded-2xl px-6 py-4">
-                        <div className="text-sm text-gray-400 mb-1">Nieznany numer</div>
-                        <div className="text-2xl font-bold text-white">{foundData?.phone}</div>
+                    <div className="bg-gray-800 rounded-2xl px-6 py-5">
+                        <div className="text-base text-gray-400 mb-1 uppercase tracking-wide font-medium">Nieznany numer</div>
+                        <div className="text-3xl font-bold text-white">{foundData?.phone}</div>
                     </div>
 
                     <form onSubmit={handleCreateLead} className="flex flex-col gap-4">
                         <div>
-                            <label className="block text-sm text-gray-400 mb-1">Imię</label>
+                            <label className="block text-base text-gray-400 mb-2">Imię</label>
                             <input
                                 value={leadForm.first_name}
                                 onChange={(e) =>
                                     setLeadForm((p) => ({ ...p, first_name: e.target.value }))
                                 }
                                 placeholder="Imię klienta"
-                                className="w-full bg-gray-800 border border-gray-600 rounded-xl px-4 py-3 text-xl text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                className="w-full bg-gray-800 border border-gray-600 rounded-xl px-4 py-4 text-xl text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
                             />
                         </div>
                         <div>
-                            <label className="block text-sm text-gray-400 mb-1">Nazwisko</label>
+                            <label className="block text-base text-gray-400 mb-2">Nazwisko</label>
                             <input
                                 value={leadForm.last_name}
                                 onChange={(e) =>
                                     setLeadForm((p) => ({ ...p, last_name: e.target.value }))
                                 }
                                 placeholder="Nazwisko klienta"
-                                className="w-full bg-gray-800 border border-gray-600 rounded-xl px-4 py-3 text-xl text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                className="w-full bg-gray-800 border border-gray-600 rounded-xl px-4 py-4 text-xl text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
                             />
                         </div>
                         <button
