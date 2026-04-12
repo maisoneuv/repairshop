@@ -5,6 +5,7 @@ import { useUser } from "../context/UserContext";
 import { useEffect, useState } from "react";
 import GlobalSearch from "../components/GlobalSearch/GlobalSearch";
 import SideNav from "../components/SideNav";
+import QuickLeadModal from "../components/QuickLeadModal";
 
 export default function AppLayout() {
     const { user } = useUser();
@@ -13,6 +14,7 @@ export default function AppLayout() {
     const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
     const [mobileSearchOpen, setMobileSearchOpen] = useState(false);
     const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+    const [showLeadModal, setShowLeadModal] = useState(false);
 
     const appBgColor = import.meta.env.VITE_APP_BG_COLOR || '#f3f4f6';
 
@@ -87,6 +89,17 @@ export default function AppLayout() {
 
                                 <button
                                     type="button"
+                                    onClick={() => setShowLeadModal(true)}
+                                    aria-label="Create new lead"
+                                    title="Nowy lead"
+                                    className="p-2 text-gray-600 hover:text-blue-600 border border-gray-200 rounded-lg hover:border-blue-200"
+                                >
+                                    <svg className="w-5 h-5" aria-hidden="true" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z" />
+                                    </svg>
+                                </button>
+                                <button
+                                    type="button"
                                     onClick={() => navigate("/work-items/new")}
                                     aria-label="Create new work item"
                                     className="p-2 text-gray-600 hover:text-blue-600 border border-gray-200 rounded-lg hover:border-blue-200"
@@ -130,6 +143,14 @@ export default function AppLayout() {
                 <Outlet />
             </main>
             </div>
+
+            {showLeadModal && (
+                <QuickLeadModal
+                    mode="create"
+                    onClose={() => setShowLeadModal(false)}
+                    onSave={() => setShowLeadModal(false)}
+                />
+            )}
         </div>
     );
 }
