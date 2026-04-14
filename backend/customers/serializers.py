@@ -1,9 +1,10 @@
 from inventory.serializers import DeviceSerializer
 from inventory.models import Device
-from .models import Customer, Asset
+from .models import Customer, Asset, Lead
 from rest_framework import serializers
 from core.serializers import AddressSerializer
 from core.models import Address
+from tasks.models import WorkItem
 
 class CustomerSerializer(serializers.ModelSerializer):
     address = AddressSerializer(required=False, allow_null=True)
@@ -82,3 +83,50 @@ class AssetSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError({"customer_id": "Customer does not belong to this tenant"})
 
         return Asset.objects.create(**validated_data)
+
+
+class LeadSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Lead
+        fields = ['id', 'first_name', 'last_name', 'email', 'prefix', 'phone_number',
+                  'device_description', 'notes', 'status', 'created_at']
+        read_only_fields = ['id', 'created_at']
+
+    def validate(self, data):
+        email = data.get('email') or (self.instance and self.instance.email)
+        phone = data.get('phone_number') or (self.instance and self.instance.phone_number)
+        if not email and not phone:
+            raise serializers.ValidationError("Wymagany email lub numer telefonu.")
+        return data
+
+
+class WorkItemBriefSerializer(serializers.ModelSerializer):
+    device = serializers.SerializerMethodField()
+
+    class Meta:
+        model = WorkItem
+        fields = ['reference_id', 'status', 'device']
+
+    def get_device(self, obj):
+        if obj.customer_asset and obj.customer_asset.device:
+            d = obj.customer_asset.device
+            parts = list(filter(None, [d.manufacturer, d.model]))
+            return " ".join(parts) or None
+        return None
+
+
+class CustomerSearchSerializer(serializers.ModelSerializer):
+    work_items = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Customer
+        fields = ['id', 'first_name', 'last_name', 'phone_number', 'work_items']
+
+    def get_work_items(self, obj):
+        qs = (
+            WorkItem.objects
+            .filter(customer=obj)
+            .select_related('customer_asset__device')
+            .order_by('-created_date')[:5]
+        )
+        return WorkItemBriefSerializer(qs, many=True).data

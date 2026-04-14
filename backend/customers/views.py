@@ -11,7 +11,7 @@ import phonenumbers
 from phonenumbers import NumberParseException
 
 from core.mixins import TenantScopedMixin
-from .serializers import CustomerSerializer, AssetSerializer, LeadSerializer
+from .serializers import CustomerSerializer, CustomerSearchSerializer, LeadSerializer, AssetSerializer
 from .models import Customer, Asset, Lead
 from tasks.models import WorkItem
 from django.views.generic import TemplateView, ListView, DetailView, CreateView, UpdateView
@@ -260,13 +260,13 @@ def get_customer_assets(request, pk):
     return HttpResponse(html)
 
 class CustomerAPISearchView(generics.ListAPIView):
-    serializer_class = CustomerSerializer
+    serializer_class = CustomerSearchSerializer
 
     def get_queryset(self):
         user = self.request.user
 
         if user.is_superuser:
-            qs = Customer.objects.select_related("address").all()
+            qs = Customer.objects.all()
         else:
             if not self.request.tenant:
                 return Customer.objects.none()
@@ -274,16 +274,23 @@ class CustomerAPISearchView(generics.ListAPIView):
             if not user.has_permission('view_all_customers', self.request.tenant):
                 return Customer.objects.none()
 
-            qs = Customer.objects.select_related("address").filter(tenant=self.request.tenant)
+            qs = Customer.objects.filter(tenant=self.request.tenant)
 
         query = self.request.query_params.get('q', '').strip()
-        filters = Q(first_name__icontains=query) | Q(last_name__icontains=query)
+        if not query:
+            return qs.none()
+
+        filters = (
+            Q(first_name__icontains=query) |
+            Q(last_name__icontains=query) |
+            Q(workitem__reference_id__icontains=query)
+        )
 
         phone_query = ''.join(filter(str.isdigit, query))
         if phone_query:
             filters |= Q(phone_number__startswith=phone_query)
 
-        return qs.filter(filters)[:10]
+        return list(qs.filter(filters).distinct())[:10]
 
 # class CustomerCreateListView(generics.ListCreateAPIView):
 #     queryset = Customer.objects.all()

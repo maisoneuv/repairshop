@@ -21,13 +21,15 @@ from .views import (CustomerListView,
                     get_customer_assets,
                     CustomerAPISearchView,
                     get_referral_sources,
-                    CustomerViewSet, customer_assets_api, customer_lookup)
+                    CustomerViewSet, customer_assets_api, customer_lookup,
+                    LeadViewSet)
 
 app_name = "customers"
 
 router = DefaultRouter()
 router.register(r'customers', CustomerViewSet, basename="customer")
 router.register(r'assets', AssetViewSet, basename="asset")
+router.register(r'leads', LeadViewSet, basename="lead")
 
 urlpatterns = [
     path('all', CustomerListView.as_view(), name="customer_list"),
@@ -47,6 +49,7 @@ urlpatterns = [
     path('asset-create-inline/', asset_create_inline, name='asset_create_inline'),
     path('customer-assets/<int:pk>/', get_customer_assets, name='customer_assets'),
     path('api/customers/search/', CustomerAPISearchView.as_view(), name='customer-api-search'),
+    path('search/', CustomerAPISearchView.as_view(), name='customer-search-api'),
     # path('api/customers/', CustomerCreateListView.as_view(), name='customer-list-create'),
     path('api/assets/<int:pk>/', AssetRetrieveUpdateAPIView.as_view(), name='asset-api-detail'),
     path('api/referral-sources/', get_referral_sources, name='referral-sources'),
