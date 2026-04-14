@@ -30,7 +30,8 @@ class CallSerializer(serializers.ModelSerializer):
     class Meta:
         model = Call
         fields = ['id', 'type', 'phone_number', 'customer', 'lead',
-                  'customer_name', 'lead_name', 'work_items', 'created_at', 'handled_at', 'notes']
+                  'customer_name', 'lead_name', 'work_items',
+                  'created_at', 'handled_at', 'notes', 'duration', 'status']
 
     def get_customer_name(self, obj):
         if obj.customer:

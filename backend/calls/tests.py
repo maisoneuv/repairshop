@@ -372,3 +372,16 @@ class UpdateCallViewTest(TestCase):
         )
         call.refresh_from_db()
         self.assertIsNotNone(call.handled_at)
+
+    def test_patch_response_includes_duration_and_status(self):
+        call = self._make_call()
+        resp = self.client.patch(
+            f"/api/calls/{call.id}/",
+            {"duration": 120},
+            format="json",
+        )
+        self.assertEqual(resp.status_code, 200)
+        data = resp.json()
+        self.assertIn("duration", data)
+        self.assertIn("status", data)
+        self.assertEqual(data["duration"], 120)
