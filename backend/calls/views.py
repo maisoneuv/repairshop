@@ -1,3 +1,7 @@
+import phonenumbers
+from phonenumbers import NumberParseException
+
+from django.db import transaction
 from django.utils import timezone
 from datetime import timedelta
 from rest_framework.decorators import api_view, authentication_classes, permission_classes
@@ -9,7 +13,7 @@ from rest_framework import serializers as drf_serializers
 
 from core.authentication import APIKeyAuthentication
 from .models import Call
-from .serializers import CallSerializer
+from .serializers import CallSerializer, CallUpdateSerializer
 from customers.models import Customer, Lead
 
 
@@ -110,3 +114,94 @@ def mark_handled(request, pk):
         lead.save(update_fields=['notes'])
 
     return Response(CallSerializer(call).data)
+
+
+LEAD_CREATING_STATUSES = {'Sukces', 'Oddzwonić'}
+LEAD_STATUS_MAP = {
+    'Sukces': 'converted',
+    'Oddzwonić': 'callback',
+}
+
+
+@api_view(['PATCH'])
+@authentication_classes([SessionAuthentication, APIKeyAuthentication])
+@permission_classes([IsAuthenticated])
+def update_call(request, pk):
+    """Android app: update call duration and/or post-call status."""
+    try:
+        call = Call.objects.select_related('customer', 'lead').get(
+            pk=pk, tenant=request.tenant
+        )
+    except Call.DoesNotExist:
+        return Response(status=404)
+
+    serializer = CallUpdateSerializer(data=request.data, partial=True)
+    if not serializer.is_valid():
+        return Response(serializer.errors, status=400)
+
+    data = serializer.validated_data
+    duration = data.get('duration')
+    status_value = data.get('status', '')
+    note = data.get('note', '')
+
+    with transaction.atomic():
+        if duration is not None:
+            call.duration = duration
+
+        if note:
+            call.notes = note
+
+        if status_value:
+            call.status = status_value
+            call.handled_at = timezone.now()
+            _handle_lead_for_call(call, status_value, note, request.tenant)
+
+        call.save()
+
+    return Response(CallSerializer(call).data)
+
+
+def _handle_lead_for_call(call, status_value, note, tenant):
+    """Create or update Lead based on call outcome. Must be called inside atomic block."""
+    if status_value not in LEAD_CREATING_STATUSES:
+        return
+
+    lead_status = LEAD_STATUS_MAP[status_value]
+    today = timezone.now().strftime('%Y-%m-%d')
+
+    if call.customer:
+        return  # Returning customer — no Lead needed
+
+    if call.lead:
+        # Update existing lead
+        call.lead.status = lead_status
+        if note:
+            new_note_line = f"[{today}] {note}"
+            if call.lead.notes:
+                call.lead.notes = f"{call.lead.notes}\n{new_note_line}"
+            else:
+                call.lead.notes = new_note_line
+        call.lead.save(update_fields=['status', 'notes'])
+        return
+
+    # Create new lead from unknown caller
+    try:
+        parsed = phonenumbers.parse(call.phone_number, None)
+        prefix = f"+{parsed.country_code}"
+        national = str(parsed.national_number)
+    except NumberParseException:
+        prefix = None
+        national = call.phone_number
+
+    lead = Lead.objects.create(
+        tenant=tenant,
+        prefix=prefix,
+        phone_number=national,
+        first_name='',
+        status=lead_status,
+    )
+    if note:
+        lead.notes = f"[{today}] {note}"
+        lead.save(update_fields=['notes'])
+
+    call.lead = lead

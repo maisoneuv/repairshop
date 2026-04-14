@@ -200,3 +200,175 @@ class IncomingCallViewTest(TestCase):
         data = resp.json()
         for field in ["id", "type", "phone_number", "customer_name", "lead_name", "work_items"]:
             self.assertIn(field, data)
+
+
+class UpdateCallViewTest(TestCase):
+    def setUp(self):
+        self.tenant = Tenant.objects.create(name="Patch Tenant", subdomain="patchtest")
+        self.user = User.objects.create_user(
+            email="patch@test.com",
+            password="pass",
+            username="patchuser",
+            tenant=self.tenant,
+        )
+        self.client = APIClient()
+        self.client.force_authenticate(user=self.user)
+        self.client.credentials(HTTP_X_TENANT="patchtest")
+
+    def _make_call(self, phone="+48500000099", customer=None, lead=None):
+        return Call.objects.create(
+            tenant=self.tenant,
+            phone_number=phone,
+            customer=customer,
+            lead=lead,
+        )
+
+    def test_patch_duration_only(self):
+        call = self._make_call()
+        resp = self.client.patch(
+            f"/api/calls/{call.id}/",
+            {"duration": 120},
+            format="json",
+        )
+        self.assertEqual(resp.status_code, 200)
+        call.refresh_from_db()
+        self.assertEqual(call.duration, 120)
+        self.assertIsNone(call.handled_at)  # no status → not handled yet
+
+    def test_patch_status_sukces_creates_lead(self):
+        call = self._make_call(phone="+48600000001")
+        resp = self.client.patch(
+            f"/api/calls/{call.id}/",
+            {"status": "Sukces", "note": "Bardzo zainteresowany"},
+            format="json",
+        )
+        self.assertEqual(resp.status_code, 200)
+        call.refresh_from_db()
+        self.assertEqual(call.status, "Sukces")
+        self.assertIsNotNone(call.handled_at)
+        self.assertIsNotNone(call.lead)
+        self.assertEqual(call.lead.status, "converted")
+
+    def test_patch_status_oddzwonic_creates_lead_callback(self):
+        call = self._make_call(phone="+48600000002")
+        resp = self.client.patch(
+            f"/api/calls/{call.id}/",
+            {"status": "Oddzwonić"},
+            format="json",
+        )
+        self.assertEqual(resp.status_code, 200)
+        call.refresh_from_db()
+        self.assertIsNotNone(call.lead)
+        self.assertEqual(call.lead.status, "callback")
+
+    def test_patch_status_pomylka_no_lead(self):
+        call = self._make_call(phone="+48600000003")
+        resp = self.client.patch(
+            f"/api/calls/{call.id}/",
+            {"status": "Pomyłka"},
+            format="json",
+        )
+        self.assertEqual(resp.status_code, 200)
+        call.refresh_from_db()
+        self.assertIsNone(call.lead)
+        self.assertIsNone(call.customer)
+
+    def test_patch_status_nie_zainteresowany_no_lead(self):
+        call = self._make_call(phone="+48600000004")
+        resp = self.client.patch(
+            f"/api/calls/{call.id}/",
+            {"status": "Nie zainteresowany"},
+            format="json",
+        )
+        self.assertEqual(resp.status_code, 200)
+        call.refresh_from_db()
+        self.assertIsNone(call.lead)
+
+    def test_patch_updates_existing_lead_status(self):
+        lead = Lead.objects.create(
+            tenant=self.tenant,
+            first_name="Ewa",
+            phone_number="600000005",
+            status="new",
+        )
+        call = self._make_call(phone="600000005", lead=lead)
+        resp = self.client.patch(
+            f"/api/calls/{call.id}/",
+            {"status": "Oddzwonić"},
+            format="json",
+        )
+        self.assertEqual(resp.status_code, 200)
+        lead.refresh_from_db()
+        self.assertEqual(lead.status, "callback")
+        self.assertEqual(Lead.objects.filter(tenant=self.tenant).count(), 1)
+
+    def test_patch_customer_no_lead_created(self):
+        customer = Customer.objects.create(
+            tenant=self.tenant,
+            first_name="Marek",
+            phone_number="600000006",
+        )
+        call = self._make_call(phone="600000006", customer=customer)
+        resp = self.client.patch(
+            f"/api/calls/{call.id}/",
+            {"status": "Sukces"},
+            format="json",
+        )
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(Lead.objects.filter(tenant=self.tenant).count(), 0)
+
+    def test_patch_note_saved_to_call_and_lead(self):
+        call = self._make_call(phone="+48600000007")
+        resp = self.client.patch(
+            f"/api/calls/{call.id}/",
+            {"status": "Oddzwonić", "note": "Zadzwonić po 15:00"},
+            format="json",
+        )
+        self.assertEqual(resp.status_code, 200)
+        call.refresh_from_db()
+        self.assertIn("Zadzwonić po 15:00", call.notes)
+        self.assertIn("Zadzwonić po 15:00", call.lead.notes)
+
+    def test_patch_note_appended_to_existing_lead_notes(self):
+        lead = Lead.objects.create(
+            tenant=self.tenant,
+            first_name="Zofia",
+            phone_number="600000008",
+            status="new",
+            notes="Stara notatka",
+        )
+        call = self._make_call(phone="600000008", lead=lead)
+        self.client.patch(
+            f"/api/calls/{call.id}/",
+            {"status": "Sukces", "note": "Nowa notatka"},
+            format="json",
+        )
+        lead.refresh_from_db()
+        self.assertIn("Stara notatka", lead.notes)
+        self.assertIn("Nowa notatka", lead.notes)
+
+    def test_patch_unknown_call_returns_404(self):
+        resp = self.client.patch(
+            "/api/calls/99999/",
+            {"duration": 10},
+            format="json",
+        )
+        self.assertEqual(resp.status_code, 404)
+
+    def test_patch_sets_handled_at_only_with_status(self):
+        call = self._make_call(phone="+48600000009")
+        self.client.patch(
+            f"/api/calls/{call.id}/",
+            {"duration": 30},
+            format="json",
+        )
+        call.refresh_from_db()
+        self.assertIsNone(call.handled_at)
+
+        self.client.patch(
+            f"/api/calls/{call.id}/",
+            {"status": "Sukces"},
+            format="json",
+        )
+        call.refresh_from_db()
+        self.assertIsNotNone(call.handled_at)
