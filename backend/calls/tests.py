@@ -83,3 +83,42 @@ class MarkHandledLeadNotesTest(TestCase):
             format="json",
         )
         self.assertEqual(resp.status_code, 200)
+
+
+class CallNewFieldsTest(TestCase):
+    def setUp(self):
+        self.tenant = Tenant.objects.create(name="Fields Tenant", subdomain="fieldstest")
+
+    def test_call_stores_duration(self):
+        call = Call.objects.create(
+            tenant=self.tenant,
+            phone_number="+48500000001",
+            duration=145,
+        )
+        call.refresh_from_db()
+        self.assertEqual(call.duration, 145)
+
+    def test_call_stores_status(self):
+        call = Call.objects.create(
+            tenant=self.tenant,
+            phone_number="+48500000002",
+            status="Sukces",
+        )
+        call.refresh_from_db()
+        self.assertEqual(call.status, "Sukces")
+
+    def test_call_duration_nullable(self):
+        call = Call.objects.create(
+            tenant=self.tenant,
+            phone_number="+48500000003",
+        )
+        call.refresh_from_db()
+        self.assertIsNone(call.duration)
+
+    def test_call_status_blank_by_default(self):
+        call = Call.objects.create(
+            tenant=self.tenant,
+            phone_number="+48500000004",
+        )
+        call.refresh_from_db()
+        self.assertEqual(call.status, "")
