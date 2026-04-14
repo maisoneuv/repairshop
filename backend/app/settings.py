@@ -66,6 +66,7 @@ INSTALLED_APPS = [
     'import_export',
     'documents',
     'ckeditor',
+    'calls',
 ]
 
 MIDDLEWARE = [
@@ -187,6 +188,7 @@ REST_FRAMEWORK = {
     ],
     'DEFAULT_SCHEMA_CLASS': 'drf_spectacular.openapi.AutoSchema',
     'DEFAULT_FILTER_BACKENDS': ['django_filters.rest_framework.DjangoFilterBackend'],
+    'EXCEPTION_HANDLER': 'core.exceptions.json_exception_handler',
 }
 
 LOGIN_REDIRECT_URL = '/'
