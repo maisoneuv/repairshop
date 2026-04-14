@@ -1,15 +1,11 @@
 from django.utils import timezone
 from datetime import timedelta
-from django.db import transaction
 from rest_framework.decorators import api_view, authentication_classes, permission_classes
 from rest_framework.response import Response
-from rest_framework.permissions import IsAuthenticated
+from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.authentication import SessionAuthentication
 from drf_spectacular.utils import extend_schema, inline_serializer
 from rest_framework import serializers as drf_serializers
-
-import phonenumbers
-from phonenumbers import NumberParseException
 
 from core.authentication import APIKeyAuthentication
 from .models import Call
@@ -17,10 +13,31 @@ from .serializers import CallSerializer
 from customers.models import Customer, Lead
 
 
+@api_view(['POST'])
+@authentication_classes([AllowAny])
+@permission_classes([AllowAny])
+def debug_incoming_call(request):
+    """Debug endpoint - returns detailed info about incoming request."""
+    return Response({
+        'method': request.method,
+        'path': request.path,
+        'content_type': request.content_type,
+        'headers': dict((k.replace('HTTP_', ''), v) for k, v in request.META.items() if k.startswith('HTTP_')),
+        'body_raw': request.body.decode('utf-8', errors='replace'),
+        'data': request.data,
+        'user': str(request.user),
+        'auth': str(request.auth),
+        'tenant': str(getattr(request, 'tenant', None)),
+    })
+
+
 @extend_schema(
     request=inline_serializer(
         name='IncomingCallRequest',
-        fields={'phone_number': drf_serializers.CharField(help_text='Numer telefonu w formacie E.164, np. +48123456789')}
+        fields={
+            'phone_number': drf_serializers.CharField(help_text='Numer telefonu, np. +48123456789'),
+            'type': drf_serializers.ChoiceField(choices=['incoming', 'outbound'], default='incoming'),
+        }
     ),
     responses={201: CallSerializer},
 )
@@ -28,40 +45,27 @@ from customers.models import Customer, Lead
 @authentication_classes([SessionAuthentication, APIKeyAuthentication])
 @permission_classes([IsAuthenticated])
 def incoming_call(request):
-    """Used by Android app to register incoming calls."""
+    """Used by Android app to register incoming/outgoing calls."""
     phone = request.data.get('phone_number', '').strip()
+    call_type = request.data.get('type', 'incoming')
+    if call_type not in ('incoming', 'outbound'):
+        call_type = 'incoming'
     if not phone:
         return Response({'detail': 'phone_number wymagany.'}, status=400)
     tenant = request.tenant
 
-    # Parse phone number to separate prefix and national number
-    try:
-        parsed = phonenumbers.parse(phone, None)
-        lead_prefix = f"+{parsed.country_code}"
-        lead_phone = str(parsed.national_number)
-    except NumberParseException:
-        lead_prefix = None
-        lead_phone = phone
+    customer = Customer.objects.filter(tenant=tenant, full_phone_number=phone).first()
+    lead = None
+    if not customer:
+        lead = Lead.objects.filter(tenant=tenant, full_phone_number=phone).first()
 
-    with transaction.atomic():
-        customer = Customer.objects.filter(tenant=tenant, full_phone_number=phone).first()
-        lead = None
-        if not customer:
-            lead = Lead.objects.filter(tenant=tenant, full_phone_number=phone).first()
-            if not lead:
-                lead = Lead.objects.create(
-                    tenant=tenant,
-                    prefix=lead_prefix,
-                    phone_number=lead_phone,
-                    first_name='',
-                    status='new',
-                )
-        call = Call.objects.create(
-            tenant=tenant,
-            phone_number=phone,
-            customer=customer,
-            lead=lead,
-        )
+    call = Call.objects.create(
+        tenant=tenant,
+        phone_number=phone,
+        type=call_type,
+        customer=customer,
+        lead=lead,
+    )
     return Response(CallSerializer(call).data, status=201)
 
 

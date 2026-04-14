@@ -122,3 +122,81 @@ class CallNewFieldsTest(TestCase):
         )
         call.refresh_from_db()
         self.assertEqual(call.status, "")
+
+
+class IncomingCallViewTest(TestCase):
+    def setUp(self):
+        self.tenant = Tenant.objects.create(name="Incoming Tenant", subdomain="incomingtest")
+        self.user = User.objects.create_user(
+            email="inc@test.com",
+            password="pass",
+            username="incuser",
+            tenant=self.tenant,
+        )
+        self.client = APIClient()
+        self.client.force_authenticate(user=self.user)
+        self.client.credentials(HTTP_X_TENANT="incomingtest")
+
+    def test_unknown_number_does_not_create_lead(self):
+        resp = self.client.post(
+            "/api/calls/incoming/",
+            {"phone_number": "+48555666777", "type": "incoming"},
+            format="json",
+        )
+        self.assertEqual(resp.status_code, 201)
+        self.assertIsNone(resp.json().get("lead"))
+        self.assertEqual(Lead.objects.filter(tenant=self.tenant).count(), 0)
+
+    def test_saves_type_field(self):
+        resp = self.client.post(
+            "/api/calls/incoming/",
+            {"phone_number": "+48555666778", "type": "outbound"},
+            format="json",
+        )
+        self.assertEqual(resp.status_code, 201)
+        call = Call.objects.get(id=resp.json()["id"])
+        self.assertEqual(call.type, "outbound")
+
+    def test_links_existing_customer(self):
+        customer = Customer.objects.create(
+            tenant=self.tenant,
+            first_name="Anna",
+            last_name="Nowak",
+            phone_number="600111222",
+        )
+        resp = self.client.post(
+            "/api/calls/incoming/",
+            {"phone_number": "600111222", "type": "incoming"},
+            format="json",
+        )
+        self.assertEqual(resp.status_code, 201)
+        data = resp.json()
+        self.assertEqual(data["customer"], customer.id)
+        self.assertIsNotNone(data["customer_name"])
+
+    def test_links_existing_lead(self):
+        lead = Lead.objects.create(
+            tenant=self.tenant,
+            first_name="Piotr",
+            phone_number="600333444",
+            status="new",
+        )
+        resp = self.client.post(
+            "/api/calls/incoming/",
+            {"phone_number": "600333444", "type": "incoming"},
+            format="json",
+        )
+        self.assertEqual(resp.status_code, 201)
+        data = resp.json()
+        self.assertEqual(data["lead"], lead.id)
+
+    def test_response_contains_required_fields(self):
+        resp = self.client.post(
+            "/api/calls/incoming/",
+            {"phone_number": "+48555666779", "type": "incoming"},
+            format="json",
+        )
+        self.assertEqual(resp.status_code, 201)
+        data = resp.json()
+        for field in ["id", "type", "phone_number", "customer_name", "lead_name", "work_items"]:
+            self.assertIn(field, data)
