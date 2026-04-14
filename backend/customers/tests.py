@@ -39,3 +39,22 @@ class CustomerLookupAPITest(TestCase):
     def test_404_for_unknown_phone(self):
         resp = self._get("999999999")
         self.assertEqual(resp.status_code, 404)
+
+
+class LeadCallbackStatusTest(TestCase):
+    def setUp(self):
+        self.tenant = Tenant.objects.create(name="CB Tenant", subdomain="cbtest")
+
+    def test_lead_can_have_callback_status(self):
+        lead = Lead.objects.create(
+            tenant=self.tenant,
+            first_name="Test",
+            phone_number="600000001",
+            status="callback",
+        )
+        lead.refresh_from_db()
+        self.assertEqual(lead.status, "callback")
+
+    def test_callback_in_status_choices(self):
+        choices_values = [c[0] for c in Lead.STATUS_CHOICES]
+        self.assertIn("callback", choices_values)
