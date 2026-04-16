@@ -5,6 +5,8 @@ from tenants.models import Tenant
 from customers.models import Customer, Lead
 from calls.models import Call
 from core.models import User
+from tasks.models import Task
+from service.models import Employee, Location
 
 
 class MarkHandledLeadNotesTest(TestCase):
@@ -347,6 +349,41 @@ class UpdateCallViewTest(TestCase):
         self.assertIn("Stara notatka", lead.notes)
         self.assertIn("Nowa notatka", lead.notes)
 
+    def test_patch_handled_note_appends_to_existing_lead(self):
+        lead = Lead.objects.create(
+            tenant=self.tenant,
+            first_name="Ola",
+            phone_number="600000010",
+            status="new",
+        )
+        call = self._make_call(phone="600000010", lead=lead)
+        self.client.patch(
+            f"/api/calls/{call.id}/",
+            {"status": "Handled", "note": "Pierwsza notatka z overlayu"},
+            format="json",
+        )
+        call.refresh_from_db()
+        lead.refresh_from_db()
+        self.assertIn("Pierwsza notatka z overlayu", call.notes)
+        self.assertIn("Pierwsza notatka z overlayu", lead.notes)
+
+    def test_patch_success_carries_previous_call_note_to_new_lead(self):
+        call = self._make_call(phone="+48600000011")
+        self.client.patch(
+            f"/api/calls/{call.id}/",
+            {"status": "Handled", "note": "Notatka przed zakonczeniem rozmowy"},
+            format="json",
+        )
+        resp = self.client.patch(
+            f"/api/calls/{call.id}/",
+            {"status": "Success"},
+            format="json",
+        )
+        self.assertEqual(resp.status_code, 200)
+        call.refresh_from_db()
+        self.assertIsNotNone(call.lead)
+        self.assertIn("Notatka przed zakonczeniem rozmowy", call.lead.notes)
+
     def test_patch_unknown_call_returns_404(self):
         resp = self.client.patch(
             "/api/calls/99999/",
@@ -385,3 +422,115 @@ class UpdateCallViewTest(TestCase):
         self.assertIn("duration", data)
         self.assertIn("status", data)
         self.assertEqual(data["duration"], 120)
+
+
+class CompleteAfterCallViewTest(TestCase):
+    def setUp(self):
+        self.tenant = Tenant.objects.create(name="Complete Tenant", subdomain="completetest")
+        self.user = User.objects.create_user(
+            email="complete@test.com",
+            password="pass",
+            username="completeuser",
+            tenant=self.tenant,
+        )
+        self.user.is_superuser = True
+        self.user.save(update_fields=["is_superuser"])
+        self.location = Location.objects.create(tenant=self.tenant, name="Main desk")
+        self.employee = Employee.objects.create(
+            tenant=self.tenant,
+            user=self.user,
+            role="Customer Service",
+            location=self.location,
+        )
+        self.client = APIClient()
+        self.client.force_authenticate(user=self.user)
+        self.client.credentials(HTTP_X_TENANT="completetest")
+
+    def _make_call(self, phone="+48555111222", customer=None, lead=None):
+        return Call.objects.create(
+            tenant=self.tenant,
+            phone_number=phone,
+            customer=customer,
+            lead=lead,
+        )
+
+    def test_complete_after_call_creates_named_lead_for_unknown_number(self):
+        call = self._make_call()
+        resp = self.client.post(
+            f"/api/calls/{call.id}/complete/",
+            {
+                "status": "Success",
+                "note": "Klient chce ofertę",
+                "lead_first_name": "Jan",
+                "lead_last_name": "Nowak",
+            },
+            format="json",
+        )
+        self.assertEqual(resp.status_code, 200)
+        call.refresh_from_db()
+        self.assertIsNotNone(call.lead)
+        self.assertEqual(call.lead.first_name, "Jan")
+        self.assertEqual(call.lead.last_name, "Nowak")
+        self.assertEqual(call.lead.status, "converted")
+        self.assertIn("Klient chce ofertę", call.lead.notes)
+
+    def test_complete_after_call_updates_existing_lead_names(self):
+        lead = Lead.objects.create(
+            tenant=self.tenant,
+            first_name="",
+            last_name="",
+            phone_number="555111223",
+            status="new",
+        )
+        call = self._make_call(phone="555111223", lead=lead)
+        resp = self.client.post(
+            f"/api/calls/{call.id}/complete/",
+            {
+                "status": "Callback",
+                "lead_first_name": "Ala",
+                "lead_last_name": "Kot",
+            },
+            format="json",
+        )
+        self.assertEqual(resp.status_code, 200)
+        lead.refresh_from_db()
+        self.assertEqual(lead.first_name, "Ala")
+        self.assertEqual(lead.last_name, "Kot")
+        self.assertEqual(lead.status, "callback")
+
+    def test_complete_after_call_creates_follow_up_task(self):
+        call = self._make_call()
+        resp = self.client.post(
+            f"/api/calls/{call.id}/complete/",
+            {
+                "status": "Callback",
+                "note": "Oddzwonić jutro",
+                "lead_first_name": "Marek",
+                "follow_up_task_summary": "Oddzwonić do klienta",
+                "follow_up_task_due_date": "2026-04-17",
+            },
+            format="json",
+        )
+        self.assertEqual(resp.status_code, 200)
+        task = Task.objects.get(tenant=self.tenant)
+        self.assertEqual(task.summary, "Oddzwonić do klienta")
+        self.assertEqual(str(task.due_date), "2026-04-17")
+        self.assertEqual(task.assigned_employee, self.employee)
+        self.assertEqual(resp.json()["task"]["summary"], "Oddzwonić do klienta")
+
+    def test_complete_after_call_for_customer_does_not_create_lead(self):
+        customer = Customer.objects.create(
+            tenant=self.tenant,
+            first_name="Ewa",
+            phone_number="555111224",
+        )
+        call = self._make_call(phone="555111224", customer=customer)
+        resp = self.client.post(
+            f"/api/calls/{call.id}/complete/",
+            {"status": "Success", "note": "Stały klient"},
+            format="json",
+        )
+        self.assertEqual(resp.status_code, 200)
+        call.refresh_from_db()
+        self.assertEqual(call.customer, customer)
+        self.assertIsNone(call.lead)

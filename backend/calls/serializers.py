@@ -64,3 +64,12 @@ class CallUpdateSerializer(serializers.Serializer):
     duration = serializers.IntegerField(required=False, min_value=0, allow_null=True)
     status = serializers.CharField(required=False, allow_blank=True, max_length=30)
     note = serializers.CharField(required=False, allow_blank=True)
+
+
+class CompleteAfterCallSerializer(serializers.Serializer):
+    status = serializers.CharField(required=True, allow_blank=False, max_length=30)
+    note = serializers.CharField(required=False, allow_blank=True)
+    lead_first_name = serializers.CharField(required=False, allow_blank=True, max_length=100)
+    lead_last_name = serializers.CharField(required=False, allow_blank=True, max_length=100)
+    follow_up_task_summary = serializers.CharField(required=False, allow_blank=True)
+    follow_up_task_due_date = serializers.DateField(required=False, allow_null=True)
