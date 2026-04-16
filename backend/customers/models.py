@@ -42,6 +42,7 @@ class Customer(models.Model):
         help_text="Country code prefix (e.g., '+48', '+1')"
     )
     tax_code = models.CharField(max_length=10, null=True, blank=True, validators=[tax_code_regex])
+    full_phone_number = models.CharField(max_length=20, blank=True, null=True, db_index=True)
 
     def full_name(self):
         parts = [self.first_name, self.last_name]
@@ -54,6 +55,15 @@ class Customer(models.Model):
         super().clean()
         if not self.email and not self.phone_number:
             raise ValidationError("Please provide at least an email address or phone number.")
+
+    def save(self, *args, **kwargs):
+        if self.prefix and self.phone_number:
+            self.full_phone_number = f"{self.prefix}{self.phone_number}"
+        elif self.phone_number:
+            self.full_phone_number = self.phone_number
+        else:
+            self.full_phone_number = None
+        super().save(*args, **kwargs)
 
     class Meta:
         permissions = [
@@ -82,19 +92,50 @@ class Customer(models.Model):
 
 
 class Lead(models.Model):
-    first_name = models.CharField(max_length=255)
-    last_name = models.CharField(max_length=255, blank=False, null=False)
-    email = models.EmailField(unique=True, blank=True, null=True)
+    STATUS_CHOICES = [
+        ('new', 'New'),
+        ('contacted', 'Contacted'),
+        ('callback', 'Callback'),
+        ('converted', 'Converted'),
+    ]
 
-    phone_regex = RegexValidator(
-        regex=r'\d{7,9}$',
-        message='Phone number must be entered without any special characters. Up to 9 digits allowed'
-    )
+    tenant = models.ForeignKey(Tenant, on_delete=models.CASCADE)
+    first_name = models.CharField(max_length=100)
+    last_name = models.CharField(max_length=100, blank=True, null=True)
+    email = models.EmailField(blank=True, null=True)
+    prefix = models.CharField(max_length=5, blank=True, null=True)
+    phone_number = models.CharField(max_length=15, blank=True, null=True)
+    full_phone_number = models.CharField(max_length=20, blank=True, null=True, db_index=True)
+    device_description = models.TextField(blank=True, null=True)
+    notes = models.TextField(blank=True, null=True)
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='new')
+    created_at = models.DateTimeField(auto_now_add=True)
 
-    phone_number = models.CharField(max_length=9, null=True, blank=True, validators=[phone_regex])
+    class Meta:
+        ordering = ['-created_at']
+        constraints = [
+            models.UniqueConstraint(
+                fields=['tenant', 'email'],
+                condition=models.Q(email__isnull=False),
+                name='unique_lead_email_per_tenant'
+            )
+        ]
 
     def full_name(self):
-        return f"{self.first_name} {self.last_name}"
+        parts = [self.first_name, self.last_name]
+        return " ".join(filter(None, parts)).strip()
+
+    def __str__(self):
+        return self.full_name() or self.email or self.phone_number or f"Lead {self.pk}"
+
+    def save(self, *args, **kwargs):
+        if self.prefix and self.phone_number:
+            self.full_phone_number = f"{self.prefix}{self.phone_number}"
+        elif self.phone_number:
+            self.full_phone_number = self.phone_number
+        else:
+            self.full_phone_number = None
+        super().save(*args, **kwargs)
 
 
 class Opportunity(models.Model):

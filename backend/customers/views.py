@@ -2,16 +2,17 @@ from django.db.models.expressions import result
 from django.shortcuts import render, reverse, get_object_or_404
 from django.template.loader import render_to_string
 from rest_framework import generics, viewsets
-from rest_framework.decorators import api_view
+from rest_framework.decorators import api_view, action
 from rest_framework.exceptions import PermissionDenied
 from rest_framework.response import Response
+from django.db import transaction
 
 import phonenumbers
 from phonenumbers import NumberParseException
 
 from core.mixins import TenantScopedMixin
-from .serializers import CustomerSerializer, AssetSerializer
-from .models import Customer, Asset
+from .serializers import CustomerSerializer, LeadSerializer, AssetSerializer
+from .models import Customer, Asset, Lead
 from tasks.models import WorkItem
 from django.views.generic import TemplateView, ListView, DetailView, CreateView, UpdateView
 from .forms import CustomerForm, CustomerAssetForm, CustomerInlineForm, CustomerAssetInlineForm
@@ -276,13 +277,20 @@ class CustomerAPISearchView(generics.ListAPIView):
             qs = Customer.objects.select_related("address").filter(tenant=self.request.tenant)
 
         query = self.request.query_params.get('q', '').strip()
-        filters = Q(first_name__icontains=query) | Q(last_name__icontains=query)
+        if not query:
+            return qs.none()
+
+        filters = (
+            Q(first_name__icontains=query) |
+            Q(last_name__icontains=query) |
+            Q(workitem__reference_id__icontains=query)
+        )
 
         phone_query = ''.join(filter(str.isdigit, query))
         if phone_query:
             filters |= Q(phone_number__startswith=phone_query)
 
-        return qs.filter(filters)[:10]
+        return qs.filter(filters).distinct()[:10]
 
 # class CustomerCreateListView(generics.ListCreateAPIView):
 #     queryset = Customer.objects.all()
@@ -369,15 +377,9 @@ def customer_assets_api(request, pk):
 @api_view(["GET"])
 def customer_lookup(request):
     """
-    Lookup customer by phone number and return customer info + latest work item device.
-
-    Query params:
-        phone: Phone number in any format (e.g., '+48-555-123-456', '(555) 123-4567')
-
-    Returns:
-        200: Customer found with optional work item data
-        404: Customer not found
-        400: Invalid phone number or missing parameter
+    Lookup customer by phone number.
+    Returns customer info, active work items (status != 'Resolved'),
+    and latest closed work item (status == 'Resolved') as fallback.
     """
     phone_param = request.GET.get('phone', '').strip()
 
@@ -387,7 +389,6 @@ def customer_lookup(request):
             status=400
         )
 
-    # Get tenant from request (set by API key authentication)
     tenant = getattr(request, 'tenant', None)
     if not tenant:
         return Response(
@@ -395,16 +396,14 @@ def customer_lookup(request):
             status=400
         )
 
-    # Parse phone number using phonenumbers library
     prefix = None
     phone_number = None
 
     try:
-        parsed = phonenumbers.parse(phone_param, None)  # None = no default region
+        parsed = phonenumbers.parse(phone_param, None)
         prefix = f"+{parsed.country_code}"
         phone_number = str(parsed.national_number)
     except NumberParseException:
-        # Fallback: Try to extract digits manually
         digits = ''.join(filter(str.isdigit, phone_param))
         if not digits:
             return Response(
@@ -412,35 +411,26 @@ def customer_lookup(request):
                 status=400
             )
 
-        # Check if starts with '+'
         if phone_param.strip().startswith('+'):
-            # Try to separate prefix from number
-            # Simple heuristic: country codes are 1-4 digits
             for i in range(1, min(5, len(digits) + 1)):
                 prefix_candidate = f"+{digits[:i]}"
                 phone_candidate = digits[i:]
-
-                # Try to find customer with this split
                 customer = Customer.objects.filter(
                     tenant=tenant,
                     prefix=prefix_candidate,
                     phone_number=phone_candidate
                 ).first()
-
                 if customer:
                     prefix = prefix_candidate
                     phone_number = phone_candidate
                     break
             else:
-                # No match found with prefix splitting
                 prefix = None
                 phone_number = digits
         else:
             prefix = None
             phone_number = digits
 
-    # Search for customer
-    # Try with prefix first (if available), then without
     customer = None
 
     if prefix:
@@ -450,7 +440,6 @@ def customer_lookup(request):
             phone_number=phone_number
         ).select_related('address').first()
 
-    # Fallback: Search without prefix (for legacy data or local numbers)
     if not customer:
         customer = Customer.objects.filter(
             tenant=tenant,
@@ -463,44 +452,85 @@ def customer_lookup(request):
             status=404
         )
 
-    # Build customer data
     customer_data = {
+        "id": customer.id,
         "first_name": customer.first_name,
-        "last_name": customer.last_name or "",  # Handle null last_name
+        "last_name": customer.last_name or "",
     }
 
-    # Find latest work item for this customer
-    latest_work_item = WorkItem.objects.filter(
-        tenant=tenant,
-        customer=customer
-    ).select_related(
-        'customer_asset__device__category'
-    ).order_by('-created_date').first()
+    def _work_item_dict(wi):
+        device_model = ""
+        if wi.customer_asset and wi.customer_asset.device:
+            device_model = wi.customer_asset.device.model or ""
+        return {
+            "id": wi.id,
+            "reference_id": wi.reference_id or "",
+            "status": wi.status,
+            "device_model": device_model,
+            "created_date": wi.created_date.isoformat() if wi.created_date else "",
+        }
 
-    # Build work item data
-    work_item_data = None
-    if latest_work_item:
-        # Extract device info if available
-        if latest_work_item.customer_asset and latest_work_item.customer_asset.device:
-            device = latest_work_item.customer_asset.device
-            work_item_data = {
-                "device_manufacturer": device.manufacturer or "",
-                "device_model": device.model or "",
-                "device_category": device.category.name if device.category else "",
-                "created_date": latest_work_item.created_date.isoformat() if latest_work_item.created_date else "",
-                "status": latest_work_item.status or ""
-            }
-        else:
-            # Work item exists but has no device info
-            work_item_data = {
-                "device_manufacturer": "",
-                "device_model": "",
-                "device_category": "",
-                "created_date": latest_work_item.created_date.isoformat() if latest_work_item.created_date else "",
-                "status": latest_work_item.status or ""
-            }
+    active_qs = WorkItem.objects.filter(
+        tenant=tenant,
+        customer=customer,
+    ).exclude(status='Resolved').select_related(
+        'customer_asset__device'
+    ).order_by('-created_date')[:3]
+
+    active_work_items = [_work_item_dict(wi) for wi in active_qs]
+
+    latest_closed_wi = WorkItem.objects.filter(
+        tenant=tenant,
+        customer=customer,
+        status='Resolved'
+    ).select_related('customer_asset__device').order_by('-created_date').first()
+
+    latest_closed_work_item = _work_item_dict(latest_closed_wi) if latest_closed_wi else None
 
     return Response({
         "customer": customer_data,
-        "latest_work_item": work_item_data
+        "active_work_items": active_work_items,
+        "latest_closed_work_item": latest_closed_work_item,
     })
+
+
+class LeadViewSet(TenantScopedMixin, viewsets.ModelViewSet):
+    serializer_class = LeadSerializer
+    http_method_names = ['get', 'post', 'patch', 'head', 'options']
+
+    def get_queryset(self):
+        if self.request.user.is_superuser:
+            return Lead.objects.all()
+        if getattr(self.request, 'tenant', None):
+            return Lead.objects.filter(tenant=self.request.tenant)
+        return Lead.objects.none()
+
+    def perform_create(self, serializer):
+        serializer.save(tenant=self.request.tenant)
+
+    @action(detail=True, methods=['post'], url_path='convert')
+    @transaction.atomic
+    def convert(self, request, pk=None):
+        lead = self.get_object()
+        if lead.status == 'converted':
+            return Response({'detail': 'Lead już skonwertowany.'}, status=400)
+        tenant = request.tenant
+        customer = None
+        if lead.email:
+            customer = Customer.objects.filter(tenant=tenant, email=lead.email).first()
+        if not customer and lead.phone_number:
+            customer = Customer.objects.filter(
+                tenant=tenant, prefix=lead.prefix, phone_number=lead.phone_number
+            ).first()
+        if not customer:
+            customer = Customer.objects.create(
+                tenant=tenant,
+                first_name=lead.first_name,
+                last_name=lead.last_name or '',
+                email=lead.email,
+                prefix=lead.prefix,
+                phone_number=lead.phone_number,
+            )
+        lead.status = 'converted'
+        lead.save(update_fields=['status'])
+        return Response(CustomerSerializer(customer, context={'request': request}).data)

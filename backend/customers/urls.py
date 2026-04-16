@@ -21,13 +21,15 @@ from .views import (CustomerListView,
                     get_customer_assets,
                     CustomerAPISearchView,
                     get_referral_sources,
-                    CustomerViewSet, customer_assets_api, customer_lookup)
+                    CustomerViewSet, customer_assets_api, customer_lookup,
+                    LeadViewSet)
 
 app_name = "customers"
 
 router = DefaultRouter()
 router.register(r'customers', CustomerViewSet, basename="customer")
 router.register(r'assets', AssetViewSet, basename="asset")
+router.register(r'leads', LeadViewSet, basename="lead")
 
 urlpatterns = [
     path('all', CustomerListView.as_view(), name="customer_list"),

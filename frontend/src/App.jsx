@@ -21,6 +21,8 @@ import ReceiveDelivery from "./features/Inventory/ReceiveDelivery";
 import SettingsPage from "./pages/SettingsPage";
 import LockScreen from "./components/LockScreen";
 import { useUser } from "./context/UserContext";
+import LeadBoard from "./pages/LeadBoard";
+import CarMode from "./pages/CarMode";
 
 function App() {
     const { user, loading, isLocked } = useUser();
@@ -60,7 +62,9 @@ function App() {
                 <Route path="/search" element={<SearchResults />} />
                 <Route path="/profile" element={<ProfilePage />} />
                 <Route path="/settings" element={<SettingsPage />} />
+                <Route path="/leads" element={<LeadBoard />} />
             </Route>
+            <Route path="/car" element={<CarMode />} />
             <Route path="/login" element={<Navigate to="/" replace />} />
         </Routes>
     );

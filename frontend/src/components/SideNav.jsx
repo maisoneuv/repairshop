@@ -15,6 +15,7 @@ import {
     Home,
     ChevronsLeft,
     ChevronsRight,
+    UserPlus,
 } from "lucide-react";
 import GlobalActionsSection from "../features/CustomActions/GlobalActionsSection";
 
@@ -63,6 +64,16 @@ const NAV_GROUPS = [
         children: [
             { label: "All Registers", path: "/cash-registers", icon: List },
             { label: "New Register", path: "/cash-registers/new", icon: Plus, accent: true },
+        ],
+    },
+    {
+        key: "leads",
+        label: "Leady",
+        icon: UserPlus,
+        mobileOnly: false,
+        basePaths: ["/leads"],
+        children: [
+            { label: "Wszystkie Leady", path: "/leads", icon: List },
         ],
     },
 ];
