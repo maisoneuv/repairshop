@@ -49,7 +49,6 @@ urlpatterns = [
     path('asset-create-inline/', asset_create_inline, name='asset_create_inline'),
     path('customer-assets/<int:pk>/', get_customer_assets, name='customer_assets'),
     path('api/customers/search/', CustomerAPISearchView.as_view(), name='customer-api-search'),
-    path('search/', CustomerAPISearchView.as_view(), name='customer-search-api'),
     # path('api/customers/', CustomerCreateListView.as_view(), name='customer-list-create'),
     path('api/assets/<int:pk>/', AssetRetrieveUpdateAPIView.as_view(), name='asset-api-detail'),
     path('api/referral-sources/', get_referral_sources, name='referral-sources'),

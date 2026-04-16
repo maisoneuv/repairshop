@@ -25,6 +25,9 @@ class Call(models.Model):
     class Meta:
         ordering = ['-created_at']
         indexes = [models.Index(fields=['tenant', 'handled_at', 'created_at'])]
+        permissions = [
+            ('access_debug_endpoint', 'Can access debug call endpoint'),
+        ]
 
     def __str__(self):
         return f"Call from {self.phone_number} ({self.created_at})"

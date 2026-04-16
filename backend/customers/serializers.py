@@ -96,7 +96,7 @@ class LeadSerializer(serializers.ModelSerializer):
         email = data.get('email') or (self.instance and self.instance.email)
         phone = data.get('phone_number') or (self.instance and self.instance.phone_number)
         if not email and not phone:
-            raise serializers.ValidationError("Wymagany email lub numer telefonu.")
+            raise serializers.ValidationError("Email or phone number is required.")
         return data
 
 

@@ -11,7 +11,7 @@ import phonenumbers
 from phonenumbers import NumberParseException
 
 from core.mixins import TenantScopedMixin
-from .serializers import CustomerSerializer, CustomerSearchSerializer, LeadSerializer, AssetSerializer
+from .serializers import CustomerSerializer, LeadSerializer, AssetSerializer
 from .models import Customer, Asset, Lead
 from tasks.models import WorkItem
 from django.views.generic import TemplateView, ListView, DetailView, CreateView, UpdateView
@@ -260,13 +260,13 @@ def get_customer_assets(request, pk):
     return HttpResponse(html)
 
 class CustomerAPISearchView(generics.ListAPIView):
-    serializer_class = CustomerSearchSerializer
+    serializer_class = CustomerSerializer
 
     def get_queryset(self):
         user = self.request.user
 
         if user.is_superuser:
-            qs = Customer.objects.all()
+            qs = Customer.objects.select_related("address").all()
         else:
             if not self.request.tenant:
                 return Customer.objects.none()
@@ -274,7 +274,7 @@ class CustomerAPISearchView(generics.ListAPIView):
             if not user.has_permission('view_all_customers', self.request.tenant):
                 return Customer.objects.none()
 
-            qs = Customer.objects.filter(tenant=self.request.tenant)
+            qs = Customer.objects.select_related("address").filter(tenant=self.request.tenant)
 
         query = self.request.query_params.get('q', '').strip()
         if not query:
@@ -290,7 +290,7 @@ class CustomerAPISearchView(generics.ListAPIView):
         if phone_query:
             filters |= Q(phone_number__startswith=phone_query)
 
-        return list(qs.filter(filters).distinct())[:10]
+        return qs.filter(filters).distinct()[:10]
 
 # class CustomerCreateListView(generics.ListCreateAPIView):
 #     queryset = Customer.objects.all()

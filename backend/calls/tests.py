@@ -102,10 +102,10 @@ class CallNewFieldsTest(TestCase):
         call = Call.objects.create(
             tenant=self.tenant,
             phone_number="+48500000002",
-            status="Sukces",
+            status="Success",
         )
         call.refresh_from_db()
-        self.assertEqual(call.status, "Sukces")
+        self.assertEqual(call.status, "Success")
 
     def test_call_duration_nullable(self):
         call = Call.objects.create(
@@ -235,16 +235,16 @@ class UpdateCallViewTest(TestCase):
         self.assertEqual(call.duration, 120)
         self.assertIsNone(call.handled_at)  # no status → not handled yet
 
-    def test_patch_status_sukces_creates_lead(self):
+    def test_patch_status_Success_creates_lead(self):
         call = self._make_call(phone="+48600000001")
         resp = self.client.patch(
             f"/api/calls/{call.id}/",
-            {"status": "Sukces", "note": "Bardzo zainteresowany"},
+            {"status": "Success", "note": "Bardzo zainteresowany"},
             format="json",
         )
         self.assertEqual(resp.status_code, 200)
         call.refresh_from_db()
-        self.assertEqual(call.status, "Sukces")
+        self.assertEqual(call.status, "Success")
         self.assertIsNotNone(call.handled_at)
         self.assertIsNotNone(call.lead)
         self.assertEqual(call.lead.status, "converted")
@@ -253,7 +253,7 @@ class UpdateCallViewTest(TestCase):
         call = self._make_call(phone="+48600000002")
         resp = self.client.patch(
             f"/api/calls/{call.id}/",
-            {"status": "Oddzwonić"},
+            {"status": "Callback"},
             format="json",
         )
         self.assertEqual(resp.status_code, 200)
@@ -294,7 +294,7 @@ class UpdateCallViewTest(TestCase):
         call = self._make_call(phone="600000005", lead=lead)
         resp = self.client.patch(
             f"/api/calls/{call.id}/",
-            {"status": "Oddzwonić"},
+            {"status": "Callback"},
             format="json",
         )
         self.assertEqual(resp.status_code, 200)
@@ -311,7 +311,7 @@ class UpdateCallViewTest(TestCase):
         call = self._make_call(phone="600000006", customer=customer)
         resp = self.client.patch(
             f"/api/calls/{call.id}/",
-            {"status": "Sukces"},
+            {"status": "Success"},
             format="json",
         )
         self.assertEqual(resp.status_code, 200)
@@ -321,7 +321,7 @@ class UpdateCallViewTest(TestCase):
         call = self._make_call(phone="+48600000007")
         resp = self.client.patch(
             f"/api/calls/{call.id}/",
-            {"status": "Oddzwonić", "note": "Zadzwonić po 15:00"},
+            {"status": "Callback", "note": "Zadzwonić po 15:00"},
             format="json",
         )
         self.assertEqual(resp.status_code, 200)
@@ -340,7 +340,7 @@ class UpdateCallViewTest(TestCase):
         call = self._make_call(phone="600000008", lead=lead)
         self.client.patch(
             f"/api/calls/{call.id}/",
-            {"status": "Sukces", "note": "Nowa notatka"},
+            {"status": "Success", "note": "Nowa notatka"},
             format="json",
         )
         lead.refresh_from_db()
@@ -367,7 +367,7 @@ class UpdateCallViewTest(TestCase):
 
         self.client.patch(
             f"/api/calls/{call.id}/",
-            {"status": "Sukces"},
+            {"status": "Success"},
             format="json",
         )
         call.refresh_from_db()

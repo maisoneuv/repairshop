@@ -26,7 +26,7 @@ function Modal({ title, onClose, children }) {
  *
  * Props:
  *   mode: "create" | "edit"
- *   initialData: obiekt leada (wymagany przy edit, musi zawierać id)
+ *   initialData: obiekt leada (Required przy edit, musi zawierać id)
  *   onClose: () => void
  *   onSave: (savedLead) => void — wywoływany po udanym zapisie
  */

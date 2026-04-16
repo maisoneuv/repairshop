@@ -6,7 +6,7 @@ from django.utils import timezone
 from datetime import timedelta
 from rest_framework.decorators import api_view, authentication_classes, permission_classes
 from rest_framework.response import Response
-from rest_framework.permissions import IsAuthenticated, AllowAny
+from rest_framework.permissions import IsAuthenticated
 from rest_framework.authentication import SessionAuthentication
 from drf_spectacular.utils import extend_schema, inline_serializer
 from rest_framework import serializers as drf_serializers
@@ -18,10 +18,12 @@ from customers.models import Customer, Lead
 
 
 @api_view(['POST'])
-@authentication_classes([AllowAny])
-@permission_classes([AllowAny])
+@authentication_classes([SessionAuthentication, APIKeyAuthentication])
+@permission_classes([IsAuthenticated])
 def debug_incoming_call(request):
-    """Debug endpoint - returns detailed info about incoming request."""
+    """Debug endpoint - returns detailed info about incoming request.
+    """
+
     return Response({
         'method': request.method,
         'path': request.path,
@@ -55,7 +57,7 @@ def incoming_call(request):
     if call_type not in ('incoming', 'outbound'):
         call_type = 'incoming'
     if not phone:
-        return Response({'detail': 'phone_number wymagany.'}, status=400)
+        return Response({'detail': 'phone_number required.'}, status=400)
     tenant = request.tenant
 
     customer = Customer.objects.filter(tenant=tenant, full_phone_number=phone).first()
@@ -116,10 +118,10 @@ def mark_handled(request, pk):
     return Response(CallSerializer(call).data)
 
 
-LEAD_CREATING_STATUSES = {'Sukces', 'Oddzwonić'}
+LEAD_CREATING_STATUSES = {'Success', 'Callback'}
 LEAD_STATUS_MAP = {
-    'Sukces': 'converted',
-    'Oddzwonić': 'callback',
+    'Success': 'converted',
+    'Callback': 'callback',
 }
 
 
@@ -128,13 +130,6 @@ LEAD_STATUS_MAP = {
 @permission_classes([IsAuthenticated])
 def update_call(request, pk):
     """Android app: update call duration and/or post-call status."""
-    try:
-        call = Call.objects.select_related('customer', 'lead').get(
-            pk=pk, tenant=request.tenant
-        )
-    except Call.DoesNotExist:
-        return Response(status=404)
-
     serializer = CallUpdateSerializer(data=request.data, partial=True)
     if not serializer.is_valid():
         return Response(serializer.errors, status=400)
@@ -145,6 +140,13 @@ def update_call(request, pk):
     note = data.get('note', '')
 
     with transaction.atomic():
+        try:
+            call = Call.objects.select_related('customer', 'lead').select_for_update().get(
+                pk=pk, tenant=request.tenant
+            )
+        except Call.DoesNotExist:
+            return Response(status=404)
+
         if duration is not None:
             call.duration = duration
 
