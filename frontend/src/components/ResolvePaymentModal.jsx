@@ -1,16 +1,11 @@
 import { useEffect, useState } from "react";
 import Modal from "./Modal";
-
-const defaultFormData = {
-    final_price: "",
-    repair_cost: "",
-    payment_method: "",
-};
+import { fetchCashRegisters } from "../api/cashRegisters";
 
 const buildFormData = (initialValues) => ({
     final_price: initialValues?.final_price ?? "",
     repair_cost: initialValues?.repair_cost ?? "",
-    payment_method: initialValues?.payment_method ?? "",
+    payment_register_id: initialValues?.payment_register_id ?? "",
 });
 
 export default function ResolvePaymentModal({
@@ -19,7 +14,8 @@ export default function ResolvePaymentModal({
     onConfirm,
     initialValues,
 }) {
-    const [formData, setFormData] = useState(defaultFormData);
+    const [formData, setFormData] = useState(buildFormData(null));
+    const [cashRegisters, setCashRegisters] = useState([]);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [submitError, setSubmitError] = useState("");
 
@@ -29,24 +25,22 @@ export default function ResolvePaymentModal({
         setFormData(buildFormData(initialValues));
         setIsSubmitting(false);
         setSubmitError("");
+
+        fetchCashRegisters().then((data) => {
+            setCashRegisters(data.results ?? data);
+        }).catch(() => {
+            setCashRegisters([]);
+        });
     }, [isOpen]); // eslint-disable-line react-hooks/exhaustive-deps
 
     const handleChange = (event) => {
         const { name, value } = event.target;
-        setFormData((prev) => ({
-            ...prev,
-            [name]: value,
-        }));
-        if (submitError) {
-            setSubmitError("");
-        }
+        setFormData((prev) => ({ ...prev, [name]: value }));
+        if (submitError) setSubmitError("");
     };
 
     const normalizeNumberValue = (value) => {
-        if (value === "" || value === null || value === undefined) {
-            return null;
-        }
-
+        if (value === "" || value === null || value === undefined) return null;
         const parsed = Number(value);
         return Number.isNaN(parsed) ? null : parsed;
     };
@@ -59,7 +53,7 @@ export default function ResolvePaymentModal({
             await onConfirm({
                 final_price: normalizeNumberValue(formData.final_price),
                 repair_cost: normalizeNumberValue(formData.repair_cost),
-                payment_method: formData.payment_method || null,
+                payment_register_id: formData.payment_register_id ? Number(formData.payment_register_id) : null,
             });
         } catch (error) {
             console.error("Failed to resolve work item with payment data:", error);
@@ -107,19 +101,22 @@ export default function ResolvePaymentModal({
                 </div>
 
                 <div>
-                    <label htmlFor="resolve-payment-method" className="block text-sm font-medium text-gray-700 mb-2">
-                        Forma płatności
+                    <label htmlFor="resolve-payment-register" className="block text-sm font-medium text-gray-700 mb-2">
+                        Kasa
                     </label>
                     <select
-                        id="resolve-payment-method"
-                        name="payment_method"
-                        value={formData.payment_method}
+                        id="resolve-payment-register"
+                        name="payment_register_id"
+                        value={formData.payment_register_id}
                         onChange={handleChange}
                         className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-white focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                     >
-                        <option value="">Wybierz</option>
-                        <option value="Card">Karta</option>
-                        <option value="Cash">Gotówka</option>
+                        <option value="">Wybierz kasę</option>
+                        {cashRegisters.map((register) => (
+                            <option key={register.id} value={register.id}>
+                                {register.name}
+                            </option>
+                        ))}
                     </select>
                 </div>
 
