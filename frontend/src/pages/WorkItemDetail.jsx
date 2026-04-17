@@ -207,7 +207,7 @@ export default function WorkItemDetail() {
             status: pendingStatus,
             final_price: paymentData.final_price,
             repair_cost: paymentData.repair_cost,
-            payment_method: paymentData.payment_method,
+            payment_register_id: paymentData.payment_register_id,
         });
 
         setWorkItem((prev) => ({ ...prev, ...updated }));
@@ -457,7 +457,7 @@ export default function WorkItemDetail() {
                 initialValues={{
                     final_price: workItem?.final_price,
                     repair_cost: workItem?.repair_cost,
-                    payment_method: workItem?.payment_method,
+                    payment_register_id: workItem?.payment_register?.id,
                 }}
             />
         </div>
