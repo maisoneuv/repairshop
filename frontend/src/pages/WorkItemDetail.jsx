@@ -20,6 +20,7 @@ import WorkitemDetailLayout from "../features/WorkItems/WorkitemDetailLayout";
 import FormDocumentsSection from "../components/FormDocumentsSection";
 import WorkItemSummary from "../components/WorkItemSummary";
 import CustomActionsTab from "../features/CustomActions/CustomActionsTab";
+import ResolvePaymentModal from "../components/ResolvePaymentModal";
 
 export default function WorkItemDetail() {
     const { id } = useParams();
@@ -32,6 +33,8 @@ export default function WorkItemDetail() {
     const [notesRefreshKey, setNotesRefreshKey] = useState(0);
     const [wiStatusColorMap, setWiStatusColorMap] = useState({});
     const [taskStatusColorMap, setTaskStatusColorMap] = useState({});
+    const [showResolveModal, setShowResolveModal] = useState(false);
+    const [pendingStatus, setPendingStatus] = useState(null);
     const scrollTargetField = useRef(null);
 
     useEffect(() => {
@@ -175,6 +178,13 @@ export default function WorkItemDetail() {
 
     const handleStatusChange = async (newStatus) => {
         if (!workItem) return;
+
+        if (newStatus === "Resolved") {
+            setPendingStatus(newStatus);
+            setShowResolveModal(true);
+            return;
+        }
+
         try {
             const updated = await updateWorkItemField(workItem.id, { status: newStatus });
             setWorkItem((prev) => ({ ...prev, ...updated }));
@@ -183,6 +193,28 @@ export default function WorkItemDetail() {
         } catch (err) {
             console.error("Failed to update status:", err);
         }
+    };
+
+    const handleResolveClose = () => {
+        setShowResolveModal(false);
+        setPendingStatus(null);
+    };
+
+    const handleResolveConfirm = async (paymentData) => {
+        if (!workItem || !pendingStatus) return;
+
+        const updated = await updateWorkItemField(workItem.id, {
+            status: pendingStatus,
+            final_price: paymentData.final_price,
+            repair_cost: paymentData.repair_cost,
+            payment_method: paymentData.payment_method,
+        });
+
+        setWorkItem((prev) => ({ ...prev, ...updated }));
+        setFormData((prev) => ({ ...prev, ...updated }));
+        setNotesRefreshKey((k) => k + 1);
+        setShowResolveModal(false);
+        setPendingStatus(null);
     };
 
     const handleCustomerUpdated = (updatedCustomer) => {
@@ -417,6 +449,17 @@ export default function WorkItemDetail() {
                     </div>
                 </div>
             )}
+
+            <ResolvePaymentModal
+                isOpen={showResolveModal}
+                onClose={handleResolveClose}
+                onConfirm={handleResolveConfirm}
+                initialValues={{
+                    final_price: workItem?.final_price,
+                    repair_cost: workItem?.repair_cost,
+                    payment_method: workItem?.payment_method,
+                }}
+            />
         </div>
     );
 }

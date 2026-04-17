@@ -1,4 +1,3 @@
-from django.db.models.expressions import result
 from django.shortcuts import render, reverse, get_object_or_404
 from django.template.loader import render_to_string
 from rest_framework import generics, viewsets
@@ -6,7 +5,6 @@ from rest_framework.decorators import api_view, action
 from rest_framework.exceptions import PermissionDenied
 from rest_framework.response import Response
 from django.db import transaction
-
 import phonenumbers
 from phonenumbers import NumberParseException
 
