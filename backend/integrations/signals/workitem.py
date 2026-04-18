@@ -227,6 +227,10 @@ def build_workitem_payload(workitem, event_type):
             'intake_method': workitem.intake_method,
             'dropoff_method': workitem.dropoff_method,
             'payment_method': workitem.payment_method,
+            'payment_register': {
+                'id': workitem.payment_register.id,
+                'name': workitem.payment_register.name,
+            } if workitem.payment_register else None,
             'comments': workitem.comments,
             'device_condition': workitem.device_condition,
             'accessories': workitem.accessories,
