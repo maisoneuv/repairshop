@@ -245,5 +245,6 @@ CKEDITOR_CONFIGS = {
         'width': '100%',
         'allowedContent': True,  # Allow all HTML/CSS
         'extraAllowedContent': 'style(*);*(*);*{*}',  # Allow inline styles
+        'fullPage': True,  # Edit whole HTML documents (<head>/<style>/doctype) without stripping
     },
 }

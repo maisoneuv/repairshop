@@ -120,16 +120,19 @@ def _generate_pdf_with_playwright(html_content, output_path):
             # Set HTML content
             page.set_content(html_content, wait_until='networkidle')
 
-            # Generate PDF with A4 page size
+            # Generate PDF. Respect the template's own @page size when it declares
+            # one (e.g. A5); fall back to A4 for templates without @page rules.
+            # Templates control their own inner padding, so no extra page margin.
             page.pdf(
                 path=output_path,
-                format='A4',
+                format='A4',  # fallback when template has no @page size
+                prefer_css_page_size=True,
                 print_background=True,  # Include background colors/images
                 margin={
-                    'top': '10mm',
-                    'bottom': '10mm',
-                    'left': '10mm',
-                    'right': '10mm'
+                    'top': '0',
+                    'bottom': '0',
+                    'left': '0',
+                    'right': '0'
                 }
             )
 
