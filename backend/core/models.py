@@ -59,6 +59,11 @@ class User(AbstractUser, PermissionsMixin):
     USERNAME_FIELD = 'email'
     REQUIRED_FIELDS = []
 
+    def save(self, *args, **kwargs):
+        if not self.username:
+            self.username = self.email
+        super().save(*args, **kwargs)
+
     def has_permission(self, permission_codename, tenant):
         if self.is_superuser:
             return True
