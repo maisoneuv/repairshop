@@ -4,7 +4,7 @@ from django.contrib.auth.models import Permission
 from django.utils.translation import gettext_lazy as _
 
 from core.admin_mixins import TenantAwareImportExportAdmin, TenantAwareImportExportMixin
-from core.models import Address, Note, Role, RolePermission, User, UserRole, APIKey, Setting
+from core.models import Address, Note, Role, RolePermission, User, UserRole, APIKey, Setting, CustomField
 from django.contrib import messages
 from django.utils.html import format_html
 
@@ -360,3 +360,12 @@ class SettingAdmin(TenantAwareImportExportAdmin):
     def get_queryset(self, request):
         """Include tenant relationship for efficient display."""
         return super().get_queryset(request).select_related('tenant')
+
+
+@admin.register(CustomField)
+class CustomFieldAdmin(admin.ModelAdmin):
+    list_display = ('label', 'model_name', 'field_type', 'field_key', 'is_required', 'is_active', 'sort_order', 'tenant')
+    list_filter = ('model_name', 'field_type', 'is_active', 'tenant')
+    search_fields = ('label', 'field_key')
+    ordering = ('tenant', 'model_name', 'sort_order', 'label')
+    readonly_fields = ('field_key', 'created_at', 'updated_at')

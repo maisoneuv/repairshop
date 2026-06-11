@@ -643,3 +643,39 @@ class Setting(models.Model):
                 }
 
         return result
+
+
+class CustomField(models.Model):
+    MODEL_CHOICES = [
+        ('workitem', 'Work Item'),
+        ('task', 'Task'),
+        ('customer', 'Customer'),
+    ]
+    FIELD_TYPES = [
+        ('text', 'Short Text'),
+        ('textarea', 'Long Text'),
+        ('number', 'Number'),
+        ('date', 'Date'),
+        ('checkbox', 'Checkbox'),
+        ('dropdown', 'Dropdown'),
+    ]
+
+    tenant = models.ForeignKey(Tenant, on_delete=models.CASCADE, related_name='custom_fields')
+    model_name = models.CharField(max_length=50, choices=MODEL_CHOICES)
+    label = models.CharField(max_length=100)
+    field_key = models.SlugField(max_length=100)
+    field_type = models.CharField(max_length=20, choices=FIELD_TYPES)
+    is_required = models.BooleanField(default=False)
+    config = models.JSONField(default=dict, blank=True)
+    sort_order = models.IntegerField(default=0)
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        unique_together = [('tenant', 'model_name', 'field_key')]
+        ordering = ['model_name', 'sort_order', 'label']
+        permissions = [('manage_custom_fields', 'Can manage custom field definitions')]
+
+    def __str__(self):
+        return f"{self.label} ({self.model_name}, {self.tenant})"

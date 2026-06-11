@@ -143,6 +143,9 @@ class WorkItemSerializer(serializers.ModelSerializer):
         shop = attrs.get("fulfillment_shop")
         if tenant and shop and shop.tenant_id != tenant.id:
             raise serializers.ValidationError({"fulfillment_shop_id": "Unknown for this tenant."})
+        if tenant and 'custom_fields' in attrs:
+            from core.utils import validate_custom_field_values
+            validate_custom_field_values(tenant, 'workitem', attrs['custom_fields'])
         return attrs
 
     def validate_status(self, value):
@@ -380,6 +383,11 @@ class TaskSerializer(serializers.ModelSerializer):
 
             if errors:
                 raise serializers.ValidationError(errors)
+
+        tenant = self.context.get('tenant') or getattr(self.context.get('request'), 'tenant', None)
+        if tenant and 'custom_fields' in attrs:
+            from core.utils import validate_custom_field_values
+            validate_custom_field_values(tenant, 'task', attrs['custom_fields'])
 
         return attrs
 

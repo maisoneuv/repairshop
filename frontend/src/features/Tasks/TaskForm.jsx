@@ -4,10 +4,12 @@ import DynamicForm from "../../components/DynamicForm";
 import { fetchSchema } from "../../api/schema";
 import { createTask } from "../../api/tasks";
 import taskLayout from "./layouts/TaskFormLayout";
+import CustomFieldsSection from "../../components/CustomFieldsSection";
 
 export default function TaskForm({ initialContext = {}, onSuccess, hideTitle = false }) {
     const [schema, setSchema] = useState(null);
     const [error, setError] = useState("");
+    const [customFieldValues, setCustomFieldValues] = useState({});
     const [searchParams] = useSearchParams();
     const navigate = useNavigate();
 
@@ -19,7 +21,7 @@ export default function TaskForm({ initialContext = {}, onSuccess, hideTitle = f
 
     const handleSubmit = async (formData) => {
         try {
-            const payload = { ...formData };
+            const payload = { ...formData, custom_fields: customFieldValues };
             if (!payload.summary) {
                 delete payload.summary;
             }
@@ -87,6 +89,14 @@ export default function TaskForm({ initialContext = {}, onSuccess, hideTitle = f
                 layout={taskLayout}
                 onSubmit={handleSubmit}
                 initialValues={initialValues}
+            />
+            <CustomFieldsSection
+                modelName="task"
+                values={customFieldValues}
+                onChange={(key, value) =>
+                    setCustomFieldValues((prev) => ({ ...prev, [key]: value }))
+                }
+                editMode={true}
             />
             {error && <p className="text-sm text-red-600 mt-2">{error}</p>}
         </div>

@@ -18,12 +18,12 @@ from rest_framework.views import APIView
 from django.views.decorators.csrf import ensure_csrf_cookie
 from rest_framework.decorators import action
 
-from .models import Note, User, Permission, RolePermission, UserRole, Role, PicklistValue, Setting
+from .models import Note, User, Permission, RolePermission, UserRole, Role, PicklistValue, Setting, CustomField
 from .serializers import (NoteSerializer, UserSerializer, PermissionSerializer,
                           RolePermissionSerializer, RoleSerializer, UserRoleSerializer,
                           UserRoleCreateSerializer, MyPermissionsResponseSerializer,
                           SettingSerializer, SettingWriteSerializer,
-                          PicklistValueAdminSerializer)
+                          PicklistValueAdminSerializer, CustomFieldSerializer)
 from .utils import create_system_note
 from tenants.managers import TenantAwareManager
 from .permissions import TenantUserMatchesRequestTenant
@@ -768,3 +768,46 @@ class PicklistAdminViewSet(viewsets.ViewSet):
             if pk in id_set:
                 PicklistValue.objects.filter(pk=pk, tenant=tenant).update(sort_order=position)
         return Response({'detail': 'Reordered successfully.'})
+
+
+class CustomFieldViewSet(viewsets.ModelViewSet):
+    serializer_class = CustomFieldSerializer
+
+    def _get_tenant(self, request):
+        tenant = getattr(request, 'tenant', None)
+        if not tenant:
+            from rest_framework.exceptions import ValidationError
+            raise ValidationError({'detail': 'X-Tenant header required.'})
+        return tenant
+
+    def get_queryset(self):
+        tenant = getattr(self.request, 'tenant', None)
+        if not tenant:
+            return CustomField.objects.none()
+        qs = CustomField.objects.filter(tenant=tenant)
+        model_name = self.request.query_params.get('model_name')
+        if model_name:
+            qs = qs.filter(model_name=model_name)
+        is_active = self.request.query_params.get('is_active')
+        if is_active is not None:
+            qs = qs.filter(is_active=is_active.lower() in ('1', 'true', 'yes'))
+        return qs
+
+    def perform_create(self, serializer):
+        tenant = self._get_tenant(self.request)
+        if not self.request.user.has_permission('core.manage_custom_fields', tenant):
+            raise PermissionDenied("You do not have permission to manage custom fields.")
+        serializer.save(tenant=tenant)
+
+    def perform_update(self, serializer):
+        tenant = self._get_tenant(self.request)
+        if not self.request.user.has_permission('core.manage_custom_fields', tenant):
+            raise PermissionDenied("You do not have permission to manage custom fields.")
+        serializer.save()
+
+    def perform_destroy(self, instance):
+        tenant = self._get_tenant(self.request)
+        if not self.request.user.has_permission('core.manage_custom_fields', tenant):
+            raise PermissionDenied("You do not have permission to manage custom fields.")
+        instance.is_active = False
+        instance.save(update_fields=['is_active'])

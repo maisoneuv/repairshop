@@ -22,6 +22,7 @@ import FormDocumentsSection from "../components/FormDocumentsSection";
 import WorkItemSummary from "../components/WorkItemSummary";
 import CustomActionsTab from "../features/CustomActions/CustomActionsTab";
 import ResolvePaymentModal from "../components/ResolvePaymentModal";
+import CustomFieldsSection from "../components/CustomFieldsSection";
 
 export default function WorkItemDetail() {
     const { id } = useParams();
@@ -251,6 +252,10 @@ export default function WorkItemDetail() {
             return acc;
         }, {});
 
+        if (formData.custom_fields !== undefined) {
+            payload.custom_fields = formData.custom_fields;
+        }
+
         try {
             setIsSaving(true);
             const updated = await updateWorkItemField(workItem.id, payload);
@@ -340,6 +345,18 @@ export default function WorkItemDetail() {
                                                     formData={formData}
                                                     onFieldChange={handleFieldChange}
                                                     onFieldSave={handleFieldSave}
+                                                    onEditRequest={handleEdit}
+                                                />
+                                                <CustomFieldsSection
+                                                    modelName="workitem"
+                                                    values={editMode ? (formData.custom_fields ?? {}) : (workItem.custom_fields ?? {})}
+                                                    onChange={(key, value) =>
+                                                        setFormData((prev) => ({
+                                                            ...prev,
+                                                            custom_fields: { ...(prev.custom_fields ?? {}), [key]: value },
+                                                        }))
+                                                    }
+                                                    editMode={editMode}
                                                     onEditRequest={handleEdit}
                                                 />
                                             </div>

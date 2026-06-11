@@ -43,6 +43,7 @@ class Customer(models.Model):
     )
     tax_code = models.CharField(max_length=10, null=True, blank=True, validators=[tax_code_regex])
     full_phone_number = models.CharField(max_length=20, blank=True, null=True, db_index=True)
+    custom_fields = models.JSONField(default=dict, blank=True)
 
     def full_name(self):
         parts = [self.first_name, self.last_name]

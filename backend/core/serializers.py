@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import Note, Address, User, Role, RolePermission, UserRole, Setting, PicklistValue
+from .models import Note, Address, User, Role, RolePermission, UserRole, Setting, PicklistValue, CustomField
 from decimal import Decimal
 from datetime import datetime
 from django.contrib.auth.models import Permission
@@ -218,3 +218,24 @@ class PicklistValueAdminSerializer(serializers.ModelSerializer):
                     {'value': 'The internal value of a system entry cannot be changed.'}
                 )
         return data
+
+
+class CustomFieldSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = CustomField
+        fields = ['id', 'model_name', 'label', 'field_key', 'field_type',
+                  'is_required', 'config', 'sort_order', 'is_active', 'created_at', 'updated_at']
+        read_only_fields = ['id', 'field_key', 'created_at', 'updated_at']
+
+    def create(self, validated_data):
+        from django.utils.text import slugify
+        tenant = validated_data['tenant']
+        model_name = validated_data['model_name']
+        base_key = slugify(validated_data['label']).replace('-', '_')
+        key = base_key
+        suffix = 2
+        while CustomField.objects.filter(tenant=tenant, model_name=model_name, field_key=key).exists():
+            key = f"{base_key}_{suffix}"
+            suffix += 1
+        validated_data['field_key'] = key
+        return super().create(validated_data)

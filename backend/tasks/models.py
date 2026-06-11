@@ -135,7 +135,7 @@ class WorkItem(models.Model):
     # paid
 
     notes = GenericRelation(Note)
-
+    custom_fields = models.JSONField(default=dict, blank=True)
 
     def __str__(self):
         return self.reference_id
@@ -186,6 +186,7 @@ class Task(models.Model):
     created_date = models.DateTimeField(auto_now_add=True)
     completed_date = models.DateTimeField(null=True, blank=True)
     actual_duration = models.DurationField(null=True, blank=True, help_text="Calculated duration from creation to completion")
+    custom_fields = models.JSONField(default=dict, blank=True)
 
     def __str__(self):
         return self.reference_id or self.summary or (f"Task #{self.pk}" if self.pk else "Task")

@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo } from "react";
 import AddressForm from "./AddressForm";
 import apiClient from "../api/apiClient";
+import CustomFieldsSection from "./CustomFieldsSection";
 
 const emptyForm = {
     first_name: "",
@@ -9,6 +10,7 @@ const emptyForm = {
     phone_number: "",
     tax_code: "",
     referral_source: "",
+    custom_fields: {},
     address: {
         street: "",
         city: "",
@@ -32,6 +34,7 @@ export default function CustomerForm({ onSuccess, initialData = null, mode = "cr
             phone_number: initialData.phone_number || "",
             tax_code: initialData.tax_code || "",
             referral_source: initialData.referral_source || "",
+            custom_fields: initialData.custom_fields ?? {},
             address: {
                 street: initialData.address?.street || "",
                 city: initialData.address?.city || "",
@@ -261,6 +264,19 @@ export default function CustomerForm({ onSuccess, initialData = null, mode = "cr
                 )}
             </div>
 
+
+            <CustomFieldsSection
+                modelName="customer"
+                values={formData.custom_fields}
+                onChange={(key, value) =>
+                    setFormData((prev) => ({
+                        ...prev,
+                        custom_fields: { ...prev.custom_fields, [key]: value },
+                    }))
+                }
+                editMode={true}
+                errors={fieldErrors.custom_fields ?? {}}
+            />
 
             {error && <p className="text-red-600 text-sm">{error}</p>}
 

@@ -13,6 +13,7 @@ router.register(r'role-permissions', RolePermissionViewSet, basename='rolepermis
 router.register(r'user-roles', UserRoleViewSet, basename='userrole')
 router.register(r'settings', SettingViewSet, basename='setting')
 router.register(r'picklist-admin', PicklistAdminViewSet, basename='picklist-admin')
+router.register(r'custom-fields', CustomFieldViewSet, basename='custom-field')
 
 # Custom paths must come BEFORE router.urls so they aren't swallowed by users/<pk>/
 urlpatterns = [
