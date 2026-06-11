@@ -80,9 +80,9 @@ class WorkItemAdmin(TenantAwareImportExportAdmin):
 class PicklistValueAdmin(TenantAwareImportExportAdmin):
     """Admin interface for managing picklist values"""
 
-    list_display = ['category', 'name', 'value', 'color', 'tenant', 'sort_order',
-                   'is_active', 'is_system', 'usage_count']
-    list_filter = ['tenant', 'category', 'is_active', 'is_system']
+    list_display = ['category', 'name', 'value', 'color', 'status_role', 'tenant',
+                    'sort_order', 'is_active', 'is_system', 'usage_count']
+    list_filter = ['tenant', 'category', 'is_active', 'is_system', 'status_role']
     search_fields = ['name', 'value', 'category']
     ordering = ['tenant', 'category', 'sort_order', 'name']
 
@@ -92,6 +92,11 @@ class PicklistValueAdmin(TenantAwareImportExportAdmin):
         }),
         ('Display & Ordering', {
             'fields': ('color', 'sort_order', 'is_active')
+        }),
+        ('Workflow', {
+            'fields': ('status_role', 'allowed_transitions'),
+            'description': 'status_role decouples frontend behaviour from hardcoded status names. '
+                           'allowed_transitions restricts which statuses this value can move to (empty = unrestricted).',
         }),
         ('System', {
             'fields': ('is_system', 'created_date'),

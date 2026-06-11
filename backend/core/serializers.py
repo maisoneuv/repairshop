@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import Note, Address, User, Role, RolePermission, UserRole, Setting
+from .models import Note, Address, User, Role, RolePermission, UserRole, Setting, PicklistValue
 from decimal import Decimal
 from datetime import datetime
 from django.contrib.auth.models import Permission
@@ -184,3 +184,37 @@ class SettingWriteSerializer(serializers.ModelSerializer):
             instance.value = value
         instance.save()
         return instance
+
+class PicklistValueAdminSerializer(serializers.ModelSerializer):
+    is_in_use = serializers.SerializerMethodField()
+
+    class Meta:
+        model = PicklistValue
+        fields = [
+            'id', 'category', 'name', 'value', 'color',
+            'sort_order', 'is_active', 'is_system',
+            'status_role', 'allowed_transitions', 'is_in_use',
+        ]
+        read_only_fields = ['id', 'is_system', 'is_in_use']
+
+    def get_is_in_use(self, obj):
+        return obj.usage_count() > 0
+
+    def validate_value(self, value):
+        if not value or not value.strip():
+            raise serializers.ValidationError("Value cannot be empty.")
+        return value.strip()
+
+    def validate_name(self, name):
+        if not name or not name.strip():
+            raise serializers.ValidationError("Name cannot be empty.")
+        return name.strip()
+
+    def validate(self, data):
+        # Prevent changing value on system entries (would break existing records)
+        if self.instance and self.instance.is_system and 'value' in data:
+            if data['value'] != self.instance.value:
+                raise serializers.ValidationError(
+                    {'value': 'The internal value of a system entry cannot be changed.'}
+                )
+        return data

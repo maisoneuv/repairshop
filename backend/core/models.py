@@ -134,6 +134,13 @@ class PicklistValue(models.Model):
         ('pink', 'Pink'),
     ]
 
+    STATUS_ROLE_CHOICES = [
+        ('initial', 'Initial'),
+        ('in_progress', 'In Progress'),
+        ('resolved', 'Resolved'),
+        ('cancelled', 'Cancelled'),
+    ]
+
     tenant = models.ForeignKey(Tenant, on_delete=models.CASCADE)
     category = models.CharField(max_length=50, help_text="Type of picklist (e.g., 'workitem_status', 'task_status', 'currency')")
     name = models.CharField(max_length=100, help_text="Display label shown to users")
@@ -142,6 +149,18 @@ class PicklistValue(models.Model):
     sort_order = models.IntegerField(default=0, help_text="Controls display order in dropdowns (lower numbers appear first)")
     is_active = models.BooleanField(default=True, help_text="Only active values can be selected by users")
     is_system = models.BooleanField(default=False, help_text="System-protected values that should not be deleted")
+    # Semantic role — decouples frontend logic from hardcoded status names.
+    # Only used for workitem_status and task_status categories.
+    status_role = models.CharField(
+        max_length=20, choices=STATUS_ROLE_CHOICES, null=True, blank=True,
+        help_text="Semantic role for status values. Allows frontend to trigger role-based behaviour without depending on the status name."
+    )
+    # Allowed next statuses for this value. Empty list means unrestricted.
+    # Stored as a list of `value` strings from the same category.
+    allowed_transitions = models.JSONField(
+        default=list, blank=True,
+        help_text="List of status values this can transition to. Empty = unrestricted."
+    )
     created_date = models.DateTimeField(auto_now_add=True)
 
     class Meta:
@@ -155,6 +174,27 @@ class PicklistValue(models.Model):
         indexes = [
             models.Index(fields=['tenant', 'category', 'is_active'], name='idx_picklist_tenant_cat_active'),
         ]
+
+    def usage_count(self):
+        """Return how many records currently reference this value."""
+        from tasks.models import WorkItem, Task
+        from customers.models import Customer, Lead
+        from service.models import Employee
+        mapping = {
+            'workitem_status': lambda: WorkItem.objects.filter(status=self.value, tenant=self.tenant).count(),
+            'task_status': lambda: Task.objects.filter(status=self.value, tenant=self.tenant).count(),
+            'currency': lambda: WorkItem.objects.filter(currency=self.value, tenant=self.tenant).count(),
+            'workitem_type': lambda: WorkItem.objects.filter(type=self.value, tenant=self.tenant).count(),
+            'workitem_priority': lambda: WorkItem.objects.filter(priority=self.value, tenant=self.tenant).count(),
+            'intake_method': lambda: WorkItem.objects.filter(intake_method=self.value, tenant=self.tenant).count(),
+            'dropoff_method': lambda: WorkItem.objects.filter(dropoff_method=self.value, tenant=self.tenant).count(),
+            'payment_method': lambda: WorkItem.objects.filter(payment_method=self.value, tenant=self.tenant).count(),
+            'employee_role': lambda: Employee.objects.filter(role=self.value, tenant=self.tenant).count(),
+            'referral_source': lambda: Customer.objects.filter(referral_source=self.value, tenant=self.tenant).count(),
+            'lead_status': lambda: Lead.objects.filter(status=self.value, tenant=self.tenant).count(),
+        }
+        fn = mapping.get(self.category)
+        return fn() if fn else 0
 
     def __str__(self):
         return f"{self.category}: {self.name} ({self.tenant})"

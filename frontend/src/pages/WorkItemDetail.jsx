@@ -5,7 +5,8 @@ import { fetchWorkItem, updateWorkItemField } from "../api/workItems";
 import { getSettingValue } from "../api/settings";
 import apiClient from "../api/apiClient";
 import { getPicklistPath } from "../api/autocompleteApi";
-import { buildStatusColorMap, getStatusStyle } from "../utils/statusColors";
+import { buildStatusColorMap, buildStatusRoleMap, getStatusStyle } from "../utils/statusColors";
+import { toast } from "sonner";
 import WorkItemDetailHeader from "../components/WorkItemDetailHeader";
 import WorkItemHighlights from "../components/WorkItemHighlights";
 import WorkItemTabs from "../components/WorkItemTabs";
@@ -33,6 +34,7 @@ export default function WorkItemDetail() {
     const [notesRefreshKey, setNotesRefreshKey] = useState(0);
     const [wiStatusColorMap, setWiStatusColorMap] = useState({});
     const [taskStatusColorMap, setTaskStatusColorMap] = useState({});
+    const [wiStatusRoleMap, setWiStatusRoleMap] = useState({});
     const [showResolveModal, setShowResolveModal] = useState(false);
     const [pendingStatus, setPendingStatus] = useState(null);
     const scrollTargetField = useRef(null);
@@ -73,6 +75,7 @@ export default function WorkItemDetail() {
             apiClient.get(getPicklistPath("task_status")).catch(() => ({ data: [] })),
         ]).then(([wiRes, taskRes]) => {
             setWiStatusColorMap(buildStatusColorMap(wiRes.data));
+            setWiStatusRoleMap(buildStatusRoleMap(wiRes.data));
             setTaskStatusColorMap(buildStatusColorMap(taskRes.data));
         });
     }, []);
@@ -179,7 +182,7 @@ export default function WorkItemDetail() {
     const handleStatusChange = async (newStatus) => {
         if (!workItem) return;
 
-        if (newStatus === "Resolved") {
+        if (wiStatusRoleMap[newStatus] === 'resolved') {
             setPendingStatus(newStatus);
             setShowResolveModal(true);
             return;
@@ -191,7 +194,11 @@ export default function WorkItemDetail() {
             setFormData((prev) => ({ ...prev, ...updated }));
             setNotesRefreshKey((k) => k + 1);
         } catch (err) {
-            console.error("Failed to update status:", err);
+            const msg = err?.status?.[0] || err?.detail || err?.non_field_errors?.[0]
+                || (typeof err === 'string' ? err : null)
+                || "Failed to update status.";
+            toast.error(msg);
+            throw err;
         }
     };
 
