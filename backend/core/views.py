@@ -18,11 +18,12 @@ from rest_framework.views import APIView
 from django.views.decorators.csrf import ensure_csrf_cookie
 from rest_framework.decorators import action
 
-from .models import Note, User, Permission, RolePermission, UserRole, Role, PicklistValue, Setting
+from .models import Note, User, Permission, RolePermission, UserRole, Role, PicklistValue, Setting, CustomField
 from .serializers import (NoteSerializer, UserSerializer, PermissionSerializer,
                           RolePermissionSerializer, RoleSerializer, UserRoleSerializer,
                           UserRoleCreateSerializer, MyPermissionsResponseSerializer,
-                          SettingSerializer, SettingWriteSerializer)
+                          SettingSerializer, SettingWriteSerializer,
+                          PicklistValueAdminSerializer, CustomFieldSerializer)
 from .utils import create_system_note
 from tenants.managers import TenantAwareManager
 from .permissions import TenantUserMatchesRequestTenant
@@ -625,6 +626,188 @@ class PicklistValuesView(APIView):
         ).order_by('sort_order', 'name')
 
         return Response([
-            {'value': v.value, 'name': v.name, 'color': v.color}
+            {
+                'value': v.value,
+                'name': v.name,
+                'color': v.color,
+                'status_role': v.status_role,
+                'allowed_transitions': v.allowed_transitions,
+            }
             for v in values
         ])
+
+
+# Categories available for tenant self-service management.
+# Tuple: (category_key, display_label, supports_status_role, supports_transitions)
+CONFIGURABLE_CATEGORIES = [
+    ('workitem_status',  'Work Item Status',   True,  True),
+    ('task_status',      'Task Status',        True,  False),
+    ('currency',         'Currency',           False, False),
+    ('workitem_type',    'Repair Type',        False, False),
+    ('workitem_priority','Priority',           False, False),
+    ('intake_method',    'Intake Method',      False, False),
+    ('dropoff_method',   'Drop-off Method',    False, False),
+    ('payment_method',   'Payment Method',     False, False),
+    ('employee_role',    'Employee Role',      False, False),
+    ('referral_source',  'Referral Source',    False, False),
+    ('lead_status',      'Lead Status',        True,  False),
+]
+
+
+class PicklistAdminViewSet(viewsets.ViewSet):
+    """
+    Tenant-facing admin API for managing picklist values.
+    Supports listing, creating, updating, deleting, and reordering values,
+    plus a categories meta-endpoint used to populate the settings UI.
+    """
+    permission_classes = [IsAuthenticated]
+
+    def _get_tenant(self, request):
+        tenant = getattr(request, 'tenant', None)
+        if not tenant:
+            raise PermissionDenied('Tenant not resolved.')
+        return tenant
+
+    @action(detail=False, methods=['get'], url_path='categories')
+    def categories(self, request):
+        """Return metadata for all configurable picklist categories."""
+        return Response([
+            {
+                'key': key,
+                'label': label,
+                'supports_status_role': supports_role,
+                'supports_transitions': supports_trans,
+            }
+            for key, label, supports_role, supports_trans in CONFIGURABLE_CATEGORIES
+        ])
+
+    def list(self, request):
+        """
+        Return all values for a category (including inactive).
+        Pass ?category=workitem_status to filter.
+        """
+        tenant = self._get_tenant(request)
+        category = request.query_params.get('category')
+        qs = PicklistValue.objects.filter(tenant=tenant)
+        if category:
+            qs = qs.filter(category=category)
+        qs = qs.order_by('category', 'sort_order', 'name')
+        serializer = PicklistValueAdminSerializer(qs, many=True)
+        return Response(serializer.data)
+
+    def create(self, request):
+        """Create a new tenant-defined picklist value."""
+        tenant = self._get_tenant(request)
+        category = request.data.get('category', '')
+        allowed_keys = {c[0] for c in CONFIGURABLE_CATEGORIES}
+        if category not in allowed_keys:
+            return Response(
+                {'category': f"'{category}' is not a configurable category."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        serializer = PicklistValueAdminSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        serializer.save(tenant=tenant, is_system=False)
+        return Response(serializer.data, status=status.HTTP_201_CREATED)
+
+    def partial_update(self, request, pk=None):
+        """Update name, color, sort_order, is_active, allowed_transitions, status_role."""
+        tenant = self._get_tenant(request)
+        try:
+            instance = PicklistValue.objects.get(pk=pk, tenant=tenant)
+        except PicklistValue.DoesNotExist:
+            return Response({'detail': 'Not found.'}, status=status.HTTP_404_NOT_FOUND)
+
+        serializer = PicklistValueAdminSerializer(instance, data=request.data, partial=True)
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+        return Response(serializer.data)
+
+    def destroy(self, request, pk=None):
+        """
+        Delete a picklist value.
+        Blocked if: value is a system entry, or records still reference it.
+        """
+        tenant = self._get_tenant(request)
+        try:
+            instance = PicklistValue.objects.get(pk=pk, tenant=tenant)
+        except PicklistValue.DoesNotExist:
+            return Response({'detail': 'Not found.'}, status=status.HTTP_404_NOT_FOUND)
+
+        if instance.is_system:
+            return Response(
+                {'detail': 'System values cannot be deleted. You can deactivate them instead.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        count = instance.usage_count()
+        if count > 0:
+            return Response(
+                {'detail': f'This value is used by {count} record(s) and cannot be deleted. Deactivate it instead.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        instance.delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+    @action(detail=False, methods=['post'], url_path='reorder')
+    def reorder(self, request):
+        """
+        Bulk-update sort_order for a category.
+        Body: {"category": "workitem_status", "ordered_ids": [3, 1, 2]}
+        """
+        tenant = self._get_tenant(request)
+        category = request.data.get('category')
+        ordered_ids = request.data.get('ordered_ids', [])
+        if not category or not isinstance(ordered_ids, list):
+            return Response(
+                {'detail': 'category and ordered_ids are required.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        values = PicklistValue.objects.filter(tenant=tenant, category=category)
+        id_set = {v.id for v in values}
+        for position, pk in enumerate(ordered_ids):
+            if pk in id_set:
+                PicklistValue.objects.filter(pk=pk, tenant=tenant).update(sort_order=position)
+        return Response({'detail': 'Reordered successfully.'})
+
+
+class CustomFieldViewSet(viewsets.ModelViewSet):
+    serializer_class = CustomFieldSerializer
+
+    def _get_tenant(self, request):
+        tenant = getattr(request, 'tenant', None)
+        if not tenant:
+            from rest_framework.exceptions import ValidationError
+            raise ValidationError({'detail': 'X-Tenant header required.'})
+        return tenant
+
+    def get_queryset(self):
+        tenant = getattr(self.request, 'tenant', None)
+        if not tenant:
+            return CustomField.objects.none()
+        qs = CustomField.objects.filter(tenant=tenant)
+        model_name = self.request.query_params.get('model_name')
+        if model_name:
+            qs = qs.filter(model_name=model_name)
+        is_active = self.request.query_params.get('is_active')
+        if is_active is not None:
+            qs = qs.filter(is_active=is_active.lower() in ('1', 'true', 'yes'))
+        return qs
+
+    def perform_create(self, serializer):
+        tenant = self._get_tenant(self.request)
+        if not self.request.user.has_permission('core.manage_custom_fields', tenant):
+            raise PermissionDenied("You do not have permission to manage custom fields.")
+        serializer.save(tenant=tenant)
+
+    def perform_update(self, serializer):
+        tenant = self._get_tenant(self.request)
+        if not self.request.user.has_permission('core.manage_custom_fields', tenant):
+            raise PermissionDenied("You do not have permission to manage custom fields.")
+        serializer.save()
+
+    def perform_destroy(self, instance):
+        tenant = self._get_tenant(self.request)
+        if not self.request.user.has_permission('core.manage_custom_fields', tenant):
+            raise PermissionDenied("You do not have permission to manage custom fields.")
+        instance.is_active = False
+        instance.save(update_fields=['is_active'])

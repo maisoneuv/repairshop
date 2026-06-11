@@ -64,7 +64,7 @@ employee_roles = [
 class Employee(models.Model):
     tenant = models.ForeignKey(Tenant, on_delete=models.CASCADE)
     user = models.OneToOneField(User, on_delete=models.CASCADE)
-    role = models.CharField(choices=employee_roles)
+    role = models.CharField(max_length=100)
     location = models.ForeignKey(Location, on_delete=models.CASCADE)
 
     def __str__(self):

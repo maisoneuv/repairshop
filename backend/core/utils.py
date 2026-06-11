@@ -88,10 +88,20 @@ def get_model_schema(model_class, tenant=None):
         if isinstance(field, models.AutoField):
             continue
 
+        if field.default is models.NOT_PROVIDED:
+            default_value = None
+        elif callable(field.default):
+            try:
+                default_value = field.default()
+            except Exception:
+                default_value = None
+        else:
+            default_value = field.default
+
         field_info = {
             "type": get_field_type(field),
             "required": not field.blank,
-            "default": field.default if field.default is not models.NOT_PROVIDED else None,
+            "default": default_value,
         }
 
         # Check if this field uses dynamic picklists
@@ -153,3 +163,45 @@ def create_system_note(obj, message):
         object_id=obj.pk,
         author=None  # System note
     )
+
+
+def validate_custom_field_values(tenant, model_name, values: dict):
+    from rest_framework import serializers
+    from core.models import CustomField
+
+    if not isinstance(values, dict):
+        raise serializers.ValidationError({'custom_fields': 'Must be an object.'})
+
+    fields = CustomField.objects.filter(tenant=tenant, model_name=model_name, is_active=True)
+    errors = {}
+
+    for field in fields:
+        val = values.get(field.field_key)
+        empty = val is None or val == ''
+
+        if field.is_required and empty:
+            errors[field.field_key] = f"{field.label} is required."
+            continue
+
+        if empty:
+            continue
+
+        if field.field_type == 'number':
+            try:
+                num = float(val)
+                min_val = field.config.get('min')
+                max_val = field.config.get('max')
+                if min_val is not None and num < float(min_val):
+                    errors[field.field_key] = f"Must be ≥ {min_val}."
+                elif max_val is not None and num > float(max_val):
+                    errors[field.field_key] = f"Must be ≤ {max_val}."
+            except (TypeError, ValueError):
+                errors[field.field_key] = "Must be a number."
+
+        elif field.field_type == 'dropdown':
+            options = field.config.get('options', [])
+            if val not in options:
+                errors[field.field_key] = "Invalid option."
+
+    if errors:
+        raise serializers.ValidationError({'custom_fields': errors})

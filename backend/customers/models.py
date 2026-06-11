@@ -22,7 +22,7 @@ class Customer(models.Model):
     last_name = models.CharField(max_length=255, blank=True, null=True)
     email = models.EmailField(blank=True, null=True)
     address = models.OneToOneField(Address, on_delete=models.CASCADE, blank=True, null=True)
-    referral_source = models.CharField(choices=referral_sources, blank=True, null=True)
+    referral_source = models.CharField(max_length=100, blank=True, null=True)
 
     phone_regex = RegexValidator(
         regex=r'\d{7,9}$',
@@ -43,6 +43,7 @@ class Customer(models.Model):
     )
     tax_code = models.CharField(max_length=10, null=True, blank=True, validators=[tax_code_regex])
     full_phone_number = models.CharField(max_length=20, blank=True, null=True, db_index=True)
+    custom_fields = models.JSONField(default=dict, blank=True)
 
     def full_name(self):
         parts = [self.first_name, self.last_name]
@@ -108,7 +109,7 @@ class Lead(models.Model):
     full_phone_number = models.CharField(max_length=20, blank=True, null=True, db_index=True)
     device_description = models.TextField(blank=True, null=True)
     notes = models.TextField(blank=True, null=True)
-    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='new')
+    status = models.CharField(max_length=100, default='new')
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
