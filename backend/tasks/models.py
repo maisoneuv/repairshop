@@ -90,7 +90,7 @@ class WorkItem(models.Model):
     closed_date = models.DateTimeField(blank=True, null=True)
     owner = models.ForeignKey(Employee, on_delete=models.PROTECT, related_name="owner") #todo
     due_date = models.DateField(null=True, blank=True)
-    type = models.CharField(choices=work_item_types,default='Chargeable Repair')
+    type = models.CharField(max_length=100, default='Chargeable Repair')
     estimated_price = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True,
                                           validators=[MinValueValidator(Decimal('0.01'))])
     final_price = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True,
@@ -100,16 +100,16 @@ class WorkItem(models.Model):
     dropoff_point = models.ForeignKey(Location, on_delete=models.PROTECT, related_name="dropoff_items")
     pickup_point = models.ForeignKey(Location, on_delete=models.PROTECT, null=True, blank=True, related_name="pickup_items")
     customer_asset = models.ForeignKey(Asset, on_delete=models.PROTECT, blank=True, null=True)
-    priority = models.CharField(choices=priority_choices, default='Standard')
+    priority = models.CharField(max_length=100, default='Standard')
     comments = models.TextField(blank=True, null=True)
     device_condition = models.TextField(blank=True, null=True)
     accessories = models.TextField(blank=True, null=True)
     technician = models.ForeignKey(Employee, on_delete=models.PROTECT, null=True, blank=True, related_name="technician")
     prepaid_amount = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True,
                                          validators=[MinValueValidator(Decimal('0.01'))])
-    intake_method = models.CharField(choices=MoveMethod.choices, default=MoveMethod.WALK_IN)
-    dropoff_method = models.CharField(max_length=20, choices=MoveMethod.choices, default=MoveMethod.WALK_IN)
-    payment_method = models.CharField(choices=payment_methods, blank=True, null=True)
+    intake_method = models.CharField(max_length=20, default=MoveMethod.WALK_IN)
+    dropoff_method = models.CharField(max_length=20, default=MoveMethod.WALK_IN)
+    payment_method = models.CharField(max_length=100, blank=True, null=True)
     fulfillment_shop = models.ForeignKey("service.RepairShop", null=True, blank=True,
                                          on_delete=models.PROTECT,
                                          help_text="Who actually performs the repair (internal or partner).")
@@ -135,7 +135,7 @@ class WorkItem(models.Model):
     # paid
 
     notes = GenericRelation(Note)
-
+    custom_fields = models.JSONField(default=dict, blank=True)
 
     def __str__(self):
         return self.reference_id
@@ -186,6 +186,7 @@ class Task(models.Model):
     created_date = models.DateTimeField(auto_now_add=True)
     completed_date = models.DateTimeField(null=True, blank=True)
     actual_duration = models.DurationField(null=True, blank=True, help_text="Calculated duration from creation to completion")
+    custom_fields = models.JSONField(default=dict, blank=True)
 
     def __str__(self):
         return self.reference_id or self.summary or (f"Task #{self.pk}" if self.pk else "Task")

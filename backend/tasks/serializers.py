@@ -1,10 +1,47 @@
+import logging
 from rest_framework import serializers
 from .models import WorkItem, Task, TaskType, TaskTypeValidationRule
 from core.models import PicklistValue
+
+logger = logging.getLogger(__name__)
 from service.serializers import CashRegisterSerializer, EmployeeSerializer, LocationSerializer, ShopSerializer
 from service.models import CashRegister, Employee, RepairShop, Location
 from inventory.models import Device
 from customers.models import Asset
+
+
+def validate_status_transition(tenant, category, current_value, new_value):
+    """
+    Hard-block a status transition if the current status has allowed_transitions configured
+    and the requested new status is not in that list.
+    Only enforced on updates (when current_value is known).
+    """
+    if not current_value or current_value == new_value:
+        return
+    try:
+        current = PicklistValue.objects.get(
+            tenant=tenant, category=category, value=current_value
+        )
+    except PicklistValue.DoesNotExist:
+        return  # Unknown current status — don't block
+    allowed = current.allowed_transitions
+    logger.debug(
+        "Transition check: %s → %s | allowed=%r | blocked=%s",
+        current_value, new_value, allowed,
+        bool(allowed and new_value not in allowed),
+    )
+    if allowed and new_value not in allowed:
+        # Fetch display names for a helpful error message
+        names = {
+            v.value: v.name
+            for v in PicklistValue.objects.filter(tenant=tenant, category=category, value__in=allowed)
+        }
+        allowed_names = ', '.join(names.get(v, v) for v in allowed)
+        current_name = current.name
+        raise serializers.ValidationError(
+            f"Cannot move from '{current_name}' to this status. "
+            f"Allowed next statuses: {allowed_names}."
+        )
 
 
 def validate_picklist_value(tenant, category, value):
@@ -106,15 +143,22 @@ class WorkItemSerializer(serializers.ModelSerializer):
         shop = attrs.get("fulfillment_shop")
         if tenant and shop and shop.tenant_id != tenant.id:
             raise serializers.ValidationError({"fulfillment_shop_id": "Unknown for this tenant."})
+        if tenant and 'custom_fields' in attrs:
+            from core.utils import validate_custom_field_values
+            validate_custom_field_values(tenant, 'workitem', attrs['custom_fields'])
         return attrs
 
     def validate_status(self, value):
-        """Validate status against active picklist values"""
+        """Validate status against active picklist values and enforce transition rules."""
         tenant = self.context.get('tenant') or getattr(
             self.context.get('request'), 'tenant', None
         )
         if tenant:
             validate_picklist_value(tenant, 'workitem_status', value)
+            if self.instance:
+                validate_status_transition(
+                    tenant, 'workitem_status', self.instance.status, value
+                )
         return value
 
     def validate_currency(self, value):
@@ -340,15 +384,24 @@ class TaskSerializer(serializers.ModelSerializer):
             if errors:
                 raise serializers.ValidationError(errors)
 
+        tenant = self.context.get('tenant') or getattr(self.context.get('request'), 'tenant', None)
+        if tenant and 'custom_fields' in attrs:
+            from core.utils import validate_custom_field_values
+            validate_custom_field_values(tenant, 'task', attrs['custom_fields'])
+
         return attrs
 
     def validate_status(self, value):
-        """Validate status against active picklist values"""
+        """Validate status against active picklist values and enforce transition rules."""
         tenant = self.context.get('tenant') or getattr(
             self.context.get('request'), 'tenant', None
         )
         if tenant:
             validate_picklist_value(tenant, 'task_status', value)
+            if self.instance:
+                validate_status_transition(
+                    tenant, 'task_status', self.instance.status, value
+                )
         return value
 
     def create(self, validated_data):

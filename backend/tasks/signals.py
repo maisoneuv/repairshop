@@ -39,30 +39,73 @@ def create_default_picklists(sender, instance, created, **kwargs):
     if not created:
         return  # Only run for newly created tenants
 
-    # Define default picklist values
+    # (value, name, sort_order, is_system, color, status_role)
     DEFAULT_PICKLISTS = {
         'workitem_status': [
-            ('New', 'New', 0, True),
-            ('In Progress', 'In Progress', 1, True),
-            ('Resolved', 'Resolved', 2, True),
+            ('New',         'New',         0, True, 'sky',     'initial'),
+            ('In Progress', 'In Progress', 1, True, 'amber',   'in_progress'),
+            ('Resolved',    'Resolved',    2, True, 'emerald', 'resolved'),
         ],
         'task_status': [
-            ('To do', 'To do', 0, True),
-            ('In progress', 'In progress', 1, True),
-            ('Done', 'Done', 2, True),
-            ('Reopened', 'Reopened', 3, True),
+            ('To do',      'To do',      0, True, 'gray',    'initial'),
+            ('In progress','In progress',1, True, 'amber',   'in_progress'),
+            ('Done',       'Done',       2, True, 'emerald', 'resolved'),
+            ('Reopened',   'Reopened',   3, True, 'rose',    'in_progress'),
         ],
         'currency': [
-            ('PLN', 'Polish Zloty', 0, True),
-            ('USD', 'US Dollar', 1, True),
-            ('EUR', 'Euro', 2, True),
-            ('GBP', 'British Pound', 3, True),
+            ('PLN', 'Polish Zloty',  0, True, 'gray', None),
+            ('USD', 'US Dollar',     1, True, 'gray', None),
+            ('EUR', 'Euro',          2, True, 'gray', None),
+            ('GBP', 'British Pound', 3, True, 'gray', None),
+        ],
+        'workitem_type': [
+            ('Chargeable Repair', 'Chargeable Repair', 0, True, 'sky',     None),
+            ('Warranty Repair',   'Warranty Repair',   1, True, 'emerald', None),
+        ],
+        'workitem_priority': [
+            ('Standard', 'Standard', 0, True, 'gray',  None),
+            ('Express',  'Express',  1, True, 'amber', None),
+        ],
+        'intake_method': [
+            ('walk_in', 'Customer drop-off in person',  0, True, 'gray',   None),
+            ('courier', 'Courier',                      1, True, 'sky',    None),
+            ('driver',  'Courier pickup from customer', 2, True, 'indigo', None),
+        ],
+        'dropoff_method': [
+            ('walk_in', 'Customer pick-up in person',   0, True, 'gray',   None),
+            ('courier', 'Courier',                      1, True, 'sky',    None),
+            ('driver',  'Courier delivery to customer', 2, True, 'indigo', None),
+        ],
+        'payment_method': [
+            ('Card', 'Card', 0, True, 'sky',   None),
+            ('Cash', 'Cash', 1, True, 'amber', None),
+        ],
+        'employee_role': [
+            ('Manager',          'Manager',          0, True, 'purple', None),
+            ('Technician',       'Technician',       1, True, 'sky',    None),
+            ('Customer Service', 'Customer Service', 2, True, 'teal',   None),
+            ('External Service', 'External Service', 3, True, 'gray',   None),
+        ],
+        'referral_source': [
+            ('Internet Search',       'Internet Search',       0, True, 'sky',    None),
+            ('Social Media',          'Social Media',          1, True, 'indigo', None),
+            ('Friend/Family Referral','Friend/Family',         2, True, 'emerald',None),
+            ('Online Advertisement',  'Online Advertisement',  3, True, 'amber',  None),
+            ('Offline Advertisement', 'Offline Advertisement', 4, True, 'orange', None),
+            ('Walk-by',               'Walk-by',               5, True, 'teal',   None),
+            ('Returning Customer',    'Returning Customer',    6, True, 'purple', None),
+            ('Other',                 'Other',                 7, True, 'gray',   None),
+        ],
+        'lead_status': [
+            ('new',       'New',       0, True, 'sky',    'initial'),
+            ('contacted', 'Contacted', 1, True, 'amber',  'in_progress'),
+            ('callback',  'Callback',  2, True, 'orange', 'in_progress'),
+            ('converted', 'Converted', 3, True, 'emerald','resolved'),
         ],
     }
 
-    # Create picklist values for the new tenant
     for category, values in DEFAULT_PICKLISTS.items():
-        for value, name, sort_order, is_system in values:
+        for value, name, sort_order, is_system, color, status_role in values:
             PicklistValue.objects.create(
                 tenant=instance,
                 category=category,
@@ -70,7 +113,9 @@ def create_default_picklists(sender, instance, created, **kwargs):
                 name=name,
                 sort_order=sort_order,
                 is_active=True,
-                is_system=is_system
+                is_system=is_system,
+                color=color,
+                status_role=status_role,
             )
 
 

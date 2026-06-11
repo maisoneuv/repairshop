@@ -397,7 +397,7 @@ class CurrentEmployeeView(APIView):
                 "id": employee.id,
                 "location_id": employee.location.id if employee.location else None,
                 "location_name": employee.location.name if employee.location else None,
-                "role": employee.get_role_display() if hasattr(employee, 'role') else None,
+                "role": employee.role,
             },
             "availableTenants": availableTenants,
             "currentTenant": {

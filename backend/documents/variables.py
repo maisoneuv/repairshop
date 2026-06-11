@@ -4,6 +4,19 @@ Maps work item data to template variables like {{customer.name}}, {{workitem.ref
 """
 from datetime import datetime
 from collections import OrderedDict
+from core.models import PicklistValue
+
+
+def _picklist_name(tenant_id, category, value):
+    """Return the display name for a picklist value, falling back to the raw value."""
+    if not value:
+        return ''
+    try:
+        return PicklistValue.objects.get(
+            tenant_id=tenant_id, category=category, value=value
+        ).name
+    except PicklistValue.DoesNotExist:
+        return value
 
 
 def get_available_merge_fields():
@@ -216,8 +229,8 @@ def get_template_variables(work_item):
 
     # Payment and intake methods
     variables['workitem.payment_method'] = work_item.payment_method or ''
-    variables['workitem.intake_method'] = work_item.get_intake_method_display() if work_item.intake_method else ''
-    variables['workitem.dropoff_method'] = work_item.get_dropoff_method_display() if work_item.dropoff_method else ''
+    variables['workitem.intake_method'] = _picklist_name(work_item.tenant_id, 'intake_method', work_item.intake_method)
+    variables['workitem.dropoff_method'] = _picklist_name(work_item.tenant_id, 'dropoff_method', work_item.dropoff_method)
 
     # ========================================================================
     # Asset/Device Variables

@@ -19,6 +19,8 @@ import CashRegisterForm from "./features/CashRegisters/CashRegisterForm";
 import InventoryStock from "./features/Inventory/InventoryStock";
 import ReceiveDelivery from "./features/Inventory/ReceiveDelivery";
 import SettingsPage from "./pages/SettingsPage";
+import SystemSettingsPage from "./pages/SystemSettingsPage";
+import CustomFieldsSettings from "./pages/CustomFieldsSettings";
 import LockScreen from "./components/LockScreen";
 import { useUser } from "./context/UserContext";
 import LeadBoard from "./pages/LeadBoard";
@@ -62,6 +64,8 @@ function App() {
                 <Route path="/search" element={<SearchResults />} />
                 <Route path="/profile" element={<ProfilePage />} />
                 <Route path="/settings" element={<SettingsPage />} />
+                <Route path="/settings/custom-fields" element={<CustomFieldsSettings />} />
+                <Route path="/system-settings/*" element={<SystemSettingsPage />} />
                 <Route path="/leads" element={<LeadBoard />} />
             </Route>
             <Route path="/car" element={<CarMode />} />

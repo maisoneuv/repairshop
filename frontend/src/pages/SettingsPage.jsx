@@ -245,6 +245,24 @@ export default function SettingsPage() {
                     </div>
                 )}
 
+                {isAdmin && (
+                    <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+                        <h2 className="text-base font-semibold text-gray-900 mb-1">Custom Fields</h2>
+                        <p className="text-sm text-gray-500 mb-3">
+                            Add custom fields to work items, tasks, and customers.
+                        </p>
+                        <Link
+                            to="/settings/custom-fields"
+                            className="inline-flex items-center gap-1.5 text-sm text-blue-600 hover:underline font-medium"
+                        >
+                            Manage custom fields
+                            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                            </svg>
+                        </Link>
+                    </div>
+                )}
+
                 {!isAdmin && (
                     <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
                         <p className="text-sm text-gray-500">Settings are only available to administrators.</p>
