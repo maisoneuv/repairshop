@@ -23,7 +23,11 @@ class UserAdmin(TenantAwareImportExportMixin, DefaultUserAdmin):
         (_("Tenant"), {"fields": ("tenant",)}),
         ("Tenant Roles & Permissions", {"fields": ("display_roles_and_permissions",)}),
     )
-    add_fieldsets = DefaultUserAdmin.add_fieldsets + (
+    add_fieldsets = (
+        (None, {
+            "classes": ("wide",),
+            "fields": ("email", "password1", "password2"),
+        }),
         (_("Tenant"), {"fields": ("tenant",)}),
     )
 

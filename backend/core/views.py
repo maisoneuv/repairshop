@@ -253,6 +253,9 @@ def login_view(request):
     user = authenticate(request, username=username, password=password)
     print(user)
     if user is not None:
+        request_tenant = getattr(request, 'tenant', None)
+        if request_tenant and user.tenant and user.tenant != request_tenant:
+            return JsonResponse({"error": "Invalid credentials"}, status=status.HTTP_401_UNAUTHORIZED)
         login(request, user)
         user.last_full_login_at = timezone.now()
         user.save(update_fields=['last_full_login_at'])
