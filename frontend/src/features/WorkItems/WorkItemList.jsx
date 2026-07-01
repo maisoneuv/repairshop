@@ -1,10 +1,12 @@
 import { useEffect, useMemo, useState, useCallback } from "react";
 import { Link, useSearchParams } from "react-router-dom";
+import { List, LayoutGrid } from "lucide-react";
 import { fetchWorkItems } from "../../api/workItems";
 import { useUser } from "../../context/UserContext";
 import apiClient from "../../api/apiClient";
 import { getPicklistPath, getEmployeeListPath } from "../../api/autocompleteApi";
 import { buildStatusColorMap, getStatusStyle } from "../../utils/statusColors";
+import WorkItemBoard from "./WorkItemBoard";
 
 const COLUMNS = [
     { key: "reference_id", label: "RMA #" },
@@ -31,6 +33,14 @@ export default function WorkItemList() {
     const [statusFilter, setStatusFilter] = useState(() => searchParams.get("status") || "__open__");
     const [ownerFilter, setOwnerFilter] = useState("");
 
+    // View mode: 'list' or 'board', persisted in localStorage
+    const [viewMode, setViewMode] = useState(() => localStorage.getItem("workitem_view_mode") || "list");
+
+    const handleViewModeChange = (mode) => {
+        setViewMode(mode);
+        localStorage.setItem("workitem_view_mode", mode);
+    };
+
     // Fetch filter options on mount
     useEffect(() => {
         const loadFilterOptions = async () => {
@@ -55,11 +65,14 @@ export default function WorkItemList() {
         setError("");
         try {
             const params = {};
-            if (statusFilter && statusFilter !== "__open__" && statusFilter !== "__all__") {
-                params.status = statusFilter;
-            }
-            if (ownerFilter) {
-                params.owner = ownerFilter;
+            // In board mode fetch all items; board handles filtering client-side
+            if (viewMode === "list") {
+                if (statusFilter && statusFilter !== "__open__" && statusFilter !== "__all__") {
+                    params.status = statusFilter;
+                }
+                if (ownerFilter) {
+                    params.owner = ownerFilter;
+                }
             }
             const data = await fetchWorkItems(params);
             setItems(data || []);
@@ -68,7 +81,7 @@ export default function WorkItemList() {
         } finally {
             setLoading(false);
         }
-    }, [statusFilter, ownerFilter]);
+    }, [viewMode, statusFilter, ownerFilter]);
 
     useEffect(() => {
         loadWorkItems();
@@ -142,12 +155,42 @@ export default function WorkItemList() {
                         </p>
                     </div>
 
-                    <Link
-                        to="/work-items/new"
-                        className="px-3 py-1.5 rounded-lg text-sm font-medium bg-blue-600 text-white hover:bg-blue-700 transition-colors"
-                    >
-                        Create New
-                    </Link>
+                    <div className="flex items-center gap-2">
+                        {/* List / Board toggle */}
+                        <div className="flex border border-gray-200 rounded-lg overflow-hidden">
+                            <button
+                                type="button"
+                                onClick={() => handleViewModeChange("list")}
+                                title="List view"
+                                className={`p-1.5 transition-colors ${
+                                    viewMode === "list"
+                                        ? "bg-blue-600 text-white"
+                                        : "text-gray-500 hover:bg-gray-100"
+                                }`}
+                            >
+                                <List size={16} />
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => handleViewModeChange("board")}
+                                title="Board view"
+                                className={`p-1.5 transition-colors ${
+                                    viewMode === "board"
+                                        ? "bg-blue-600 text-white"
+                                        : "text-gray-500 hover:bg-gray-100"
+                                }`}
+                            >
+                                <LayoutGrid size={16} />
+                            </button>
+                        </div>
+
+                        <Link
+                            to="/work-items/new"
+                            className="px-3 py-1.5 rounded-lg text-sm font-medium bg-blue-600 text-white hover:bg-blue-700 transition-colors"
+                        >
+                            Create New
+                        </Link>
+                    </div>
                 </div>
 
                 <div className="flex gap-2 mt-3" role="tablist" aria-label="Work item view">
@@ -181,27 +224,29 @@ export default function WorkItemList() {
                 </div>
             </div>
 
-            {/* Filters */}
+            {/* Filters — status filter hidden in board mode (columns are the statuses) */}
             <div className="px-4 md:px-6 py-3 border-b border-gray-100 flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4 bg-gray-50">
-                <div className="flex items-center gap-2">
-                    <label htmlFor="status-filter" className="text-sm font-medium text-gray-600 whitespace-nowrap">
-                        Status:
-                    </label>
-                    <select
-                        id="status-filter"
-                        value={statusFilter}
-                        onChange={(e) => setStatusFilter(e.target.value)}
-                        className="flex-1 min-w-0 px-3 py-1.5 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    >
-                        <option value="__open__">Open (Not Resolved)</option>
-                        <option value="__all__">All Statuses</option>
-                        {statusOptions.map((opt) => (
-                            <option key={opt.value} value={opt.value}>
-                                {opt.name}
-                            </option>
-                        ))}
-                    </select>
-                </div>
+                {viewMode === "list" && (
+                    <div className="flex items-center gap-2">
+                        <label htmlFor="status-filter" className="text-sm font-medium text-gray-600 whitespace-nowrap">
+                            Status:
+                        </label>
+                        <select
+                            id="status-filter"
+                            value={statusFilter}
+                            onChange={(e) => setStatusFilter(e.target.value)}
+                            className="flex-1 min-w-0 px-3 py-1.5 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        >
+                            <option value="__open__">Open (Not Resolved)</option>
+                            <option value="__all__">All Statuses</option>
+                            {statusOptions.map((opt) => (
+                                <option key={opt.value} value={opt.value}>
+                                    {opt.name}
+                                </option>
+                            ))}
+                        </select>
+                    </div>
+                )}
 
                 <div className="flex items-center gap-2">
                     <label htmlFor="owner-filter" className="text-sm font-medium text-gray-600 whitespace-nowrap">
@@ -223,130 +268,153 @@ export default function WorkItemList() {
                 </div>
             </div>
 
-            <div className="p-4 md:p-6">
-                {error && (
-                    <div className="mb-4 rounded-lg bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700">
-                        {error}
-                    </div>
-                )}
-
-                {/* Mobile card list */}
-                <div className="md:hidden space-y-3">
+            {viewMode === "board" ? (
+                <div className="p-4 md:p-6 overflow-hidden">
+                    {error && (
+                        <div className="mb-4 rounded-lg bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700">
+                            {error}
+                        </div>
+                    )}
                     {loading ? (
                         <p className="py-10 text-center text-sm text-gray-500">Loading work items...</p>
-                    ) : sortedItems.length === 0 ? (
-                        <p className="py-10 text-center text-sm text-gray-500">No work items found.</p>
                     ) : (
-                        sortedItems.map((item) => (
-                            <Link
-                                key={item.id}
-                                to={`/work-items/${item.id}`}
-                                className="block border border-gray-200 rounded-lg p-3 hover:bg-blue-50/50 active:bg-blue-50"
-                            >
-                                <div className="flex items-center justify-between mb-1.5">
-                                    <span className="text-sm font-medium text-blue-600">
-                                        {item.reference_id || `#${item.id}`}
-                                    </span>
-                                    <span className={`inline-block px-2 py-0.5 rounded-full text-xs font-medium border ${getStatusStyle(item.status, statusColorMap)}`}>
-                                        {item.status || "-"}
-                                    </span>
-                                </div>
-                                <div className="text-xs text-gray-600">
-                                    {item.device_name || "No device"}
-                                </div>
-                                {item.device_category_name && (
-                                    <div className="text-xs text-gray-500 mt-0.5">
-                                        {item.device_category_name}
-                                    </div>
-                                )}
-                            </Link>
-                        ))
+                        <WorkItemBoard
+                            items={items}
+                            statusOptions={statusOptions}
+                            statusColorMap={statusColorMap}
+                            ownerFilter={ownerFilter}
+                            view={view}
+                            employee={employee}
+                            onItemsChange={setItems}
+                        />
                     )}
                 </div>
+            ) : (
+                <div className="p-4 md:p-6">
+                    {error && (
+                        <div className="mb-4 rounded-lg bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700">
+                            {error}
+                        </div>
+                    )}
 
-                {/* Desktop table */}
-                <div className="hidden md:block overflow-x-auto">
-                    <table className="min-w-full divide-y divide-gray-200 text-sm">
-                        <thead className="bg-gray-50">
-                            <tr>
-                                {COLUMNS.map((column) => (
-                                    <th
-                                        key={column.key}
-                                        scope="col"
-                                        tabIndex={0}
-                                        aria-sort={
-                                            sortField === column.key
-                                                ? sortDirection === "asc" ? "ascending" : "descending"
-                                                : "none"
-                                        }
-                                        className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider cursor-pointer select-none focus:outline-none focus:ring-2 focus:ring-inset focus:ring-blue-500"
-                                        onClick={() => handleSort(column.key)}
-                                        onKeyDown={(e) => {
-                                            if (e.key === "Enter" || e.key === " ") {
-                                                e.preventDefault();
-                                                handleSort(column.key);
-                                            }
-                                        }}
-                                    >
-                                        <span className="inline-flex items-center gap-1">
-                                            {column.label}
-                                            {sortField === column.key && (
-                                                <svg
-                                                    className={`h-3 w-3 ${sortDirection === "asc" ? "rotate-180" : ""}`}
-                                                    viewBox="0 0 20 20"
-                                                    fill="none"
-                                                    stroke="currentColor"
-                                                    strokeWidth="2"
-                                                    strokeLinecap="round"
-                                                    strokeLinejoin="round"
-                                                    aria-hidden="true"
-                                                >
-                                                    <path d="M6 8l4 4 4-4" />
-                                                </svg>
-                                            )}
+                    {/* Mobile card list */}
+                    <div className="md:hidden space-y-3">
+                        {loading ? (
+                            <p className="py-10 text-center text-sm text-gray-500">Loading work items...</p>
+                        ) : sortedItems.length === 0 ? (
+                            <p className="py-10 text-center text-sm text-gray-500">No work items found.</p>
+                        ) : (
+                            sortedItems.map((item) => (
+                                <Link
+                                    key={item.id}
+                                    to={`/work-items/${item.id}`}
+                                    className="block border border-gray-200 rounded-lg p-3 hover:bg-blue-50/50 active:bg-blue-50"
+                                >
+                                    <div className="flex items-center justify-between mb-1.5">
+                                        <span className="text-sm font-medium text-blue-600">
+                                            {item.reference_id || `#${item.id}`}
                                         </span>
-                                    </th>
-                                ))}
-                            </tr>
-                        </thead>
-                        <tbody className="bg-white divide-y divide-gray-100">
-                            {loading ? (
+                                        <span className={`inline-block px-2 py-0.5 rounded-full text-xs font-medium border ${getStatusStyle(item.status, statusColorMap)}`}>
+                                            {item.status || "-"}
+                                        </span>
+                                    </div>
+                                    <div className="text-xs text-gray-600">
+                                        {item.device_name || "No device"}
+                                    </div>
+                                    {item.device_category_name && (
+                                        <div className="text-xs text-gray-500 mt-0.5">
+                                            {item.device_category_name}
+                                        </div>
+                                    )}
+                                </Link>
+                            ))
+                        )}
+                    </div>
+
+                    {/* Desktop table */}
+                    <div className="hidden md:block overflow-x-auto">
+                        <table className="min-w-full divide-y divide-gray-200 text-sm">
+                            <thead className="bg-gray-50">
                                 <tr>
-                                    <td colSpan={COLUMNS.length} className="px-4 py-10 text-center text-sm text-gray-500">
-                                        Loading work items...
-                                    </td>
-                                </tr>
-                            ) : sortedItems.length === 0 ? (
-                                <tr>
-                                    <td colSpan={COLUMNS.length} className="px-4 py-10 text-center text-sm text-gray-500">
-                                        No work items found.
-                                    </td>
-                                </tr>
-                            ) : (
-                                sortedItems.map((item) => (
-                                    <tr key={item.id} className="hover:bg-blue-50/50">
-                                        <td className="px-4 py-3 text-sm font-medium text-blue-600">
-                                            <Link to={`/work-items/${item.id}`} className="hover:underline">
-                                                {item.reference_id || `#${item.id}`}
-                                            </Link>
-                                        </td>
-                                        <td className="px-4 py-3 text-sm">
-                                            <span className={`inline-block px-2 py-0.5 rounded-full text-xs font-medium border ${getStatusStyle(item.status, statusColorMap)}`}>
-                                                {item.status || "-"}
+                                    {COLUMNS.map((column) => (
+                                        <th
+                                            key={column.key}
+                                            scope="col"
+                                            tabIndex={0}
+                                            aria-sort={
+                                                sortField === column.key
+                                                    ? sortDirection === "asc" ? "ascending" : "descending"
+                                                    : "none"
+                                            }
+                                            className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider cursor-pointer select-none focus:outline-none focus:ring-2 focus:ring-inset focus:ring-blue-500"
+                                            onClick={() => handleSort(column.key)}
+                                            onKeyDown={(e) => {
+                                                if (e.key === "Enter" || e.key === " ") {
+                                                    e.preventDefault();
+                                                    handleSort(column.key);
+                                                }
+                                            }}
+                                        >
+                                            <span className="inline-flex items-center gap-1">
+                                                {column.label}
+                                                {sortField === column.key && (
+                                                    <svg
+                                                        className={`h-3 w-3 ${sortDirection === "asc" ? "rotate-180" : ""}`}
+                                                        viewBox="0 0 20 20"
+                                                        fill="none"
+                                                        stroke="currentColor"
+                                                        strokeWidth="2"
+                                                        strokeLinecap="round"
+                                                        strokeLinejoin="round"
+                                                        aria-hidden="true"
+                                                    >
+                                                        <path d="M6 8l4 4 4-4" />
+                                                    </svg>
+                                                )}
                                             </span>
-                                        </td>
-                                        <td className="px-4 py-3 text-sm text-gray-700">{item.device_name || "-"}</td>
-                                        <td className="px-4 py-3 text-sm text-gray-700">{item.device_category_name || "-"}</td>
-                                        <td className="px-4 py-3 text-sm text-gray-600">
-                                            {formatDate(item.created_date)}
+                                        </th>
+                                    ))}
+                                </tr>
+                            </thead>
+                            <tbody className="bg-white divide-y divide-gray-100">
+                                {loading ? (
+                                    <tr>
+                                        <td colSpan={COLUMNS.length} className="px-4 py-10 text-center text-sm text-gray-500">
+                                            Loading work items...
                                         </td>
                                     </tr>
-                                ))
-                            )}
-                        </tbody>
-                    </table>
+                                ) : sortedItems.length === 0 ? (
+                                    <tr>
+                                        <td colSpan={COLUMNS.length} className="px-4 py-10 text-center text-sm text-gray-500">
+                                            No work items found.
+                                        </td>
+                                    </tr>
+                                ) : (
+                                    sortedItems.map((item) => (
+                                        <tr key={item.id} className="hover:bg-blue-50/50">
+                                            <td className="px-4 py-3 text-sm font-medium text-blue-600">
+                                                <Link to={`/work-items/${item.id}`} className="hover:underline">
+                                                    {item.reference_id || `#${item.id}`}
+                                                </Link>
+                                            </td>
+                                            <td className="px-4 py-3 text-sm">
+                                                <span className={`inline-block px-2 py-0.5 rounded-full text-xs font-medium border ${getStatusStyle(item.status, statusColorMap)}`}>
+                                                    {item.status || "-"}
+                                                </span>
+                                            </td>
+                                            <td className="px-4 py-3 text-sm text-gray-700">{item.device_name || "-"}</td>
+                                            <td className="px-4 py-3 text-sm text-gray-700">{item.device_category_name || "-"}</td>
+                                            <td className="px-4 py-3 text-sm text-gray-600">
+                                                {formatDate(item.created_date)}
+                                            </td>
+                                        </tr>
+                                    ))
+                                )}
+                            </tbody>
+                        </table>
+                    </div>
                 </div>
-            </div>
+            )}
         </div>
     );
 }

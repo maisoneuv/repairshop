@@ -323,6 +323,9 @@ class WorkItemViewSet(viewsets.ModelViewSet):
 
         tenant = getattr(self.request, 'tenant', None)
 
+        if user.is_superuser and tenant:
+            return base_qs.filter(tenant=tenant)
+
         if user.is_superuser:
             return base_qs.all()
 
@@ -722,6 +725,9 @@ class TaskViewSet(viewsets.ModelViewSet):
         if "deviceName" in includes:
             base_qs = base_qs.select_related('work_item__customer_asset__device')
 
+        if user.is_superuser and self.request.tenant:
+            return base_qs.filter(tenant=self.request.tenant)
+
         if user.is_superuser:
             return base_qs.all()
 
@@ -911,6 +917,9 @@ class TaskTypeViewSet(viewsets.ModelViewSet):
     def get_queryset(self):
         """Filter task types by tenant and active status"""
         user = self.request.user
+
+        if user.is_superuser and self.request.tenant:
+            return TaskType.objects.filter(tenant=self.request.tenant)
 
         if user.is_superuser:
             return TaskType.objects.all()
