@@ -91,7 +91,9 @@ class AssetViewSet(viewsets.ModelViewSet):
         user = self.request.user
         tenant = getattr(self.request, "tenant", None)
 
-        if user.is_superuser:
+        if user.is_superuser and tenant:
+            qs = Asset.objects.select_related("device", "customer").filter(customer__tenant=tenant)
+        elif user.is_superuser:
             qs = Asset.objects.select_related("device", "customer").all()
         else:
             if not tenant:
@@ -263,7 +265,9 @@ class CustomerAPISearchView(generics.ListAPIView):
     def get_queryset(self):
         user = self.request.user
 
-        if user.is_superuser:
+        if user.is_superuser and self.request.tenant:
+            qs = Customer.objects.select_related("address").filter(tenant=self.request.tenant)
+        elif user.is_superuser:
             qs = Customer.objects.select_related("address").all()
         else:
             if not self.request.tenant:
@@ -299,6 +303,9 @@ class CustomerViewSet(TenantScopedMixin, viewsets.ModelViewSet):
 
     def get_queryset(self):
         user = self.request.user
+
+        if user.is_superuser and self.request.tenant:
+            return Customer.objects.select_related("address").filter(tenant=self.request.tenant)
 
         if user.is_superuser:
             return Customer.objects.select_related("address").all()
@@ -497,10 +504,13 @@ class LeadViewSet(TenantScopedMixin, viewsets.ModelViewSet):
     http_method_names = ['get', 'post', 'patch', 'head', 'options']
 
     def get_queryset(self):
+        tenant = getattr(self.request, 'tenant', None)
+        if self.request.user.is_superuser and tenant:
+            return Lead.objects.filter(tenant=tenant)
         if self.request.user.is_superuser:
             return Lead.objects.all()
-        if getattr(self.request, 'tenant', None):
-            return Lead.objects.filter(tenant=self.request.tenant)
+        if tenant:
+            return Lead.objects.filter(tenant=tenant)
         return Lead.objects.none()
 
     def perform_create(self, serializer):

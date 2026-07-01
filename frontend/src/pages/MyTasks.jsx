@@ -1,10 +1,12 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
+import { List, LayoutGrid } from "lucide-react";
 import { fetchTasks } from "../api/tasks";
 import apiClient from "../api/apiClient";
 import { getPicklistPath } from "../api/autocompleteApi";
 import { buildStatusColorMap, getStatusStyle } from "../utils/statusColors";
 import { useUser } from "../context/UserContext";
+import TaskBoard from "../features/Tasks/TaskBoard";
 
 const COLUMNS = [
     { key: "id", label: "Task ID" },
@@ -27,6 +29,14 @@ export default function MyTasks() {
     const [sortDirection, setSortDirection] = useState("desc");
     const [statusOptions, setStatusOptions] = useState([]);
     const [statusFilter, setStatusFilter] = useState("__open__");
+
+    // View mode: 'list' or 'board', persisted in localStorage
+    const [viewMode, setViewMode] = useState(() => localStorage.getItem("tasks_my_view_mode") || "list");
+
+    const handleViewModeChange = (mode) => {
+        setViewMode(mode);
+        localStorage.setItem("tasks_my_view_mode", mode);
+    };
 
     useEffect(() => {
         const load = async () => {
@@ -124,172 +134,228 @@ export default function MyTasks() {
             <div className="px-4 md:px-6 py-3 md:py-4 border-b border-gray-100 flex items-center justify-between">
                 <div>
                     <h1 className="text-lg md:text-xl font-semibold text-gray-800">My Tasks</h1>
-                    <p className="text-xs md:text-sm text-gray-500">
-                        Tasks assigned to you
-                    </p>
+                    <p className="text-xs md:text-sm text-gray-500">Tasks assigned to you</p>
                 </div>
 
-                <Link
-                    to="/tasks/new"
-                    className="px-3 py-1.5 rounded-lg text-sm font-medium bg-blue-600 text-white hover:bg-blue-700"
-                >
-                    Create New
-                </Link>
-            </div>
-
-            {/* Filters */}
-            <div className="px-4 md:px-6 py-3 border-b border-gray-100 flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4 bg-gray-50">
                 <div className="flex items-center gap-2">
-                    <label htmlFor="status-filter" className="text-sm font-medium text-gray-600 whitespace-nowrap">
-                        Status:
-                    </label>
-                    <select
-                        id="status-filter"
-                        value={statusFilter}
-                        onChange={(e) => setStatusFilter(e.target.value)}
-                        className="flex-1 min-w-0 px-3 py-1.5 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    {/* List / Board toggle */}
+                    <div className="flex border border-gray-200 rounded-lg overflow-hidden">
+                        <button
+                            type="button"
+                            onClick={() => handleViewModeChange("list")}
+                            title="List view"
+                            className={`p-1.5 transition-colors ${
+                                viewMode === "list"
+                                    ? "bg-blue-600 text-white"
+                                    : "text-gray-500 hover:bg-gray-100"
+                            }`}
+                        >
+                            <List size={16} />
+                        </button>
+                        <button
+                            type="button"
+                            onClick={() => handleViewModeChange("board")}
+                            title="Board view"
+                            className={`p-1.5 transition-colors ${
+                                viewMode === "board"
+                                    ? "bg-blue-600 text-white"
+                                    : "text-gray-500 hover:bg-gray-100"
+                            }`}
+                        >
+                            <LayoutGrid size={16} />
+                        </button>
+                    </div>
+
+                    <Link
+                        to="/tasks/new"
+                        className="px-3 py-1.5 rounded-lg text-sm font-medium bg-blue-600 text-white hover:bg-blue-700"
                     >
-                        <option value="__open__">Open (Not Done)</option>
-                        <option value="__all__">All Statuses</option>
-                        {statusOptions.map((opt) => (
-                            <option key={opt.value} value={opt.value}>
-                                {opt.name}
-                            </option>
-                        ))}
-                    </select>
+                        Create New
+                    </Link>
                 </div>
             </div>
 
-            <div className="p-4 md:p-6">
-                {error && (
-                    <div className="mb-4 rounded-lg bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700">
-                        {error}
+            {/* Filters — status filter hidden in board mode */}
+            <div className="px-4 md:px-6 py-3 border-b border-gray-100 flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4 bg-gray-50">
+                {viewMode === "list" && (
+                    <div className="flex items-center gap-2">
+                        <label htmlFor="status-filter" className="text-sm font-medium text-gray-600 whitespace-nowrap">
+                            Status:
+                        </label>
+                        <select
+                            id="status-filter"
+                            value={statusFilter}
+                            onChange={(e) => setStatusFilter(e.target.value)}
+                            className="flex-1 min-w-0 px-3 py-1.5 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        >
+                            <option value="__open__">Open (Not Done)</option>
+                            <option value="__all__">All Statuses</option>
+                            {statusOptions.map((opt) => (
+                                <option key={opt.value} value={opt.value}>
+                                    {opt.name}
+                                </option>
+                            ))}
+                        </select>
                     </div>
                 )}
+            </div>
 
-                {!employee && (
-                    <div className="mb-4 rounded-lg bg-yellow-50 border border-yellow-200 px-4 py-3 text-sm text-yellow-700">
-                        No employee profile found for your account.
-                    </div>
-                )}
-
-                {/* Mobile card list */}
-                <div className="md:hidden space-y-3">
+            {viewMode === "board" ? (
+                <div className="p-4 md:p-6 overflow-hidden">
+                    {error && (
+                        <div className="mb-4 rounded-lg bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700">
+                            {error}
+                        </div>
+                    )}
+                    {!employee && (
+                        <div className="mb-4 rounded-lg bg-yellow-50 border border-yellow-200 px-4 py-3 text-sm text-yellow-700">
+                            No employee profile found for your account.
+                        </div>
+                    )}
                     {loading ? (
                         <p className="py-10 text-center text-sm text-gray-500">Loading tasks...</p>
-                    ) : sortedTasks.length === 0 ? (
-                        <p className="py-10 text-center text-sm text-gray-500">No tasks assigned to you.</p>
                     ) : (
-                        sortedTasks.map((task) => (
-                            <Link
-                                key={task.id}
-                                to={`/tasks/${task.id}`}
-                                className="block border border-gray-200 rounded-lg p-3 hover:bg-blue-50/50 active:bg-blue-50"
-                            >
-                                <div className="flex items-center justify-between mb-1.5">
-                                    <span className="text-sm font-medium text-blue-600">#{task.id}</span>
-                                    <span className={`inline-block px-2 py-0.5 rounded-full text-xs font-medium border ${getStatusStyle(task.status, statusColorMap)}`}>
-                                        {task.status || "-"}
-                                    </span>
-                                </div>
-                                <div className="flex items-center justify-between text-xs text-gray-600">
-                                    <span>{task.task_type?.name || "-"}</span>
-                                    <span>{task.assigned_employee?.name || "Unassigned"}</span>
-                                </div>
-                                {(task.work_item || task.device_name) && (
-                                    <div className="flex items-center justify-between text-xs text-gray-500 mt-1">
-                                        <span>{task.work_item?.reference_id || ""}</span>
-                                        <span>{task.device_name || ""}</span>
-                                    </div>
-                                )}
-                            </Link>
-                        ))
+                        <TaskBoard
+                            tasks={tasks}
+                            statusOptions={statusOptions}
+                            statusColorMap={statusColorMap}
+                            assigneeFilter={employee ? String(employee.id) : ""}
+                            onTasksChange={setTasks}
+                        />
                     )}
                 </div>
+            ) : (
+                <div className="p-4 md:p-6">
+                    {error && (
+                        <div className="mb-4 rounded-lg bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700">
+                            {error}
+                        </div>
+                    )}
 
-                {/* Desktop table */}
-                <div className="hidden md:block overflow-x-auto">
-                    <table className="min-w-full divide-y divide-gray-200 text-sm">
-                        <thead className="bg-gray-50">
-                            <tr>
-                                {COLUMNS.map((column) => (
-                                    <th
-                                        key={column.key}
-                                        scope="col"
-                                        className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider cursor-pointer"
-                                        onClick={() => handleSort(column.key)}
-                                    >
-                                        <span className="inline-flex items-center gap-1">
-                                            {column.label}
-                                            {sortField === column.key && (
-                                                <svg
-                                                    className={`h-3 w-3 ${sortDirection === "asc" ? "transform rotate-180" : ""}`}
-                                                    viewBox="0 0 20 20"
-                                                    fill="currentColor"
-                                                >
-                                                    <path d="M6 8l4 4 4-4" />
-                                                </svg>
-                                            )}
+                    {!employee && (
+                        <div className="mb-4 rounded-lg bg-yellow-50 border border-yellow-200 px-4 py-3 text-sm text-yellow-700">
+                            No employee profile found for your account.
+                        </div>
+                    )}
+
+                    {/* Mobile card list */}
+                    <div className="md:hidden space-y-3">
+                        {loading ? (
+                            <p className="py-10 text-center text-sm text-gray-500">Loading tasks...</p>
+                        ) : sortedTasks.length === 0 ? (
+                            <p className="py-10 text-center text-sm text-gray-500">No tasks assigned to you.</p>
+                        ) : (
+                            sortedTasks.map((task) => (
+                                <Link
+                                    key={task.id}
+                                    to={`/tasks/${task.id}`}
+                                    className="block border border-gray-200 rounded-lg p-3 hover:bg-blue-50/50 active:bg-blue-50"
+                                >
+                                    <div className="flex items-center justify-between mb-1.5">
+                                        <span className="text-sm font-medium text-blue-600">#{task.id}</span>
+                                        <span className={`inline-block px-2 py-0.5 rounded-full text-xs font-medium border ${getStatusStyle(task.status, statusColorMap)}`}>
+                                            {task.status || "-"}
                                         </span>
-                                    </th>
-                                ))}
-                            </tr>
-                        </thead>
-                        <tbody className="bg-white divide-y divide-gray-100">
-                            {loading ? (
+                                    </div>
+                                    <div className="flex items-center justify-between text-xs text-gray-600">
+                                        <span>{task.task_type?.name || "-"}</span>
+                                        <span>{task.assigned_employee?.name || "Unassigned"}</span>
+                                    </div>
+                                    {(task.work_item || task.device_name) && (
+                                        <div className="flex items-center justify-between text-xs text-gray-500 mt-1">
+                                            <span>{task.work_item?.reference_id || ""}</span>
+                                            <span>{task.device_name || ""}</span>
+                                        </div>
+                                    )}
+                                </Link>
+                            ))
+                        )}
+                    </div>
+
+                    {/* Desktop table */}
+                    <div className="hidden md:block overflow-x-auto">
+                        <table className="min-w-full divide-y divide-gray-200 text-sm">
+                            <thead className="bg-gray-50">
                                 <tr>
-                                    <td colSpan={COLUMNS.length} className="px-4 py-10 text-center text-sm text-gray-500">
-                                        Loading tasks...
-                                    </td>
-                                </tr>
-                            ) : sortedTasks.length === 0 ? (
-                                <tr>
-                                    <td colSpan={COLUMNS.length} className="px-4 py-10 text-center text-sm text-gray-500">
-                                        No tasks assigned to you.
-                                    </td>
-                                </tr>
-                            ) : (
-                                sortedTasks.map((task) => (
-                                    <tr key={task.id} className="hover:bg-blue-50/50">
-                                        <td className="px-4 py-3 text-sm font-medium text-blue-600">
-                                            <Link to={`/tasks/${task.id}`} className="hover:underline">
-                                                #{task.id}
-                                            </Link>
-                                        </td>
-                                        <td className="px-4 py-3 text-sm text-gray-700">
-                                            {task.task_type?.name || "-"}
-                                        </td>
-                                        <td className="px-4 py-3 text-sm">
-                                            <span className={`inline-block px-2 py-0.5 rounded-full text-xs font-medium border ${getStatusStyle(task.status, statusColorMap)}`}>
-                                                {task.status || "-"}
+                                    {COLUMNS.map((column) => (
+                                        <th
+                                            key={column.key}
+                                            scope="col"
+                                            className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider cursor-pointer"
+                                            onClick={() => handleSort(column.key)}
+                                        >
+                                            <span className="inline-flex items-center gap-1">
+                                                {column.label}
+                                                {sortField === column.key && (
+                                                    <svg
+                                                        className={`h-3 w-3 ${sortDirection === "asc" ? "transform rotate-180" : ""}`}
+                                                        viewBox="0 0 20 20"
+                                                        fill="currentColor"
+                                                    >
+                                                        <path d="M6 8l4 4 4-4" />
+                                                    </svg>
+                                                )}
                                             </span>
-                                        </td>
-                                        <td className="px-4 py-3 text-sm text-gray-700">
-                                            {task.assigned_employee?.name || "-"}
-                                        </td>
-                                        <td className="px-4 py-3 text-sm text-gray-700">
-                                            {task.work_item ? (
-                                                <Link
-                                                    to={`/work-items/${task.work_item.id}`}
-                                                    className="text-blue-600 hover:underline"
-                                                >
-                                                    {task.work_item.reference_id}
-                                                </Link>
-                                            ) : "-"}
-                                        </td>
-                                        <td className="px-4 py-3 text-sm text-gray-700">
-                                            {task.device_name || "-"}
-                                        </td>
-                                        <td className="px-4 py-3 text-sm text-gray-600">
-                                            {formatDate(task.created_date)}
+                                        </th>
+                                    ))}
+                                </tr>
+                            </thead>
+                            <tbody className="bg-white divide-y divide-gray-100">
+                                {loading ? (
+                                    <tr>
+                                        <td colSpan={COLUMNS.length} className="px-4 py-10 text-center text-sm text-gray-500">
+                                            Loading tasks...
                                         </td>
                                     </tr>
-                                ))
-                            )}
-                        </tbody>
-                    </table>
+                                ) : sortedTasks.length === 0 ? (
+                                    <tr>
+                                        <td colSpan={COLUMNS.length} className="px-4 py-10 text-center text-sm text-gray-500">
+                                            No tasks assigned to you.
+                                        </td>
+                                    </tr>
+                                ) : (
+                                    sortedTasks.map((task) => (
+                                        <tr key={task.id} className="hover:bg-blue-50/50">
+                                            <td className="px-4 py-3 text-sm font-medium text-blue-600">
+                                                <Link to={`/tasks/${task.id}`} className="hover:underline">
+                                                    #{task.id}
+                                                </Link>
+                                            </td>
+                                            <td className="px-4 py-3 text-sm text-gray-700">
+                                                {task.task_type?.name || "-"}
+                                            </td>
+                                            <td className="px-4 py-3 text-sm">
+                                                <span className={`inline-block px-2 py-0.5 rounded-full text-xs font-medium border ${getStatusStyle(task.status, statusColorMap)}`}>
+                                                    {task.status || "-"}
+                                                </span>
+                                            </td>
+                                            <td className="px-4 py-3 text-sm text-gray-700">
+                                                {task.assigned_employee?.name || "-"}
+                                            </td>
+                                            <td className="px-4 py-3 text-sm text-gray-700">
+                                                {task.work_item ? (
+                                                    <Link
+                                                        to={`/work-items/${task.work_item.id}`}
+                                                        className="text-blue-600 hover:underline"
+                                                    >
+                                                        {task.work_item.reference_id}
+                                                    </Link>
+                                                ) : "-"}
+                                            </td>
+                                            <td className="px-4 py-3 text-sm text-gray-700">
+                                                {task.device_name || "-"}
+                                            </td>
+                                            <td className="px-4 py-3 text-sm text-gray-600">
+                                                {formatDate(task.created_date)}
+                                            </td>
+                                        </tr>
+                                    ))
+                                )}
+                            </tbody>
+                        </table>
+                    </div>
                 </div>
-            </div>
+            )}
         </div>
     );
 }

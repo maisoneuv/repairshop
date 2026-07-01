@@ -113,6 +113,7 @@ class WorkItemSerializer(serializers.ModelSerializer):
     )
     device_name = serializers.SerializerMethodField()
     device_category_name = serializers.SerializerMethodField()
+    customer_name = serializers.SerializerMethodField()
 
     class Meta:
         model = WorkItem
@@ -171,6 +172,10 @@ class WorkItemSerializer(serializers.ModelSerializer):
         if tenant:
             validate_picklist_value(tenant, 'currency', value)
         return value
+
+    def get_customer_name(self, obj):
+        customer = getattr(obj, "customer", None)
+        return getattr(customer, "name", None)
 
     def get_device_name(self, obj):
         asset = getattr(obj, "customer_asset", None)
