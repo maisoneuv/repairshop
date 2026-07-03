@@ -47,6 +47,7 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
+    'anymail',
     'dal',
     'dal_select2',
     'core',
@@ -71,12 +72,12 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     'corsheaders.middleware.CorsMiddleware',
-    'tenants.middleware.TenantMiddleware',
     'django.middleware.security.SecurityMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
+    'tenants.middleware.TenantMiddleware',
     'core.middleware.UpdateLastActivityMiddleware',
     'integrations.middleware.APIKeyRequestLoggingMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
@@ -221,6 +222,33 @@ CORS_ALLOW_HEADERS = list(default_headers) + [
 ]
 
 DEFAULT_TENANT_SUBDOMAIN = os.getenv("DJANGO_DEFAULT_TENANT_SUBDOMAIN") or None
+
+# Email
+# Dev default: console backend — emails print to terminal, no SMTP needed.
+# Production: set EMAIL_BACKEND=anymail.backends.mailgun.EmailBackend
+#             and supply MAILGUN_API_KEY + MAILGUN_SENDER_DOMAIN.
+EMAIL_BACKEND = os.getenv('EMAIL_BACKEND', 'django.core.mail.backends.console.EmailBackend')
+DEFAULT_FROM_EMAIL = os.getenv('DEFAULT_FROM_EMAIL', 'noreply@example.com')
+
+# Kept for optional direct-SMTP use (e.g. local mailhog)
+EMAIL_HOST = os.getenv('EMAIL_HOST', 'localhost')
+EMAIL_PORT = int(os.getenv('EMAIL_PORT', '587'))
+EMAIL_USE_TLS = os.getenv('EMAIL_USE_TLS', 'False').lower() == 'true'
+EMAIL_USE_SSL = os.getenv('EMAIL_USE_SSL', 'False').lower() == 'true'
+EMAIL_HOST_USER = os.getenv('EMAIL_HOST_USER', '')
+EMAIL_HOST_PASSWORD = os.getenv('EMAIL_HOST_PASSWORD', '')
+EMAIL_TIMEOUT = 10
+
+# Mailgun (django-anymail) — only active when EMAIL_BACKEND is the anymail backend.
+# MAILGUN_SENDER_DOMAIN is the domain you verified in Mailgun (e.g. mg.yourdomain.com).
+# For the EU Mailgun region add: MAILGUN_API_URL=https://api.eu.mailgun.net/v3
+ANYMAIL = {
+    'MAILGUN_API_KEY': os.getenv('MAILGUN_API_KEY', ''),
+    'MAILGUN_SENDER_DOMAIN': os.getenv('MAILGUN_SENDER_DOMAIN', ''),
+    'MAILGUN_API_URL': os.getenv('MAILGUN_API_URL', 'https://api.mailgun.net/v3'),
+}
+FRONTEND_BASE_URL = os.getenv('FRONTEND_BASE_URL', 'http://localhost:5173')
+PASSWORD_RESET_TIMEOUT = 3 * 24 * 60 * 60  # 3 days
 
 # ============================================================================
 # Celery Configuration

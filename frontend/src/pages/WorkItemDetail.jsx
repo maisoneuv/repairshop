@@ -5,7 +5,8 @@ import { fetchWorkItem, updateWorkItemField } from "../api/workItems";
 import { getSettingValue } from "../api/settings";
 import apiClient from "../api/apiClient";
 import { getPicklistPath } from "../api/autocompleteApi";
-import { buildStatusColorMap, getStatusStyle } from "../utils/statusColors";
+import { buildStatusColorMap, buildStatusRoleMap, getStatusStyle } from "../utils/statusColors";
+import { toast } from "sonner";
 import WorkItemDetailHeader from "../components/WorkItemDetailHeader";
 import WorkItemHighlights from "../components/WorkItemHighlights";
 import WorkItemTabs from "../components/WorkItemTabs";
@@ -21,6 +22,9 @@ import FormDocumentsSection from "../components/FormDocumentsSection";
 import WorkItemSummary from "../components/WorkItemSummary";
 import CustomActionsTab from "../features/CustomActions/CustomActionsTab";
 import ResolvePaymentModal from "../components/ResolvePaymentModal";
+import CustomFieldsSection from "../components/CustomFieldsSection";
+import EmailComposer from "../components/EmailComposer";
+import EmailsTab from "../components/EmailsTab";
 
 export default function WorkItemDetail() {
     const { id } = useParams();
@@ -33,8 +37,11 @@ export default function WorkItemDetail() {
     const [notesRefreshKey, setNotesRefreshKey] = useState(0);
     const [wiStatusColorMap, setWiStatusColorMap] = useState({});
     const [taskStatusColorMap, setTaskStatusColorMap] = useState({});
+    const [wiStatusRoleMap, setWiStatusRoleMap] = useState({});
     const [showResolveModal, setShowResolveModal] = useState(false);
     const [pendingStatus, setPendingStatus] = useState(null);
+    const [showEmailComposer, setShowEmailComposer] = useState(false);
+    const [emailsRefreshKey, setEmailsRefreshKey] = useState(0);
     const scrollTargetField = useRef(null);
 
     useEffect(() => {
@@ -73,6 +80,7 @@ export default function WorkItemDetail() {
             apiClient.get(getPicklistPath("task_status")).catch(() => ({ data: [] })),
         ]).then(([wiRes, taskRes]) => {
             setWiStatusColorMap(buildStatusColorMap(wiRes.data));
+            setWiStatusRoleMap(buildStatusRoleMap(wiRes.data));
             setTaskStatusColorMap(buildStatusColorMap(taskRes.data));
         });
     }, []);
@@ -179,7 +187,7 @@ export default function WorkItemDetail() {
     const handleStatusChange = async (newStatus) => {
         if (!workItem) return;
 
-        if (newStatus === "Resolved") {
+        if (wiStatusRoleMap[newStatus] === 'resolved') {
             setPendingStatus(newStatus);
             setShowResolveModal(true);
             return;
@@ -191,7 +199,11 @@ export default function WorkItemDetail() {
             setFormData((prev) => ({ ...prev, ...updated }));
             setNotesRefreshKey((k) => k + 1);
         } catch (err) {
-            console.error("Failed to update status:", err);
+            const msg = err?.status?.[0] || err?.detail || err?.non_field_errors?.[0]
+                || (typeof err === 'string' ? err : null)
+                || "Failed to update status.";
+            toast.error(msg);
+            throw err;
         }
     };
 
@@ -243,6 +255,10 @@ export default function WorkItemDetail() {
             }
             return acc;
         }, {});
+
+        if (formData.custom_fields !== undefined) {
+            payload.custom_fields = formData.custom_fields;
+        }
 
         try {
             setIsSaving(true);
@@ -335,6 +351,18 @@ export default function WorkItemDetail() {
                                                     onFieldSave={handleFieldSave}
                                                     onEditRequest={handleEdit}
                                                 />
+                                                <CustomFieldsSection
+                                                    modelName="workitem"
+                                                    values={editMode ? (formData.custom_fields ?? {}) : (workItem.custom_fields ?? {})}
+                                                    onChange={(key, value) =>
+                                                        setFormData((prev) => ({
+                                                            ...prev,
+                                                            custom_fields: { ...(prev.custom_fields ?? {}), [key]: value },
+                                                        }))
+                                                    }
+                                                    editMode={editMode}
+                                                    onEditRequest={handleEdit}
+                                                />
                                             </div>
                                         </div>
                                     )}
@@ -345,6 +373,25 @@ export default function WorkItemDetail() {
 
                                     {activeTab === 'documents' && (
                                         <FormDocumentsSection workItemId={workItem.id} />
+                                    )}
+
+                                    {activeTab === 'emails' && (
+                                        <div>
+                                            <div className="flex justify-end mb-4">
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setShowEmailComposer(true)}
+                                                    className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors"
+                                                >
+                                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                                                            d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
+                                                    </svg>
+                                                    Compose Email
+                                                </button>
+                                            </div>
+                                            <EmailsTab model="workitem" objectId={workItem.id} refreshKey={emailsRefreshKey} />
+                                        </div>
                                     )}
 
                                     {activeTab === 'actions' && (
@@ -420,7 +467,13 @@ export default function WorkItemDetail() {
                         )}
 
                         {/* Activity Timeline */}
-                        <EnhancedActivityTimeline model="workitem" objectId={workItem.id} refreshKey={notesRefreshKey} statusColorMap={{...wiStatusColorMap, ...taskStatusColorMap}} />
+                        <EnhancedActivityTimeline
+                            model="workitem"
+                            objectId={workItem.id}
+                            refreshKey={notesRefreshKey}
+                            statusColorMap={{...wiStatusColorMap, ...taskStatusColorMap}}
+                            onComposeEmail={() => setShowEmailComposer(true)}
+                        />
                     </div>
                 </div>
             </div>
@@ -459,6 +512,19 @@ export default function WorkItemDetail() {
                     repair_cost: workItem?.repair_cost,
                     payment_register_id: workItem?.payment_register?.id,
                 }}
+            />
+
+            <EmailComposer
+                isOpen={showEmailComposer}
+                onClose={() => setShowEmailComposer(false)}
+                onSent={() => {
+                    setEmailsRefreshKey((k) => k + 1);
+                    setNotesRefreshKey((k) => k + 1);
+                }}
+                model="workitem"
+                objectId={workItem?.id}
+                defaultTo={workItem?.customerDetails?.email || ''}
+                defaultSubject={workItem?.reference_id ? `Re: ${workItem.reference_id}` : ''}
             />
         </div>
     );

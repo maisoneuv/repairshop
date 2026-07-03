@@ -34,6 +34,9 @@ class EmployeeSearchView(GenericSearchView):
     def get_queryset(self):
         user = self.request.user
 
+        if user.is_superuser and self.request.tenant:
+            return Employee.objects.select_related('user').filter(tenant=self.request.tenant)
+
         if user.is_superuser:
             return Employee.objects.select_related('user').all()
 
@@ -65,7 +68,9 @@ class EmployeeListView(APIView):
     def get(self, request):
         user = request.user
 
-        if user.is_superuser:
+        if user.is_superuser and request.tenant:
+            queryset = Employee.objects.select_related('user').filter(tenant=request.tenant)
+        elif user.is_superuser:
             queryset = Employee.objects.select_related('user').all()
         elif not request.tenant:
             return Response([], status=status.HTTP_200_OK)
@@ -397,7 +402,7 @@ class CurrentEmployeeView(APIView):
                 "id": employee.id,
                 "location_id": employee.location.id if employee.location else None,
                 "location_name": employee.location.name if employee.location else None,
-                "role": employee.get_role_display() if hasattr(employee, 'role') else None,
+                "role": employee.role,
             },
             "availableTenants": availableTenants,
             "currentTenant": {

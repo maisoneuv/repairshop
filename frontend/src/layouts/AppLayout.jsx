@@ -6,6 +6,7 @@ import { useEffect, useState } from "react";
 import GlobalSearch from "../components/GlobalSearch/GlobalSearch";
 import SideNav from "../components/SideNav";
 import QuickLeadModal from "../components/QuickLeadModal";
+import { Toaster } from "sonner";
 
 export default function AppLayout() {
     const { user } = useUser();
@@ -151,6 +152,7 @@ export default function AppLayout() {
                     onSave={() => setShowLeadModal(false)}
                 />
             )}
+            <Toaster position="top-center" richColors closeButton />
         </div>
     );
 }

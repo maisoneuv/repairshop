@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import Note, Address, User, Role, RolePermission, UserRole, Setting
+from .models import Note, Address, User, Role, RolePermission, UserRole, Setting, PicklistValue, CustomField, EmailMessage, EmailAttachment, EmailTemplate
 from decimal import Decimal
 from datetime import datetime
 from django.contrib.auth.models import Permission
@@ -45,10 +45,20 @@ class UserSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
         fields = ['id', 'email', 'is_active', 'is_staff', 'is_superuser', 'name', 'first_name', 'last_name', 'has_pin']
-        read_only_fields = ['id', 'is_superuser', 'has_pin']
+        read_only_fields = ['id', 'is_staff', 'is_superuser', 'has_pin']
 
     def get_has_pin(self, obj):
         return bool(obj.pin_hash)
+
+
+class UserCreateSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = User
+        fields = ['email', 'name', 'first_name', 'last_name', 'is_active']
+        extra_kwargs = {
+            'is_active': {'default': True},
+            'name': {'default': ''},
+        }
 
 class PermissionSerializer(serializers.ModelSerializer):
     content_type = serializers.StringRelatedField()
@@ -184,3 +194,97 @@ class SettingWriteSerializer(serializers.ModelSerializer):
             instance.value = value
         instance.save()
         return instance
+
+class PicklistValueAdminSerializer(serializers.ModelSerializer):
+    is_in_use = serializers.SerializerMethodField()
+
+    class Meta:
+        model = PicklistValue
+        fields = [
+            'id', 'category', 'name', 'value', 'color',
+            'sort_order', 'is_active', 'is_system',
+            'status_role', 'allowed_transitions', 'is_in_use',
+        ]
+        read_only_fields = ['id', 'is_system', 'is_in_use']
+
+    def get_is_in_use(self, obj):
+        return obj.usage_count() > 0
+
+    def validate_value(self, value):
+        if not value or not value.strip():
+            raise serializers.ValidationError("Value cannot be empty.")
+        return value.strip()
+
+    def validate_name(self, name):
+        if not name or not name.strip():
+            raise serializers.ValidationError("Name cannot be empty.")
+        return name.strip()
+
+    def validate(self, data):
+        # Prevent changing value on system entries (would break existing records)
+        if self.instance and self.instance.is_system and 'value' in data:
+            if data['value'] != self.instance.value:
+                raise serializers.ValidationError(
+                    {'value': 'The internal value of a system entry cannot be changed.'}
+                )
+        return data
+
+
+class CustomFieldSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = CustomField
+        fields = ['id', 'model_name', 'label', 'field_key', 'field_type',
+                  'is_required', 'config', 'sort_order', 'is_active', 'created_at', 'updated_at']
+        read_only_fields = ['id', 'field_key', 'created_at', 'updated_at']
+
+    def create(self, validated_data):
+        from django.utils.text import slugify
+        tenant = validated_data['tenant']
+        model_name = validated_data['model_name']
+        base_key = slugify(validated_data['label']).replace('-', '_')
+        key = base_key
+        suffix = 2
+        while CustomField.objects.filter(tenant=tenant, model_name=model_name, field_key=key).exists():
+            key = f"{base_key}_{suffix}"
+            suffix += 1
+        validated_data['field_key'] = key
+        return super().create(validated_data)
+
+
+class EmailAttachmentSerializer(serializers.ModelSerializer):
+    url = serializers.SerializerMethodField()
+
+    class Meta:
+        model = EmailAttachment
+        fields = ['id', 'filename', 'mime_type', 'size', 'url']
+
+    def get_url(self, obj):
+        request = self.context.get('request')
+        if request and obj.file:
+            return request.build_absolute_uri(obj.file.url)
+        return None
+
+
+class EmailMessageSerializer(serializers.ModelSerializer):
+    author_name = serializers.SerializerMethodField()
+    attachments = EmailAttachmentSerializer(many=True, read_only=True)
+
+    class Meta:
+        model = EmailMessage
+        fields = [
+            'id', 'to_email', 'cc_emails', 'subject', 'body_html', 'body_text',
+            'status', 'error_message', 'sent_at', 'author_name', 'attachments',
+        ]
+
+    def get_author_name(self, obj):
+        if not obj.author:
+            return None
+        full_name = f"{obj.author.first_name} {obj.author.last_name}".strip()
+        return full_name or obj.author.email
+
+
+class EmailTemplateSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = EmailTemplate
+        fields = ['id', 'name', 'subject', 'body_html', 'created_at', 'updated_at']
+        read_only_fields = ['id', 'created_at', 'updated_at']

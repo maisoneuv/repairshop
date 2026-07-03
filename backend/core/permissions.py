@@ -25,3 +25,25 @@ class TenantUserMatchesRequestTenant(BasePermission):
             raise PermissionDenied("You don't belong to this tenant.")
 
         return True
+
+
+class ManageUsersPermission(BasePermission):
+    """
+    Requires the manage_users permission within the current tenant.
+    Superusers always pass. Non-authenticated requests always fail.
+    """
+
+    def has_permission(self, request, _view):
+        if not request.user or not request.user.is_authenticated:
+            return False
+
+        if request.user.is_superuser:
+            return True
+
+        if not request.tenant:
+            raise PermissionDenied("Tenant must be specified.")
+
+        if not request.user.has_permission('manage_users', request.tenant):
+            raise PermissionDenied("You need the manage_users permission.")
+
+        return True

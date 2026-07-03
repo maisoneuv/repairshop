@@ -11,13 +11,21 @@ class CustomerSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Customer
-        fields = ['id', 'first_name', 'last_name', 'email', 'prefix', 'phone_number', 'referral_source', 'tax_code', 'address']
+        fields = ['id', 'first_name', 'last_name', 'email', 'prefix', 'phone_number', 'referral_source', 'tax_code', 'address', 'custom_fields']
         read_only_fields = ['id', 'tenant']
 
     def validate_address(self, value):
         if isinstance(value, dict) and all(not (v or '').strip() for v in value.values()):
             return None
         return value
+
+    def validate(self, attrs):
+        request = self.context.get('request')
+        tenant = getattr(request, 'tenant', None) if request else None
+        if tenant and 'custom_fields' in attrs:
+            from core.utils import validate_custom_field_values
+            validate_custom_field_values(tenant, 'customer', attrs['custom_fields'])
+        return attrs
 
     def create(self, validated_data):
         request = self.context.get("request")

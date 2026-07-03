@@ -22,13 +22,29 @@ export function getStatusClasses(colorName) {
 
 /**
  * Build a lookup map from picklist API response: { statusValue: tailwindClasses }
- * Input: array of { value, name, color } from /api/core/picklist/<category>/
+ * Input: array of { value, name, color, status_role } from /api/core/picklist/<category>/
  */
 export function buildStatusColorMap(picklistValues) {
   const map = {};
   if (!picklistValues) return map;
   for (const item of picklistValues) {
     map[item.value] = getStatusClasses(item.color);
+  }
+  return map;
+}
+
+/**
+ * Build a role map: { statusValue: status_role }
+ * Used to decouple frontend behaviour (e.g. "show payment modal") from hardcoded status names.
+ * A status_role of 'resolved' means "this status represents completion".
+ */
+export function buildStatusRoleMap(picklistValues) {
+  const map = {};
+  if (!picklistValues) return map;
+  for (const item of picklistValues) {
+    if (item.status_role) {
+      map[item.value] = item.status_role;
+    }
   }
   return map;
 }

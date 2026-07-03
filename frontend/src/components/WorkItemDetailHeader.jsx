@@ -72,8 +72,8 @@ export default function WorkItemDetailHeader({ workItem, schema, onEdit, onStatu
                 await onStatusChange(newStatus);
                 setStatusUpdated(true);
                 setTimeout(() => setStatusUpdated(false), 1500);
-            } catch (err) {
-                console.error('Failed to update status:', err);
+            } catch {
+                // Error already shown via toast in the parent handler — don't show checkmark
             }
         }
     };

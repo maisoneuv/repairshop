@@ -53,15 +53,20 @@ class TenantMiddleware(MiddlewareMixin):
             # Skip all other tenant resolution and membership checks for API keys
             return
 
-        # 1) If authenticated, prefer the user's active tenant
         user = getattr(request, "user", None)
-        if user and user.is_authenticated:
-            active = getattr(user, "active_tenant", None)
-            if active:
-                request.tenant = active
-                logger.warning("TenantMiddleware using active tenant %s", active)
+        is_authenticated = bool(user and user.is_authenticated)
 
-        # 2) Header hint (when not set yet)
+        # 1) Authenticated non-superusers are locked to their own tenant.
+        #    This prevents a stale or spoofed X-Tenant header from redirecting
+        #    them to another tenant's data.
+        if is_authenticated and not user.is_superuser:
+            user_tenant = getattr(user, "tenant", None)
+            if user_tenant:
+                request.tenant = user_tenant
+                logger.warning("TenantMiddleware using user's own tenant %s", user_tenant)
+
+        # 2) Header hint — used for unauthenticated requests and superusers
+        #    (superusers may legitimately switch between tenants via the header).
         if request.tenant is None:
             header_slug = request.META.get("HTTP_X_TENANT")
             if header_slug:
@@ -80,12 +85,17 @@ class TenantMiddleware(MiddlewareMixin):
             request.tenant = Tenant.objects.filter(subdomain=DEFAULT_TENANT_SUBDOMAIN).first()
             logger.warning("TenantMiddleware default slug %s -> %s", DEFAULT_TENANT_SUBDOMAIN, request.tenant)
 
-        # 4) Enforce membership only when authenticated and not on optional paths
+        # 4) Enforce membership for authenticated non-superusers.
         if (
             request.tenant
-            and user
-            and user.is_authenticated
+            and is_authenticated
+            and not user.is_superuser
             and not any(request.path.startswith(p) for p in TENANT_OPTIONAL_PATHS)
         ):
-            if not user.tenants.filter(pk=request.tenant.pk).exists():
+            from core.models import UserRole  # lazy import to avoid circular dependency
+            has_access = (
+                getattr(user, "tenant_id", None) == request.tenant.pk
+                or UserRole.objects.filter(user=user, role__tenant=request.tenant).exists()
+            )
+            if not has_access:
                 raise PermissionDenied("You don't have access to this tenant.")

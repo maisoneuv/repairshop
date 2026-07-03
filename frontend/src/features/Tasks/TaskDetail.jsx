@@ -6,7 +6,8 @@ import { fetchSchema } from "../../api/schema";
 import { fetchTask, updateTaskField } from "../../api/tasks";
 import apiClient from "../../api/apiClient";
 import { getPicklistPath } from "../../api/autocompleteApi";
-import { buildStatusColorMap, getStatusStyle } from "../../utils/statusColors";
+import { buildStatusColorMap, buildStatusRoleMap, getStatusStyle } from "../../utils/statusColors";
+import { toast } from "sonner";
 import ParentWorkItemCard from "../../components/ParentWorkItemCard";
 import DeviceCard from "../../components/DeviceCard";
 import EnhancedActivityTimeline from "../../components/EnhancedActivityTimeline";
@@ -32,6 +33,7 @@ export default function TaskDetail() {
     const [notesRefreshKey, setNotesRefreshKey] = useState(0);
     const [wiStatusColorMap, setWiStatusColorMap] = useState({});
     const [taskStatusColorMap, setTaskStatusColorMap] = useState({});
+    const [taskStatusRoleMap, setTaskStatusRoleMap] = useState({});
     const [isStatusDropdownOpen, setIsStatusDropdownOpen] = useState(false);
     const statusDropdownRef = useRef(null);
 
@@ -54,7 +56,7 @@ export default function TaskDetail() {
 
     const handleStatusSelect = async (newStatus) => {
         setIsStatusDropdownOpen(false);
-        if (newStatus === 'Done') {
+        if (taskStatusRoleMap[newStatus] === 'resolved') {
             setShowCompleteModal(true);
             return;
         }
@@ -65,7 +67,10 @@ export default function TaskDetail() {
             setFormData(updatedTask);
             setNotesRefreshKey((k) => k + 1);
         } catch (err) {
-            console.error('Failed to update status:', err);
+            const msg = err?.status?.[0] || err?.detail || err?.non_field_errors?.[0]
+                || (typeof err === 'string' ? err : null)
+                || "Failed to update status.";
+            toast.error(msg);
         }
     };
 
@@ -105,6 +110,7 @@ export default function TaskDetail() {
         ]).then(([wiRes, taskRes]) => {
             setWiStatusColorMap(buildStatusColorMap(wiRes.data));
             setTaskStatusColorMap(buildStatusColorMap(taskRes.data));
+            setTaskStatusRoleMap(buildStatusRoleMap(taskRes.data));
         });
     }, []);
 
