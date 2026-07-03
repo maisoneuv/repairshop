@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import Note, Address, User, Role, RolePermission, UserRole, Setting, PicklistValue, CustomField
+from .models import Note, Address, User, Role, RolePermission, UserRole, Setting, PicklistValue, CustomField, EmailMessage, EmailAttachment, EmailTemplate
 from decimal import Decimal
 from datetime import datetime
 from django.contrib.auth.models import Permission
@@ -45,10 +45,20 @@ class UserSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
         fields = ['id', 'email', 'is_active', 'is_staff', 'is_superuser', 'name', 'first_name', 'last_name', 'has_pin']
-        read_only_fields = ['id', 'is_superuser', 'has_pin']
+        read_only_fields = ['id', 'is_staff', 'is_superuser', 'has_pin']
 
     def get_has_pin(self, obj):
         return bool(obj.pin_hash)
+
+
+class UserCreateSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = User
+        fields = ['email', 'name', 'first_name', 'last_name', 'is_active']
+        extra_kwargs = {
+            'is_active': {'default': True},
+            'name': {'default': ''},
+        }
 
 class PermissionSerializer(serializers.ModelSerializer):
     content_type = serializers.StringRelatedField()
@@ -239,3 +249,42 @@ class CustomFieldSerializer(serializers.ModelSerializer):
             suffix += 1
         validated_data['field_key'] = key
         return super().create(validated_data)
+
+
+class EmailAttachmentSerializer(serializers.ModelSerializer):
+    url = serializers.SerializerMethodField()
+
+    class Meta:
+        model = EmailAttachment
+        fields = ['id', 'filename', 'mime_type', 'size', 'url']
+
+    def get_url(self, obj):
+        request = self.context.get('request')
+        if request and obj.file:
+            return request.build_absolute_uri(obj.file.url)
+        return None
+
+
+class EmailMessageSerializer(serializers.ModelSerializer):
+    author_name = serializers.SerializerMethodField()
+    attachments = EmailAttachmentSerializer(many=True, read_only=True)
+
+    class Meta:
+        model = EmailMessage
+        fields = [
+            'id', 'to_email', 'cc_emails', 'subject', 'body_html', 'body_text',
+            'status', 'error_message', 'sent_at', 'author_name', 'attachments',
+        ]
+
+    def get_author_name(self, obj):
+        if not obj.author:
+            return None
+        full_name = f"{obj.author.first_name} {obj.author.last_name}".strip()
+        return full_name or obj.author.email
+
+
+class EmailTemplateSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = EmailTemplate
+        fields = ['id', 'name', 'subject', 'body_html', 'created_at', 'updated_at']
+        read_only_fields = ['id', 'created_at', 'updated_at']

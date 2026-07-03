@@ -23,6 +23,8 @@ import WorkItemSummary from "../components/WorkItemSummary";
 import CustomActionsTab from "../features/CustomActions/CustomActionsTab";
 import ResolvePaymentModal from "../components/ResolvePaymentModal";
 import CustomFieldsSection from "../components/CustomFieldsSection";
+import EmailComposer from "../components/EmailComposer";
+import EmailsTab from "../components/EmailsTab";
 
 export default function WorkItemDetail() {
     const { id } = useParams();
@@ -38,6 +40,8 @@ export default function WorkItemDetail() {
     const [wiStatusRoleMap, setWiStatusRoleMap] = useState({});
     const [showResolveModal, setShowResolveModal] = useState(false);
     const [pendingStatus, setPendingStatus] = useState(null);
+    const [showEmailComposer, setShowEmailComposer] = useState(false);
+    const [emailsRefreshKey, setEmailsRefreshKey] = useState(0);
     const scrollTargetField = useRef(null);
 
     useEffect(() => {
@@ -371,6 +375,25 @@ export default function WorkItemDetail() {
                                         <FormDocumentsSection workItemId={workItem.id} />
                                     )}
 
+                                    {activeTab === 'emails' && (
+                                        <div>
+                                            <div className="flex justify-end mb-4">
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setShowEmailComposer(true)}
+                                                    className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors"
+                                                >
+                                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                                                            d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
+                                                    </svg>
+                                                    Compose Email
+                                                </button>
+                                            </div>
+                                            <EmailsTab model="workitem" objectId={workItem.id} refreshKey={emailsRefreshKey} />
+                                        </div>
+                                    )}
+
                                     {activeTab === 'actions' && (
                                         <CustomActionsTab target="workitem" targetId={workItem.id} />
                                     )}
@@ -444,7 +467,13 @@ export default function WorkItemDetail() {
                         )}
 
                         {/* Activity Timeline */}
-                        <EnhancedActivityTimeline model="workitem" objectId={workItem.id} refreshKey={notesRefreshKey} statusColorMap={{...wiStatusColorMap, ...taskStatusColorMap}} />
+                        <EnhancedActivityTimeline
+                            model="workitem"
+                            objectId={workItem.id}
+                            refreshKey={notesRefreshKey}
+                            statusColorMap={{...wiStatusColorMap, ...taskStatusColorMap}}
+                            onComposeEmail={() => setShowEmailComposer(true)}
+                        />
                     </div>
                 </div>
             </div>
@@ -483,6 +512,19 @@ export default function WorkItemDetail() {
                     repair_cost: workItem?.repair_cost,
                     payment_register_id: workItem?.payment_register?.id,
                 }}
+            />
+
+            <EmailComposer
+                isOpen={showEmailComposer}
+                onClose={() => setShowEmailComposer(false)}
+                onSent={() => {
+                    setEmailsRefreshKey((k) => k + 1);
+                    setNotesRefreshKey((k) => k + 1);
+                }}
+                model="workitem"
+                objectId={workItem?.id}
+                defaultTo={workItem?.customerDetails?.email || ''}
+                defaultSubject={workItem?.reference_id ? `Re: ${workItem.reference_id}` : ''}
             />
         </div>
     );

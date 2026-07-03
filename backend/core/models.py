@@ -54,10 +54,16 @@ class User(AbstractUser, PermissionsMixin):
     pin_hash = models.CharField(max_length=128, blank=True, default='')
     last_full_login_at = models.DateTimeField(null=True, blank=True)
     last_activity_at = models.DateTimeField(null=True, blank=True)
+    password_reset_sent_at = models.DateTimeField(null=True, blank=True)
 
     objects = UserManager()
     USERNAME_FIELD = 'email'
     REQUIRED_FIELDS = []
+
+    class Meta:
+        permissions = [
+            ('manage_users', 'Can manage tenant users and roles'),
+        ]
 
     def save(self, *args, **kwargs):
         if not self.username:
@@ -648,6 +654,56 @@ class Setting(models.Model):
                 }
 
         return result
+
+
+class EmailMessage(models.Model):
+    STATUS_CHOICES = [('pending', 'Pending'), ('sent', 'Sent'), ('failed', 'Failed')]
+
+    tenant = models.ForeignKey(Tenant, on_delete=models.CASCADE, related_name='email_messages')
+    author = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True)
+    to_email = models.EmailField()
+    cc_emails = models.JSONField(default=list, blank=True)
+    subject = models.CharField(max_length=998)
+    body_html = models.TextField()
+    body_text = models.TextField(blank=True)
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='sent')
+    error_message = models.TextField(blank=True)
+    sent_at = models.DateTimeField(auto_now_add=True)
+
+    content_type = models.ForeignKey(ContentType, on_delete=models.CASCADE)
+    object_id = models.PositiveIntegerField()
+    content_object = GenericForeignKey("content_type", "object_id")
+
+    class Meta:
+        ordering = ["-sent_at"]
+
+
+class EmailAttachment(models.Model):
+    email = models.ForeignKey(EmailMessage, on_delete=models.CASCADE, related_name='attachments')
+    file = models.FileField(upload_to='email_attachments/%Y/%m/')
+    filename = models.CharField(max_length=255)
+    mime_type = models.CharField(max_length=100, blank=True)
+    size = models.PositiveIntegerField(default=0)
+
+    def __str__(self):
+        return self.filename
+
+
+class EmailTemplate(models.Model):
+    tenant = models.ForeignKey(Tenant, on_delete=models.CASCADE, related_name='email_templates')
+    name = models.CharField(max_length=255)
+    subject = models.CharField(max_length=998, blank=True)
+    body_html = models.TextField(blank=True)
+    created_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, related_name='created_email_templates')
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['name']
+        unique_together = [('tenant', 'name')]
+
+    def __str__(self):
+        return f"{self.name} ({self.tenant})"
 
 
 class CustomField(models.Model):
