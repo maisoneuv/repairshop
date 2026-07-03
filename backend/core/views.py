@@ -1,16 +1,22 @@
 from datetime import timedelta
 from django.contrib.auth import authenticate, login, logout
 from django.contrib.auth.hashers import make_password, check_password
+from django.contrib.auth.password_validation import validate_password
+from django.contrib.auth.tokens import default_token_generator
+from django.core.exceptions import ValidationError as DjangoValidationError
+from django.conf import settings as django_settings
 from django.db import models as db_models
 from django.http import JsonResponse
 from django.utils import timezone
+from django.utils.encoding import force_bytes
+from django.utils.http import urlsafe_base64_encode, urlsafe_base64_decode
 from django.shortcuts import render
 from django.views.generic import ListView
 from rest_framework.decorators import api_view, permission_classes
-from rest_framework.exceptions import PermissionDenied
+from rest_framework.exceptions import PermissionDenied, ValidationError
 from rest_framework.generics import ListAPIView
 from rest_framework.filters import SearchFilter
-from rest_framework.permissions import IsAuthenticatedOrReadOnly, IsAuthenticated, IsAdminUser
+from rest_framework.permissions import IsAuthenticatedOrReadOnly, IsAuthenticated, IsAdminUser, AllowAny
 from rest_framework import viewsets, status
 from django.contrib.contenttypes.models import ContentType
 from rest_framework.response import Response
@@ -18,15 +24,51 @@ from rest_framework.views import APIView
 from django.views.decorators.csrf import ensure_csrf_cookie
 from rest_framework.decorators import action
 
-from .models import Note, User, Permission, RolePermission, UserRole, Role, PicklistValue, Setting, CustomField
-from .serializers import (NoteSerializer, UserSerializer, PermissionSerializer,
+import logging
+from .email_utils import send_system_email
+
+logger = logging.getLogger(__name__)
+from .models import Note, User, Permission, RolePermission, UserRole, Role, PicklistValue, Setting, CustomField, EmailMessage, EmailAttachment, EmailTemplate
+from .serializers import (NoteSerializer, UserSerializer, UserCreateSerializer, PermissionSerializer,
                           RolePermissionSerializer, RoleSerializer, UserRoleSerializer,
                           UserRoleCreateSerializer, MyPermissionsResponseSerializer,
                           SettingSerializer, SettingWriteSerializer,
-                          PicklistValueAdminSerializer, CustomFieldSerializer)
+                          PicklistValueAdminSerializer, CustomFieldSerializer,
+                          EmailMessageSerializer, EmailTemplateSerializer)
 from .utils import create_system_note
 from tenants.managers import TenantAwareManager
-from .permissions import TenantUserMatchesRequestTenant
+from tenants.models import TenantEmailSettings
+from .permissions import TenantUserMatchesRequestTenant, ManageUsersPermission
+
+INCLUDED_APP_LABELS = {
+    "customers", "tasks", "service", "documents",
+    "inventory", "integrations", "core", "calls",
+}
+
+
+def _send_password_reset_email(user, request=None):
+    """Generate a password reset token and send it to the user by email."""
+    uid = urlsafe_base64_encode(force_bytes(user.pk))
+    token = default_token_generator.make_token(user)
+    frontend_base = getattr(django_settings, 'FRONTEND_BASE_URL', 'http://localhost:5173')
+    reset_url = f"{frontend_base}/reset-password/{uid}/{token}/"
+
+    is_new = not user.has_usable_password()
+    subject = "Set up your account" if is_new else "Reset your password"
+    greeting = user.name or user.first_name or user.email
+    action_label = "Set your password" if is_new else "Reset your password"
+    body = (
+        f"Hi {greeting},\n\n"
+        + ("Your account has been created. " if is_new else "")
+        + f"Click the link below to {action_label.lower()}:\n\n"
+        f"{reset_url}\n\n"
+        "This link expires in 72 hours.\n"
+    )
+
+    send_system_email(subject, body, user.email)
+
+    user.password_reset_sent_at = timezone.now()
+    user.save(update_fields=['password_reset_sent_at'])
 
 def home_view(request):
     return render(request, 'home.html')
@@ -159,25 +201,203 @@ class NoteViewSet(viewsets.ModelViewSet):
 
 
 class UserViewSet(viewsets.ModelViewSet):
-    serializer_class = UserSerializer
-    permission_classes = [IsAuthenticated, TenantUserMatchesRequestTenant]
+    def get_serializer_class(self):
+        if self.action == 'create':
+            return UserCreateSerializer
+        return UserSerializer
+
+    def get_permissions(self):
+        if self.action in ('create', 'update', 'partial_update', 'destroy'):
+            return [IsAuthenticated(), ManageUsersPermission()]
+        return [IsAuthenticated(), TenantUserMatchesRequestTenant()]
 
     def get_queryset(self):
-        # Only users belonging to this tenant
-        return User.objects.filter(tenant=self.request.tenant)
+        return User.objects.filter(
+            tenant=self.request.tenant,
+            is_superuser=False,
+            is_staff=False,
+        )
 
     def perform_create(self, serializer):
-        # Force assign the tenant of the request
-        serializer.save(tenant=self.request.tenant)
+        user = serializer.save(tenant=self.request.tenant, created_by=self.request.user)
+        user.set_unusable_password()
+        user.save(update_fields=['password'])
+        try:
+            _send_password_reset_email(user)
+        except Exception:
+            pass  # email failure should not block user creation
+
+    def destroy(self, _request, *_args, **_kwargs):
+        return Response(
+            {'detail': 'Deleting users is not allowed. Deactivate them instead.'},
+            status=status.HTTP_405_METHOD_NOT_ALLOWED,
+        )
+
+
+class TriggerPasswordResetView(APIView):
+    permission_classes = [IsAuthenticated, ManageUsersPermission]
+
+    def post(self, request, pk):
+        try:
+            user = User.objects.get(pk=pk, tenant=request.tenant, is_superuser=False, is_staff=False)
+        except User.DoesNotExist:
+            return Response({'detail': 'Not found.'}, status=status.HTTP_404_NOT_FOUND)
+
+        if user.password_reset_sent_at:
+            elapsed = (timezone.now() - user.password_reset_sent_at).total_seconds()
+            if elapsed < 60:
+                return Response(
+                    {'detail': 'Please wait before requesting another reset.'},
+                    status=status.HTTP_429_TOO_MANY_REQUESTS,
+                )
+
+        try:
+            _send_password_reset_email(user)
+        except Exception as exc:
+            return Response({'detail': f'Failed to send email: {exc}'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+        return Response({'sent': True})
+
+
+class PasswordResetConfirmView(APIView):
+    permission_classes = [AllowAny]
+    authentication_classes = []
+
+    def post(self, request):
+        uid = request.data.get('uid', '')
+        token = request.data.get('token', '')
+        new_password = request.data.get('new_password', '')
+
+        if not uid or not token or not new_password:
+            return Response({'detail': 'uid, token, and new_password are required.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            user_pk = urlsafe_base64_decode(uid).decode()
+            user = User.objects.get(pk=user_pk)
+        except (ValueError, TypeError, User.DoesNotExist):
+            return Response({'detail': 'Invalid link.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        if not default_token_generator.check_token(user, token):
+            return Response({'detail': 'Invalid or expired link.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            validate_password(new_password, user)
+        except DjangoValidationError as exc:
+            return Response({'detail': exc.messages}, status=status.HTTP_400_BAD_REQUEST)
+
+        user.set_password(new_password)
+        user.save(update_fields=['password'])
+
+        return Response({'success': True})
+
+
+class TenantEmailSettingsView(APIView):
+    permission_classes = [IsAuthenticated, ManageUsersPermission]
+
+    def _get_or_create_settings(self, tenant):
+        obj, _ = TenantEmailSettings.objects.get_or_create(tenant=tenant)
+        return obj
+
+    def get(self, request):
+        obj = self._get_or_create_settings(request.tenant)
+        return Response({
+            'from_name': obj.from_name,
+            'from_email': obj.from_email,
+            'is_verified': obj.is_verified,
+            'verification_sent_at': obj.verification_sent_at,
+            'verified_at': obj.verified_at,
+        })
+
+    def patch(self, request):
+        obj = self._get_or_create_settings(request.tenant)
+        new_email = request.data.get('from_email', obj.from_email)
+        if new_email != obj.from_email:
+            obj.is_verified = False
+            obj.verified_at = None
+        obj.from_name = request.data.get('from_name', obj.from_name)
+        obj.from_email = new_email
+        obj.save()
+        return Response({
+            'from_name': obj.from_name,
+            'from_email': obj.from_email,
+            'is_verified': obj.is_verified,
+            'verification_sent_at': obj.verification_sent_at,
+            'verified_at': obj.verified_at,
+        })
+
+
+class SendEmailVerificationView(APIView):
+    permission_classes = [IsAuthenticated, ManageUsersPermission]
+
+    def post(self, request):
+        obj, _ = TenantEmailSettings.objects.get_or_create(tenant=request.tenant)
+        if not obj.from_email:
+            return Response({'detail': 'No from_email configured.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        import uuid as _uuid
+        obj.verification_token = _uuid.uuid4()
+        obj.verification_sent_at = timezone.now()
+        obj.is_verified = False
+        obj.verified_at = None
+        obj.save()
+
+        verify_url = request.build_absolute_uri(f"/api/core/email-settings/verify/{obj.verification_token}/")
+        tenant_name = request.tenant.name
+        subject = f"Confirm your sending address for {tenant_name}"
+        body = (
+            f"Hi,\n\n"
+            f"Someone requested to use this email address as the From address for {tenant_name} on Fixed.\n\n"
+            f"Click the link below to confirm:\n\n"
+            f"{verify_url}\n\n"
+            "If you didn't request this, you can safely ignore this email.\n"
+        )
+        try:
+            send_system_email(subject, body, obj.from_email)
+        except Exception as exc:
+            return Response({'detail': f'Failed to send verification email: {exc}'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+        return Response({'sent': True})
+
+
+class VerifyEmailAddressView(APIView):
+    permission_classes = [AllowAny]
+    authentication_classes = []
+
+    def get(self, _request, token):
+        try:
+            obj = TenantEmailSettings.objects.get(verification_token=token)
+        except TenantEmailSettings.DoesNotExist:
+            from django.http import HttpResponse
+            return HttpResponse(
+                "<html><body><h2>Invalid or expired verification link.</h2></body></html>",
+                content_type='text/html',
+                status=400,
+            )
+        obj.is_verified = True
+        obj.verified_at = timezone.now()
+        obj.save(update_fields=['is_verified', 'verified_at'])
+        from django.http import HttpResponse
+        return HttpResponse(
+            "<html><body><h2>Email address verified successfully. You can close this window.</h2></body></html>",
+            content_type='text/html',
+        )
+
 
 class PermissionViewSet(viewsets.ReadOnlyModelViewSet):
-    queryset = Permission.objects.all()
     serializer_class = PermissionSerializer
     permission_classes = [IsAuthenticated]
 
+    def get_queryset(self):
+        return Permission.objects.filter(content_type__app_label__in=INCLUDED_APP_LABELS)
+
+
 class RoleViewSet(viewsets.ModelViewSet):
     serializer_class = RoleSerializer
-    permission_classes = [IsAuthenticated, TenantUserMatchesRequestTenant]
+
+    def get_permissions(self):
+        if self.action in ('create', 'update', 'partial_update', 'destroy'):
+            return [IsAuthenticated(), ManageUsersPermission()]
+        return [IsAuthenticated(), TenantUserMatchesRequestTenant()]
 
     def get_queryset(self):
         return Role.objects.filter(tenant=self.request.tenant)
@@ -185,18 +405,42 @@ class RoleViewSet(viewsets.ModelViewSet):
     def perform_create(self, serializer):
         serializer.save(tenant=self.request.tenant)
 
+    def perform_destroy(self, instance):
+        if instance.name == 'Tenant Admin':
+            raise ValidationError('The Tenant Admin role cannot be deleted.')
+        instance.delete()
+
+
 class RolePermissionViewSet(viewsets.ModelViewSet):
     serializer_class = RolePermissionSerializer
-    permission_classes = [IsAuthenticated, TenantUserMatchesRequestTenant]
+
+    def get_permissions(self):
+        if self.action in ('create', 'update', 'partial_update', 'destroy'):
+            return [IsAuthenticated(), ManageUsersPermission()]
+        return [IsAuthenticated(), TenantUserMatchesRequestTenant()]
 
     def get_queryset(self):
         return RolePermission.objects.filter(role__tenant=self.request.tenant)
 
+    def perform_create(self, serializer):
+        role = serializer.validated_data['permission'].content_type.app_label
+        if role not in INCLUDED_APP_LABELS:
+            raise ValidationError('Permission from this app cannot be assigned via this API.')
+        serializer.save()
+
+
 class UserRoleViewSet(viewsets.ModelViewSet):
-    permission_classes = [IsAuthenticated, TenantUserMatchesRequestTenant]
+    def get_permissions(self):
+        if self.action in ('create', 'update', 'partial_update', 'destroy'):
+            return [IsAuthenticated(), ManageUsersPermission()]
+        return [IsAuthenticated(), TenantUserMatchesRequestTenant()]
 
     def get_queryset(self):
-        return UserRole.objects.filter(role__tenant=self.request.tenant)
+        qs = UserRole.objects.filter(role__tenant=self.request.tenant)
+        user_id = self.request.query_params.get('user')
+        if user_id:
+            qs = qs.filter(user_id=user_id)
+        return qs
 
     def get_serializer_class(self):
         if self.action in ['create', 'update', 'partial_update']:
@@ -205,8 +449,11 @@ class UserRoleViewSet(viewsets.ModelViewSet):
 
     def perform_create(self, serializer):
         role = serializer.validated_data['role']
+        target_user = serializer.validated_data['user']
         if role.tenant != self.request.tenant:
             raise PermissionDenied("Role not in current tenant.")
+        if target_user.tenant != self.request.tenant or target_user.is_superuser or target_user.is_staff:
+            raise PermissionDenied("User not in current tenant.")
         serializer.save()
 
 class MyPermissionsView(APIView):
@@ -814,3 +1061,118 @@ class CustomFieldViewSet(viewsets.ModelViewSet):
             raise PermissionDenied("You do not have permission to manage custom fields.")
         instance.is_active = False
         instance.save(update_fields=['is_active'])
+
+
+class SendEmailView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        from .email_utils import send_customer_email_html
+
+        tenant = request.tenant
+        data = request.data
+
+        to_email = data.get('to_email', '').strip()
+        cc_raw = data.getlist('cc_emails') if hasattr(data, 'getlist') else (data.get('cc_emails') or [])
+        if isinstance(cc_raw, str):
+            cc_raw = [cc_raw]
+        cc_emails = [e.strip() for e in cc_raw if e.strip()]
+        subject = data.get('subject', '').strip()
+        body_html = data.get('body_html', '')
+        body_text = data.get('body_text', '').strip()
+        model_name = data.get('model', '').strip()
+        object_id = data.get('object_id')
+        files = request.FILES.getlist('attachments')
+
+        if not to_email:
+            return Response({'error': 'to_email is required'}, status=status.HTTP_400_BAD_REQUEST)
+        if not subject:
+            return Response({'error': 'subject is required'}, status=status.HTTP_400_BAD_REQUEST)
+        if not model_name or not object_id:
+            return Response({'error': 'model and object_id are required'}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            content_type = ContentType.objects.get(model=model_name)
+        except ContentType.DoesNotExist:
+            return Response({'error': f'Unknown model: {model_name}'}, status=status.HTTP_400_BAD_REQUEST)
+
+        # Read uploaded files into memory as (filename, bytes, mime_type) tuples
+        # before saving them to storage, so we can attach them to the email.
+        attachment_tuples = []
+        for f in files:
+            attachment_tuples.append((f.name, f.read(), getattr(f, 'content_type', '') or 'application/octet-stream'))
+            f.seek(0)  # rewind so the file can still be saved to storage below
+
+        send_status = 'sent'
+        error_msg = ''
+        try:
+            send_customer_email_html(
+                tenant, subject, body_html, body_text, to_email,
+                cc_emails=cc_emails, attachments=attachment_tuples,
+            )
+        except Exception as exc:
+            send_status = 'failed'
+            error_msg = str(exc)
+            logger.exception("Email send failed (tenant=%s, to=%s): %s", tenant, to_email, exc)
+
+        sent_email = EmailMessage.objects.create(
+            tenant=tenant,
+            author=request.user,
+            to_email=to_email,
+            cc_emails=cc_emails,
+            subject=subject,
+            body_html=body_html,
+            body_text=body_text,
+            status=send_status,
+            error_message=error_msg,
+            content_type=content_type,
+            object_id=object_id,
+        )
+
+        for f in files:
+            EmailAttachment.objects.create(
+                email=sent_email,
+                file=f,
+                filename=f.name,
+                mime_type=getattr(f, 'content_type', ''),
+                size=f.size,
+            )
+
+        if send_status == 'failed':
+            return Response(
+                {'error': error_msg},
+                status=status.HTTP_502_BAD_GATEWAY,
+            )
+
+        return Response(
+            EmailMessageSerializer(sent_email, context={'request': request}).data,
+            status=status.HTTP_201_CREATED,
+        )
+
+
+class EmailMessageListView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, model, obj_id):
+        try:
+            content_type = ContentType.objects.get(model=model)
+        except ContentType.DoesNotExist:
+            return Response({'error': f'Unknown model: {model}'}, status=status.HTTP_400_BAD_REQUEST)
+
+        emails = EmailMessage.objects.filter(
+            tenant=request.tenant,
+            content_type=content_type,
+            object_id=obj_id,
+        ).prefetch_related('attachments')
+        return Response(EmailMessageSerializer(emails, many=True, context={'request': request}).data)
+
+
+class EmailTemplateViewSet(viewsets.ModelViewSet):
+    permission_classes = [IsAuthenticated]
+    serializer_class = EmailTemplateSerializer
+
+    def get_queryset(self):
+        return EmailTemplate.objects.filter(tenant=self.request.tenant)
+
+    def perform_create(self, serializer):
+        serializer.save(tenant=self.request.tenant, created_by=self.request.user)

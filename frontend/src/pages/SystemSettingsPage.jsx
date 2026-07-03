@@ -3,6 +3,8 @@ import { NavLink, Routes, Route, Navigate, useNavigate, useParams, useLocation }
 import PicklistContentPane from "../features/Settings/PicklistContentPane";
 import CustomFieldsInline from "../features/Settings/CustomFieldsInline";
 import { fetchCustomFields } from "../api/customFields";
+import { getEmailSettings, updateEmailSettings, sendVerificationEmail } from "../api/emailSettings";
+import UserManagementPage from "./UserManagementPage";
 
 // ─── Data ────────────────────────────────────────────────────────────────────
 
@@ -331,18 +333,156 @@ function GlobalPicklistsView() {
     );
 }
 
-// ─── Users Tab ────────────────────────────────────────────────────────────────
+// ─── Email Settings ───────────────────────────────────────────────────────────
 
-function UsersTab() {
+function EmailSettingsPanel() {
+    const [settings, setSettings] = useState(null);
+    const [fromName, setFromName] = useState("");
+    const [fromEmail, setFromEmail] = useState("");
+    const [saving, setSaving] = useState(false);
+    const [sendingVerification, setSendingVerification] = useState(false);
+    const [verificationSent, setVerificationSent] = useState(false);
+    const [error, setError] = useState(null);
+
+    useEffect(() => {
+        getEmailSettings().then(data => {
+            setSettings(data);
+            setFromName(data.from_name);
+            setFromEmail(data.from_email);
+        }).catch(() => setError("Failed to load email settings."));
+    }, []);
+
+    const isDirty = settings && (fromName !== settings.from_name || fromEmail !== settings.from_email);
+    const emailChanged = settings && fromEmail !== settings.from_email;
+
+    async function handleSave() {
+        setSaving(true);
+        setError(null);
+        try {
+            const updated = await updateEmailSettings({ from_name: fromName, from_email: fromEmail });
+            setSettings(updated);
+        } catch {
+            setError("Failed to save settings.");
+        } finally {
+            setSaving(false);
+        }
+    }
+
+    async function handleSendVerification() {
+        setSendingVerification(true);
+        setError(null);
+        try {
+            await sendVerificationEmail();
+            setVerificationSent(true);
+            setTimeout(() => setVerificationSent(false), 4000);
+        } catch (err) {
+            setError(err?.response?.data?.detail ?? "Failed to send verification email.");
+        } finally {
+            setSendingVerification(false);
+        }
+    }
+
+    if (!settings) {
+        return (
+            <div className="px-8 py-8 text-sm text-gray-400">
+                {error ?? "Loading…"}
+            </div>
+        );
+    }
+
+    const isVerified = settings.is_verified && !emailChanged;
+
     return (
-        <div className="px-8 py-8 max-w-2xl">
+        <div className="px-8 py-8 max-w-xl">
             <div className="mb-8">
-                <h2 className="text-[15px] font-semibold text-gray-900">User Management</h2>
-                <p className="text-sm text-gray-500 mt-1">Manage user roles, permissions, and access.</p>
+                <h2 className="text-[15px] font-semibold text-gray-900">Email Settings</h2>
+                <p className="text-sm text-gray-500 mt-1 leading-relaxed">
+                    Configure the From address used when sending emails to your customers.
+                    System emails (password resets, invitations) always come from the platform address.
+                </p>
             </div>
-            <div className="bg-white border border-gray-200 rounded-lg px-6 py-10 text-center">
-                <p className="text-sm text-gray-400">Full user management is available in <span className="font-medium text-gray-600">Settings → Users</span>.</p>
+
+            <div className="bg-white border border-gray-200 rounded-lg divide-y divide-gray-100">
+                {/* From name */}
+                <div className="px-5 py-4">
+                    <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">
+                        Display name
+                    </label>
+                    <input
+                        type="text"
+                        value={fromName}
+                        onChange={e => setFromName(e.target.value)}
+                        placeholder="e.g. Best Repairs"
+                        className="w-full text-sm border border-gray-200 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-transparent"
+                    />
+                    <p className="text-xs text-gray-400 mt-1">Shown as the sender name in your customers' inboxes.</p>
+                </div>
+
+                {/* From email */}
+                <div className="px-5 py-4">
+                    <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">
+                        From email address
+                    </label>
+                    <div className="flex items-center gap-2">
+                        <input
+                            type="email"
+                            value={fromEmail}
+                            onChange={e => setFromEmail(e.target.value)}
+                            placeholder="e.g. repairs@yourshop.com"
+                            className="flex-1 text-sm border border-gray-200 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-transparent"
+                        />
+                        {isVerified ? (
+                            <span className="shrink-0 inline-flex items-center gap-1 text-xs font-medium bg-green-50 text-green-700 border border-green-200 rounded-full px-2.5 py-1">
+                                <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
+                                </svg>
+                                Verified
+                            </span>
+                        ) : (
+                            <span className="shrink-0 inline-flex items-center text-xs font-medium bg-amber-50 text-amber-700 border border-amber-200 rounded-full px-2.5 py-1">
+                                Unverified
+                            </span>
+                        )}
+                    </div>
+                </div>
+
+                {/* Save + verify actions */}
+                <div className="px-5 py-4 flex items-center gap-3">
+                    <button
+                        onClick={handleSave}
+                        disabled={!isDirty || saving}
+                        className="text-sm font-medium px-4 py-2 rounded-md bg-gray-900 text-white hover:bg-gray-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                    >
+                        {saving ? "Saving…" : "Save"}
+                    </button>
+                    <button
+                        onClick={handleSendVerification}
+                        disabled={!settings.from_email || emailChanged || isVerified || sendingVerification}
+                        className="text-sm font-medium px-4 py-2 rounded-md border border-gray-200 text-gray-700 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                    >
+                        {verificationSent ? "Email sent!" : sendingVerification ? "Sending…" : "Send verification email"}
+                    </button>
+                </div>
+
+                {/* Deliverability note */}
+                <div className="px-5 py-4 bg-blue-50">
+                    <p className="text-xs text-blue-700 leading-relaxed">
+                        <span className="font-semibold">Tip:</span> For best deliverability, add{" "}
+                        <code className="font-mono bg-blue-100 px-1 rounded">include:spf.migadu.com</code>{" "}
+                        to your domain's SPF DNS record. This prevents emails from landing in spam.
+                    </p>
+                </div>
             </div>
+
+            {error && (
+                <p className="mt-4 text-sm text-red-600">{error}</p>
+            )}
+
+            {isVerified && settings.verified_at && (
+                <p className="mt-3 text-xs text-gray-400">
+                    Verified on {new Date(settings.verified_at).toLocaleDateString()}
+                </p>
+            )}
         </div>
     );
 }
@@ -352,6 +492,7 @@ function UsersTab() {
 const TABS = [
     { label: "Object & Field Settings", matchPath: ["/system-settings/fields", "/system-settings/global"], path: "fields" },
     { label: "User Management",         matchPath: ["/system-settings/users"],                              path: "users" },
+    { label: "Email",                   matchPath: ["/system-settings/email"],                              path: "email" },
 ];
 
 export default function SystemSettingsPage() {
@@ -395,7 +536,8 @@ export default function SystemSettingsPage() {
                     <Route path="fields" element={<FieldsOverview />} />
                     <Route path="fields/:model/*" element={<ObjectDetail />} />
                     <Route path="global/*" element={<GlobalPicklistsView />} />
-                    <Route path="users" element={<UsersTab />} />
+                    <Route path="users" element={<UserManagementPage />} />
+                    <Route path="email" element={<EmailSettingsPanel />} />
                     {/* Legacy URLs from old navigation — redirect to new structure */}
                     <Route path="picklists/:category" element={<LegacyPicklistRedirect />} />
                     <Route path="custom-fields/:model" element={<LegacyCustomFieldsRedirect />} />

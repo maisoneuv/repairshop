@@ -7,6 +7,7 @@ export default function WorkItemTabs({ children, defaultTab = 'details' }) {
         { id: 'details', label: 'Details' },
         { id: 'inventory', label: 'Inventory' },
         { id: 'documents', label: 'Documents' },
+        { id: 'emails', label: 'Emails' },
         { id: 'actions', label: 'Actions' },
     ];
 
