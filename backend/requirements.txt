@@ -23,5 +23,5 @@ Pillow==10.4.0
 # Phone number parsing
 phonenumbers==8.13.47
 
-# Transactional email via Mailgun HTTP API (avoids raw SMTP port issues in Docker)
-django-anymail[mailgun]
+# Transactional email — Mailgun (dev/sandbox) or Resend (production)
+django-anymail[mailgun,resend]

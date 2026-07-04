@@ -1,6 +1,6 @@
 import apiClient from './apiClient';
 
-export async function sendEmail({ model, objectId, toEmail, ccEmails, subject, bodyHtml, bodyText, attachments }) {
+export async function sendEmail({ model, objectId, toEmail, ccEmails, subject, bodyHtml, bodyText, attachments, documentIds }) {
     const formData = new FormData();
     formData.append('model', model);
     formData.append('object_id', objectId);
@@ -14,6 +14,9 @@ export async function sendEmail({ model, objectId, toEmail, ccEmails, subject, b
     }
     for (const file of (attachments || [])) {
         formData.append('attachments', file);
+    }
+    for (const id of (documentIds || [])) {
+        formData.append('document_ids', id);
     }
 
     const res = await apiClient.post('/api/core/emails/send/', formData, {
