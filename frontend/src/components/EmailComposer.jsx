@@ -8,6 +8,7 @@ import { Color } from '@tiptap/extension-color';
 import Placeholder from '@tiptap/extension-placeholder';
 import Image from '@tiptap/extension-image';
 import { sendEmail, getEmailTemplates, createEmailTemplate, updateEmailTemplate, deleteEmailTemplate } from '../api/emails';
+import { fetchFormDocuments } from '../api/documents';
 import { toast } from 'sonner';
 
 // ─── Toolbar button ────────────────────────────────────────────────────────────
@@ -258,9 +259,14 @@ export default function EmailComposer({ isOpen, onClose, onSent, model, objectId
     const [cc, setCc] = useState('');
     const [subject, setSubject] = useState(defaultSubject);
     const [attachments, setAttachments] = useState([]);
+    const [documentAttachments, setDocumentAttachments] = useState([]);
     const [sending, setSending] = useState(false);
     const [showTemplates, setShowTemplates] = useState(false);
+    const [showDocPicker, setShowDocPicker] = useState(false);
+    const [availableDocs, setAvailableDocs] = useState([]);
+    const [loadingDocs, setLoadingDocs] = useState(false);
     const fileInputRef = useRef();
+    const docPickerRef = useRef();
 
     const editor = useEditor({
         extensions: [
@@ -286,9 +292,50 @@ export default function EmailComposer({ isOpen, onClose, onSent, model, objectId
             setSubject(defaultSubject);
             setCc('');
             setAttachments([]);
+            setDocumentAttachments([]);
+            setShowDocPicker(false);
+            setAvailableDocs([]);
             editor?.commands.clearContent();
         }
     }, [isOpen, defaultTo, defaultSubject]);
+
+    // Close doc picker on outside click
+    useEffect(() => {
+        function handler(e) {
+            if (docPickerRef.current && !docPickerRef.current.contains(e.target)) {
+                setShowDocPicker(false);
+            }
+        }
+        document.addEventListener('mousedown', handler);
+        return () => document.removeEventListener('mousedown', handler);
+    }, []);
+
+    const handleToggleDocPicker = useCallback(async () => {
+        if (showDocPicker) { setShowDocPicker(false); return; }
+        setShowDocPicker(true);
+        if (availableDocs.length === 0) {
+            setLoadingDocs(true);
+            try {
+                const docs = await fetchFormDocuments(objectId);
+                setAvailableDocs(docs.filter((d) => d.status === 'success'));
+            } catch {
+                toast.error('Failed to load documents');
+            } finally {
+                setLoadingDocs(false);
+            }
+        }
+    }, [showDocPicker, availableDocs.length, objectId]);
+
+    const toggleDocAttachment = useCallback((doc) => {
+        setDocumentAttachments((prev) => {
+            if (prev.some((d) => d.id === doc.id)) return prev.filter((d) => d.id !== doc.id);
+            return [...prev, { id: doc.id, label: doc.form_type_display, generated_at: doc.generated_at }];
+        });
+    }, []);
+
+    const removeDocAttachment = useCallback((id) => {
+        setDocumentAttachments((prev) => prev.filter((d) => d.id !== id));
+    }, []);
 
     const handleFileChange = useCallback((e) => {
         const files = Array.from(e.target.files || []);
@@ -339,6 +386,7 @@ export default function EmailComposer({ isOpen, onClose, onSent, model, objectId
                 bodyHtml: editor?.getHTML() || '',
                 bodyText: editor?.getText() || '',
                 attachments,
+                documentIds: documentAttachments.map((d) => d.id),
             });
             toast.success('Email sent');
             onSent?.(sent);
@@ -433,7 +481,7 @@ export default function EmailComposer({ isOpen, onClose, onSent, model, objectId
                     </div>
 
                     {/* Attachments list */}
-                    {attachments.length > 0 && (
+                    {(attachments.length > 0 || documentAttachments.length > 0) && (
                         <div className="px-5 py-2 border-t border-gray-100 flex flex-wrap gap-2 shrink-0">
                             {attachments.map((file, i) => (
                                 <div key={i}
@@ -442,6 +490,18 @@ export default function EmailComposer({ isOpen, onClose, onSent, model, objectId
                                     <span className="text-gray-400">({(file.size / 1024).toFixed(0)} KB)</span>
                                     <button type="button" onClick={() => removeAttachment(i)}
                                         className="text-gray-400 hover:text-red-500 ml-0.5">×</button>
+                                </div>
+                            ))}
+                            {documentAttachments.map((doc) => (
+                                <div key={`doc-${doc.id}`}
+                                    className="flex items-center gap-1.5 bg-blue-50 border border-blue-200 rounded-full px-3 py-1 text-xs text-blue-700">
+                                    <svg className="w-3 h-3 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                                            d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                                    </svg>
+                                    <span className="truncate max-w-[140px]">{doc.label}</span>
+                                    <button type="button" onClick={() => removeDocAttachment(doc.id)}
+                                        className="text-blue-400 hover:text-red-500 ml-0.5">×</button>
                                 </div>
                             ))}
                         </div>
@@ -453,7 +513,7 @@ export default function EmailComposer({ isOpen, onClose, onSent, model, objectId
                             <button
                                 type="button"
                                 onClick={() => fileInputRef.current?.click()}
-                                title="Attach files"
+                                title="Attach files from device"
                                 className="flex items-center gap-1.5 text-sm text-gray-500 hover:text-gray-800 px-2 py-1 rounded hover:bg-gray-100 transition-colors"
                             >
                                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -469,6 +529,70 @@ export default function EmailComposer({ isOpen, onClose, onSent, model, objectId
                                 className="hidden"
                                 onChange={handleFileChange}
                             />
+
+                            {model === 'workitem' && objectId && (
+                                <div className="relative" ref={docPickerRef}>
+                                    <button
+                                        type="button"
+                                        onClick={handleToggleDocPicker}
+                                        title="Attach from Documents tab"
+                                        className={`flex items-center gap-1.5 text-sm px-2 py-1 rounded transition-colors ${
+                                            showDocPicker
+                                                ? 'bg-blue-100 text-blue-700'
+                                                : 'text-gray-500 hover:text-gray-800 hover:bg-gray-100'
+                                        }`}
+                                    >
+                                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}
+                                                d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                                        </svg>
+                                        Documents
+                                    </button>
+
+                                    {showDocPicker && (
+                                        <div className="absolute bottom-full left-0 mb-2 w-72 bg-white border border-gray-200 rounded-xl shadow-xl z-50 overflow-hidden">
+                                            <div className="px-4 py-2.5 border-b border-gray-100">
+                                                <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Attach from Documents</p>
+                                            </div>
+                                            {loadingDocs ? (
+                                                <p className="text-sm text-gray-400 px-4 py-4">Loading…</p>
+                                            ) : availableDocs.length === 0 ? (
+                                                <p className="text-sm text-gray-400 px-4 py-4">No documents available.</p>
+                                            ) : (
+                                                <div className="max-h-56 overflow-y-auto">
+                                                    {availableDocs.map((doc) => {
+                                                        const selected = documentAttachments.some((d) => d.id === doc.id);
+                                                        return (
+                                                            <button
+                                                                key={doc.id}
+                                                                type="button"
+                                                                onClick={() => toggleDocAttachment(doc)}
+                                                                className={`w-full flex items-center gap-3 px-4 py-2.5 text-left transition-colors ${
+                                                                    selected ? 'bg-blue-50' : 'hover:bg-gray-50'
+                                                                }`}
+                                                            >
+                                                                <svg className="w-4 h-4 shrink-0 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}
+                                                                        d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                                                                </svg>
+                                                                <div className="flex-1 min-w-0">
+                                                                    <p className="text-sm font-medium text-gray-800">{doc.form_type_display}</p>
+                                                                    <p className="text-xs text-gray-400">{new Date(doc.generated_at).toLocaleDateString()}</p>
+                                                                </div>
+                                                                {selected && (
+                                                                    <svg className="w-4 h-4 shrink-0 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                                                                    </svg>
+                                                                )}
+                                                            </button>
+                                                        );
+                                                    })}
+                                                </div>
+                                            )}
+                                        </div>
+                                    )}
+                                </div>
+                            )}
                         </div>
                         <div className="flex items-center gap-3">
                             <button

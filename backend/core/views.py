@@ -1083,6 +1083,15 @@ class SendEmailView(APIView):
         model_name = data.get('model', '').strip()
         object_id = data.get('object_id')
         files = request.FILES.getlist('attachments')
+        doc_ids_raw = data.getlist('document_ids') if hasattr(data, 'getlist') else (data.get('document_ids') or [])
+        if isinstance(doc_ids_raw, str):
+            doc_ids_raw = [doc_ids_raw]
+        document_ids = []
+        for d in doc_ids_raw:
+            try:
+                document_ids.append(int(d))
+            except (ValueError, TypeError):
+                pass
 
         if not to_email:
             return Response({'error': 'to_email is required'}, status=status.HTTP_400_BAD_REQUEST)
@@ -1102,6 +1111,25 @@ class SendEmailView(APIView):
         for f in files:
             attachment_tuples.append((f.name, f.read(), getattr(f, 'content_type', '') or 'application/octet-stream'))
             f.seek(0)  # rewind so the file can still be saved to storage below
+
+        # Load document attachments from work item form documents
+        doc_attachment_data = []  # (filename, content) for creating EmailAttachment records
+        if document_ids:
+            import os
+            from documents.models import FormDocument
+            docs = FormDocument.objects.filter(
+                id__in=document_ids,
+                tenant=tenant,
+                status=FormDocument.STATUS_SUCCESS,
+            )
+            for doc in docs:
+                abs_path = os.path.join(django_settings.MEDIA_ROOT, doc.file_path)
+                if os.path.exists(abs_path):
+                    with open(abs_path, 'rb') as fobj:
+                        content = fobj.read()
+                    filename = os.path.basename(doc.file_path)
+                    attachment_tuples.append((filename, content, 'application/pdf'))
+                    doc_attachment_data.append((filename, content))
 
         send_status = 'sent'
         error_msg = ''
@@ -1136,6 +1164,16 @@ class SendEmailView(APIView):
                 filename=f.name,
                 mime_type=getattr(f, 'content_type', ''),
                 size=f.size,
+            )
+
+        from django.core.files.base import ContentFile
+        for filename, content in doc_attachment_data:
+            EmailAttachment.objects.create(
+                email=sent_email,
+                file=ContentFile(content, name=filename),
+                filename=filename,
+                mime_type='application/pdf',
+                size=len(content),
             )
 
         if send_status == 'failed':
