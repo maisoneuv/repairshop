@@ -38,8 +38,12 @@ def generate_pdf_from_work_item(work_item, template, output_filename=None):
         # Get template variables from work item
         variables = get_template_variables(work_item)
 
-        # Replace variables in HTML template
-        html_content = replace_variables_in_html(template.html_content, variables)
+        # Replace variables in HTML template. Re-sanitize here too: templates
+        # stored before sanitize-on-save existed may still carry script.
+        from .sanitizer import sanitize_template_html
+        html_content = replace_variables_in_html(
+            sanitize_template_html(template.html_content), variables
+        )
 
         # Generate filename if not provided
         if not output_filename:
@@ -113,9 +117,11 @@ def _generate_pdf_with_playwright(html_content, output_path):
     """
     try:
         with sync_playwright() as p:
-            # Launch headless Chromium browser
+            # Launch headless Chromium browser. Templates are static print
+            # documents — disable JS so template content can never execute
+            # code inside this server-side browser.
             browser = p.chromium.launch(headless=True)
-            page = browser.new_page()
+            page = browser.new_page(java_script_enabled=False)
 
             # Set HTML content
             page.set_content(html_content, wait_until='networkidle')
@@ -157,8 +163,11 @@ def preview_html(work_item, template):
         str: HTML with all variables replaced
     """
     try:
+        from .sanitizer import sanitize_template_html
         variables = get_template_variables(work_item)
-        return replace_variables_in_html(template.html_content, variables)
+        return replace_variables_in_html(
+            sanitize_template_html(template.html_content), variables
+        )
     except Exception as e:
         logger.error(f"Failed to generate preview HTML: {str(e)}")
         raise PDFGenerationError(f"Preview generation failed: {str(e)}") from e

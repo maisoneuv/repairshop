@@ -3,6 +3,7 @@ from inventory.models import Device
 from .models import Customer, Asset, Lead
 from rest_framework import serializers
 from core.serializers import AddressSerializer
+from core.serializer_fields import TenantScopedPrimaryKeyRelatedField
 from core.models import Address
 from tasks.models import WorkItem
 
@@ -68,7 +69,7 @@ class AssetSerializer(serializers.ModelSerializer):
         write_only=True,
         required=False
     )
-    customer_id = serializers.PrimaryKeyRelatedField(
+    customer_id = TenantScopedPrimaryKeyRelatedField(
         queryset=Customer.objects.all(),
         source='customer',
         write_only=True,

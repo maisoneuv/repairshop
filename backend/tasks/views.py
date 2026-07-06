@@ -78,25 +78,21 @@ class WorkItemCreateView(CreateView):
 
     def get_initial(self):
         initial = super().get_initial()
-        print(initial)
         user = self.request.user
         if hasattr(user, 'employee'):
             initial['owner'] = user.employee
             initial['customer_dropoff_point'] = user.employee.location.id
 
-        print(initial)
         return initial
 
     def get_form(self, form_class=None):
         form = super().get_form(form_class)
-        print("🧪 Form is bound:", form.is_bound)
         return form
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
 
         context['device_search'] = reverse('tasks:device_search')
-        print('context',context)
         return context
 
 
@@ -105,23 +101,18 @@ def work_item_create(request):
     form = WorkItemForm()
     if request.method == "POST":
         form = WorkItemForm(request.POST)
-        print('valid: ', form.is_valid())
         if form.is_valid():
-            print('request: ', request.POST)
             work_item = form.save(commit=False)
             if hasattr(request, "tenant") and request.tenant:
                 work_item.tenant = request.tenant
             else:
                 raise ValueError("Tenant is required to create a work item.")
-            print(work_item)
             customer_id = request.POST.get("customer_id")
-            print(customer_id)
             if customer_id:
 
                 work_item.customer = get_object_or_404(Customer, pk=customer_id)
 
             device_id = request.POST.get("device_id")
-            print(device_id)
             if device_id:
                 work_item.customer_asset = get_object_or_404(Asset, pk=device_id)
 
@@ -133,9 +124,6 @@ def work_item_create(request):
 
             work_item.save()
             return redirect("tasks:work_item_detail", pk=work_item.pk)  # ✅ Use your real redirect URL name
-        else:
-            print("Form is NOT valid")
-            print(form.errors)
 
     context = {
         "form": form
@@ -215,7 +203,6 @@ class TaskUpdateView(UpdateView):
 def customer_search(request):
     from customers.models import Customer
     query = request.GET.get('customer-search','')
-    print(f"query: {query}")
     if not query:
         customers = Customer.objects.none()
     else:
@@ -224,13 +211,11 @@ def customer_search(request):
             Q(email__startswith=query) |
             Q(phone_number__startswith=query)
         )[:5]
-    print(customers)
     return render(request, 'partials/customer_search_results.html', {'customers':customers})
 
 
 def device_search(request):
     from inventory.models import Device
-    print(request.GET)
     query = request.GET.get('device-search', '')
     if not query:
         devices = Device.objects.none()
@@ -239,7 +224,6 @@ def device_search(request):
             Q(manufacturer__istartswith=query) |
             Q(model__istartswith=query)
         )[:5]
-    print(devices)
     return render(request, 'partials/device_search_results.html', {'devices': devices})
 
 
@@ -259,12 +243,9 @@ class WorkItemFilter(django_filters.FilterSet):
 
     def filter_by_customer(self, queryset, name, value):
         """Filter work items by customer ID - includes items where customer is direct or via asset"""
-        print(f"[WorkItemFilter] Filtering by customer ID: {value}")
-        print(f"[WorkItemFilter] Initial queryset count: {queryset.count()}")
         filtered = queryset.filter(
             Q(customer_id=value) | Q(customer_asset__customer_id=value)
         ).distinct()
-        print(f"[WorkItemFilter] Filtered queryset count: {filtered.count()}")
         return filtered
 
     class Meta:
@@ -661,8 +642,6 @@ class WorkItemSchemaView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
-        print("User:", request.user)
-        print("Is authenticated:", request.user.is_authenticated)
         tenant = getattr(request, 'tenant', None)
         schema = get_model_schema(WorkItem, tenant=tenant)
         return Response(schema)

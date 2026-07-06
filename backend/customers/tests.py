@@ -14,7 +14,14 @@ class CustomerLookupAPITest(TestCase):
             last_name="Kowalski",
             phone_number="123456789",
         )
+        self.user = User.objects.create_user(
+            username="agent@testco.test",
+            email="agent@testco.test",
+            password="test-password",
+            tenant=self.tenant,
+        )
         self.client = APIClient()
+        self.client.login(email="agent@testco.test", password="test-password")
 
     def _get(self, phone):
         return self.client.get(
@@ -22,6 +29,14 @@ class CustomerLookupAPITest(TestCase):
             {"phone": phone},
             HTTP_X_TENANT="testco",
         )
+
+    def test_rejects_anonymous_access(self):
+        resp = APIClient().get(
+            "/api/customers/api/customers/lookup/",
+            {"phone": "123456789"},
+            HTTP_X_TENANT="testco",
+        )
+        self.assertIn(resp.status_code, (401, 403))
 
     def test_returns_customer_id(self):
         resp = self._get("123456789")

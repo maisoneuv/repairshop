@@ -20,6 +20,7 @@ from .serializers import (
     GenerateFormDocumentSerializer,
     AvailableVariablesSerializer,
 )
+from .sanitizer import sanitize_template_html
 from .tasks import generate_form_document_task
 from .variables import replace_variables_in_html, format_date_polish, format_datetime_polish
 
@@ -245,8 +246,11 @@ class FormTemplateViewSet(viewsets.ModelViewSet):
             # Get sample data
             sample_data = get_sample_template_data()
 
-            # Replace variables in HTML
-            rendered_html = replace_variables_in_html(html_content, sample_data)
+            # Sanitize before reflecting back as text/html on the app origin
+            # (also covers templates stored before sanitize-on-save existed).
+            rendered_html = replace_variables_in_html(
+                sanitize_template_html(html_content), sample_data
+            )
 
             # Return as HTML response
             return HttpResponse(rendered_html, content_type='text/html')
@@ -281,8 +285,11 @@ class FormTemplateViewSet(viewsets.ModelViewSet):
             # Get sample data
             sample_data = get_sample_template_data()
 
-            # Replace variables in HTML
-            rendered_html = replace_variables_in_html(html_content, sample_data)
+            # Sanitize before reflecting back as text/html on the app origin
+            # (also covers templates stored before sanitize-on-save existed).
+            rendered_html = replace_variables_in_html(
+                sanitize_template_html(html_content), sample_data
+            )
 
             # Return as HTML response
             return HttpResponse(rendered_html, content_type='text/html')

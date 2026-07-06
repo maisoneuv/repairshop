@@ -12,7 +12,7 @@ from django.utils.encoding import force_bytes
 from django.utils.http import urlsafe_base64_encode, urlsafe_base64_decode
 from django.shortcuts import render
 from django.views.generic import ListView
-from rest_framework.decorators import api_view, permission_classes
+from rest_framework.decorators import api_view, permission_classes, throttle_classes
 from rest_framework.exceptions import PermissionDenied, ValidationError
 from rest_framework.generics import ListAPIView
 from rest_framework.filters import SearchFilter
@@ -35,6 +35,11 @@ from .serializers import (NoteSerializer, UserSerializer, UserCreateSerializer, 
                           SettingSerializer, SettingWriteSerializer,
                           PicklistValueAdminSerializer, CustomFieldSerializer,
                           EmailMessageSerializer, EmailTemplateSerializer)
+from .security import (
+    LoginRateThrottle, PinLoginRateThrottle, PinnedUsersRateThrottle,
+    pin_login_locked, register_pin_failure, clear_pin_failures,
+    issue_device_cookie, has_valid_device_cookie,
+)
 from .utils import create_system_note
 from tenants.managers import TenantAwareManager
 from tenants.models import TenantEmailSettings
@@ -127,8 +132,6 @@ class BaseListView(ListView):
     def get_nested_attr(self, obj, field_path):
         parts = field_path.split(".")  # e.g. ["inventory_item", "name"]
         for part in parts:
-            print(f"part: {part}")
-            print(f"obj: {obj}")
             if obj is None:
                 return None
             obj = getattr(obj, part, None)  # e.g. obj = obj.inventory_item, then obj = obj.name
@@ -153,11 +156,38 @@ class GenericSearchView(ListAPIView):
 
 class NoteViewSet(viewsets.ModelViewSet):
     serializer_class = NoteSerializer
+    permission_classes = [IsAuthenticated]
+
+    def _get_parent_content_type(self):
+        """
+        Resolve the parent object's content type, enforcing that the parent
+        model is tenant-scoped and that the object belongs to the request
+        tenant. Raises 404 otherwise so cross-tenant IDs are indistinguishable
+        from nonexistent ones.
+        """
+        from rest_framework.exceptions import NotFound
+
+        model = self.kwargs["model"]
+        obj_id = self.kwargs["obj_id"]
+        tenant = getattr(self.request, "tenant", None)
+        if tenant is None:
+            raise NotFound("Not found.")
+
+        content_type = ContentType.objects.get(model=model)
+        model_class = content_type.model_class()
+        if model_class is None or not any(
+            f.name == "tenant" for f in model_class._meta.fields
+        ):
+            raise NotFound("Not found.")
+
+        if not model_class.objects.filter(pk=obj_id, tenant=tenant).exists():
+            raise NotFound("Not found.")
+        return content_type
 
     def get_queryset(self):
         model = self.kwargs["model"]
         obj_id = self.kwargs["obj_id"]
-        content_type = ContentType.objects.get(model=model)
+        content_type = self._get_parent_content_type()
 
         # Get notes for the current object
         notes = Note.objects.filter(content_type=content_type, object_id=obj_id)
@@ -182,10 +212,8 @@ class NoteViewSet(viewsets.ModelViewSet):
         return notes.distinct()
 
     def perform_create(self, serializer):
-        model = self.kwargs["model"]
         obj_id = self.kwargs["obj_id"]
-        content_type = ContentType.objects.get(model=model)
-        print(f'user:{self.request.user}')
+        content_type = self._get_parent_content_type()
         serializer.save(author=self.request.user, content_type=content_type, object_id=obj_id)
 
     def perform_update(self, serializer):
@@ -491,14 +519,13 @@ class MyPermissionsView(APIView):
 
 @ensure_csrf_cookie
 @api_view(['POST'])
+@permission_classes([AllowAny])
+@throttle_classes([LoginRateThrottle])
 def login_view(request):
     username = request.data.get('email')
     password = request.data.get('password')
-    print(f'username:{username}')
-    print(f'pass:{password}')
 
     user = authenticate(request, username=username, password=password)
-    print(user)
     if user is not None:
         request_tenant = getattr(request, 'tenant', None)
         if request_tenant and user.tenant and user.tenant != request_tenant:
@@ -506,11 +533,18 @@ def login_view(request):
         login(request, user)
         user.last_full_login_at = timezone.now()
         user.save(update_fields=['last_full_login_at'])
-        return JsonResponse({"success": True})
+        response = JsonResponse({"success": True})
+        # A full password login marks this browser as trusted for the lock
+        # screen (pinned-users list + PIN login).
+        tenant_id = user.tenant_id or getattr(request_tenant, 'pk', None)
+        if tenant_id:
+            issue_device_cookie(response, tenant_id)
+        return response
     return JsonResponse({"error": "Invalid credentials"}, status=status.HTTP_401_UNAUTHORIZED)
 
 
 @api_view(['POST'])
+@permission_classes([AllowAny])
 def logout_view(request):
     logout(request)
     return JsonResponse({"success": True})
@@ -518,6 +552,7 @@ def logout_view(request):
 
 @api_view(['POST'])
 @permission_classes([])
+@throttle_classes([PinLoginRateThrottle])
 def quick_login_view(request):
     """Authenticate via user_id + PIN. Used by the lock screen."""
     user_id = request.data.get('user_id')
@@ -530,6 +565,22 @@ def quick_login_view(request):
     if not tenant:
         return JsonResponse({"error": "Tenant not resolved"}, status=status.HTTP_400_BAD_REQUEST)
 
+    # If a session is already active (Fix 2: lockScreen no longer calls logout),
+    # the session itself proves continuity — skip the inactivity check entirely.
+    already_authed = request.user.is_authenticated
+
+    # PIN login is only for browsers that have completed a full password login
+    # before (trusted device cookie) or still hold a live session. Anyone else
+    # must use the password form — this blocks remote PIN brute-forcing.
+    if not already_authed and not has_valid_device_cookie(request, tenant):
+        return JsonResponse({"error": "full_login_required"}, status=status.HTTP_403_FORBIDDEN)
+
+    if pin_login_locked(user_id):
+        return JsonResponse(
+            {"error": "Too many attempts. Try again later."},
+            status=status.HTTP_429_TOO_MANY_REQUESTS,
+        )
+
     try:
         user = User.objects.get(pk=user_id, is_active=True)
     except User.DoesNotExist:
@@ -540,11 +591,8 @@ def quick_login_view(request):
         return JsonResponse({"error": "Invalid credentials"}, status=status.HTTP_401_UNAUTHORIZED)
 
     if not user.pin_hash or not check_password(pin, user.pin_hash):
+        register_pin_failure(user_id)
         return JsonResponse({"error": "Invalid credentials"}, status=status.HTTP_401_UNAUTHORIZED)
-
-    # If a session is already active (Fix 2: lockScreen no longer calls logout),
-    # the session itself proves continuity — skip the inactivity check entirely.
-    already_authed = request.user.is_authenticated
 
     if not already_authed:
         # No active session — require recent activity within the inactivity window.
@@ -554,6 +602,7 @@ def quick_login_view(request):
         if not last_activity or timezone.now() - last_activity > inactivity_limit:
             return JsonResponse({"error": "full_login_required"}, status=status.HTTP_403_FORBIDDEN)
 
+    clear_pin_failures(user_id)
     login(request, user)
     return JsonResponse({"success": True})
 
@@ -611,13 +660,19 @@ def set_user_pin_view(request, user_id):
 
 @api_view(['GET'])
 @permission_classes([])
+@throttle_classes([PinnedUsersRateThrottle])
 def list_pinned_users_view(request):
-    """Return all active tenant users who have a PIN set (for lock screen tiles).
-    Public endpoint — only exposes names/initials, no sensitive data.
-    Requires tenant context (X-Tenant header or subdomain) but not authentication."""
+    """Return active tenant users who have a PIN set (for lock screen tiles).
+
+    Only for browsers with a live session or a trusted-device cookie from an
+    earlier full login — otherwise returns an empty list, so the endpoint
+    cannot be used to enumerate user IDs/names (audit H-1)."""
     tenant = getattr(request, 'tenant', None)
     if not tenant:
         return JsonResponse({"error": "Tenant not resolved"}, status=status.HTTP_400_BAD_REQUEST)
+
+    if not request.user.is_authenticated and not has_valid_device_cookie(request, tenant):
+        return JsonResponse({"users": []})
 
     users = User.objects.filter(
         db_models.Q(tenant=tenant) | db_models.Q(tenant__isnull=True),

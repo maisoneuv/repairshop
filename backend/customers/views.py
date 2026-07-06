@@ -79,8 +79,15 @@ class CustomerAssetUpdateView(UpdateView):
 
 class AssetRetrieveUpdateAPIView(generics.RetrieveUpdateAPIView):
     """API endpoint for retrieving and updating asset information"""
-    queryset = Asset.objects.all()
     serializer_class = AssetSerializer
+
+    def get_queryset(self):
+        tenant = getattr(self.request, "tenant", None)
+        if tenant is None:
+            return Asset.objects.none()
+        return Asset.objects.select_related("device", "customer").filter(
+            customer__tenant=tenant
+        )
 
 
 class AssetViewSet(viewsets.ModelViewSet):
@@ -192,14 +199,12 @@ class CustomerPhoneSearchView(autocomplete.Select2QuerySetView):
 def customer_search(request):
     # query = request.GET.get("customer_search", "").strip()
     query = request.GET.get("customer_search")
-    print(f"query: {query}")
     if not query:
         customers = Customer.objects.none()
     else:
         customers = Customer.objects.filter(
             Q(first_name__icontains=query) | Q(email__icontains=query) | Q(phone_number__icontains=query)
         )
-    print(f"customers: {customers}")
     if customers.exists():
         return render(request, 'partials/customer_search_results.html', {'customers': customers})
     else:
@@ -207,7 +212,6 @@ def customer_search(request):
 
 def select_customer(request, customer_id):
     customer = get_object_or_404(Customer, id=customer_id)
-    print(f"customer selected: {customer}")
     return render(request, 'partials/customer_selected.html', {'customer': customer})
 
 def create_customer_form(request):
@@ -242,20 +246,14 @@ def asset_create_inline(request):
                 'id': asset.id,
                 'label': f"{asset.device} ({asset.serial_number})"
             })
-        else:
-            print("Form is NOT valid")
-            print(form.errors)
         return render(request, 'partials/device_form_inline.html', {'form': form})
     else:
         form = CustomerAssetInlineForm()
         return render(request, 'partials/device_form_inline.html', {'form': form})
 
 def get_customer_assets(request, pk):
-    print(pk)
     customer = get_object_or_404(Customer, pk=pk)
-    print('customer', customer)
     assets = customer.asset_set.select_related('device').all()
-    print('assets:', assets)
     html = render_to_string("partials/customer_assets_table.html", {"assets": assets})
     return HttpResponse(html)
 
@@ -322,8 +320,6 @@ class CustomerViewSet(TenantScopedMixin, viewsets.ModelViewSet):
 
     def perform_create(self, serializer):
         user = self.request.user
-        print(f'customer requests: {self.request.data}')
-        print("resolved tenant:", getattr(self.request, "tenant", None))
         if user.is_superuser:
             serializer.save()
             return
@@ -373,7 +369,7 @@ def get_referral_sources(request):
 @api_view(["GET"])
 def customer_assets_api(request, pk):
     """Return all assets (devices) for a given customer."""
-    customer = get_object_or_404(Customer, pk=pk)
+    customer = get_object_or_404(Customer, pk=pk, tenant=getattr(request, "tenant", None))
     assets = customer.asset_set.select_related("device").all()
     serializer = AssetSerializer(assets, many=True)
     return Response(serializer.data)

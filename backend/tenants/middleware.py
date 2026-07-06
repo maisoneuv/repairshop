@@ -39,8 +39,7 @@ class TenantMiddleware(MiddlewareMixin):
     def process_request(self, request: HttpRequest):
 
         request.tenant = None
-        header_val = request.META.get("HTTP_X_TENANT")
-        logger.warning("TenantMiddleware incoming host=%s header=%s user=%s", request.get_host(), header_val, getattr(request, "user", None))
+        logger.debug("TenantMiddleware incoming host=%s", request.get_host())
 
         # 0) Check if request is authenticated via API key
         # API keys are set by DRF authentication (request.auth)
@@ -49,7 +48,7 @@ class TenantMiddleware(MiddlewareMixin):
         if api_key and hasattr(api_key, "tenant"):
             # API key determines the tenant
             request.tenant = api_key.tenant
-            logger.warning("TenantMiddleware using API key tenant %s", api_key.tenant)
+            logger.debug("TenantMiddleware using API key tenant %s", api_key.tenant)
             # Skip all other tenant resolution and membership checks for API keys
             return
 
@@ -63,7 +62,7 @@ class TenantMiddleware(MiddlewareMixin):
             user_tenant = getattr(user, "tenant", None)
             if user_tenant:
                 request.tenant = user_tenant
-                logger.warning("TenantMiddleware using user's own tenant %s", user_tenant)
+                logger.debug("TenantMiddleware using user's own tenant %s", user_tenant)
 
         # 2) Header hint — used for unauthenticated requests and superusers
         #    (superusers may legitimately switch between tenants via the header).
@@ -71,19 +70,19 @@ class TenantMiddleware(MiddlewareMixin):
             header_slug = request.META.get("HTTP_X_TENANT")
             if header_slug:
                 request.tenant = Tenant.objects.filter(subdomain=header_slug).first()
-                logger.warning("TenantMiddleware header slug %s -> %s", header_slug, request.tenant)
+                logger.debug("TenantMiddleware header slug %s -> %s", header_slug, request.tenant)
 
         # 3) Host fallback (multi-tenant via subdomain)
         if request.tenant is None:
             slug = _derive_slug_from_host(request.get_host())
             if slug:
                 request.tenant = Tenant.objects.filter(subdomain=slug).first()
-                logger.warning("TenantMiddleware host slug %s -> %s", slug, request.tenant)
+                logger.debug("TenantMiddleware host slug %s -> %s", slug, request.tenant)
 
         # 3b) Fallback to a configured default tenant when running without subdomains.
         if request.tenant is None and DEFAULT_TENANT_SUBDOMAIN:
             request.tenant = Tenant.objects.filter(subdomain=DEFAULT_TENANT_SUBDOMAIN).first()
-            logger.warning("TenantMiddleware default slug %s -> %s", DEFAULT_TENANT_SUBDOMAIN, request.tenant)
+            logger.debug("TenantMiddleware default slug %s -> %s", DEFAULT_TENANT_SUBDOMAIN, request.tenant)
 
         # 4) Enforce membership for authenticated non-superusers.
         if (

@@ -51,7 +51,9 @@ export default function LockScreen() {
             }
             setShake(true);
             setTimeout(() => setShake(false), 600);
-            setError("Incorrect PIN");
+            setError(err?.response?.status === 429
+                ? "Too many attempts — try again in a few minutes"
+                : "Incorrect PIN");
             setPin([]);
         } finally {
             setSubmitting(false);

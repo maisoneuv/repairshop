@@ -605,7 +605,7 @@ def transfer_between_registers(request):
     if not request.tenant:
         return Response({"detail": "Tenant not resolved"}, status=400)
 
-    serializer = CashTransferSerializer(data=request.data)
+    serializer = CashTransferSerializer(data=request.data, context={'request': request})
     serializer.is_valid(raise_exception=True)
 
     source = serializer.validated_data['source_register']

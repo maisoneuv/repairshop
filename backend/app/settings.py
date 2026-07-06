@@ -25,7 +25,7 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # See https://docs.djangoproject.com/en/5.0/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = os.environ.get('DJANGO_SECRET_KEY'),
+SECRET_KEY = os.environ.get('DJANGO_SECRET_KEY')
 if not SECRET_KEY:
     raise ValueError("No DJANGO_SECRET_KEY set in environment variables!")
 
@@ -187,6 +187,15 @@ REST_FRAMEWORK = {
         'rest_framework.authentication.SessionAuthentication',  # Frontend
         'core.authentication.APIKeyAuthentication',  # External systems
     ],
+    # Deny-by-default: views that must be public opt in with AllowAny explicitly.
+    'DEFAULT_PERMISSION_CLASSES': [
+        'rest_framework.permissions.IsAuthenticated',
+    ],
+    'DEFAULT_THROTTLE_RATES': {
+        'login': '10/min',
+        'pin_login': '10/min',
+        'pinned_users': '30/min',
+    },
     'DEFAULT_SCHEMA_CLASS': 'drf_spectacular.openapi.AutoSchema',
     'DEFAULT_FILTER_BACKENDS': ['django_filters.rest_framework.DjangoFilterBackend'],
     'EXCEPTION_HANDLER': 'core.exceptions.json_exception_handler',
@@ -254,6 +263,18 @@ PASSWORD_RESET_TIMEOUT = 3 * 24 * 60 * 60  # 3 days
 # ============================================================================
 # Celery Configuration
 # ============================================================================
+# Cache backs DRF throttling and the PIN-attempt lockout. Point it at Redis in
+# any multi-process deployment (locmem is per-process, so limits would otherwise
+# only apply per worker).
+_redis_cache_url = os.environ.get('DJANGO_REDIS_CACHE_URL')
+if _redis_cache_url:
+    CACHES = {
+        'default': {
+            'BACKEND': 'django.core.cache.backends.redis.RedisCache',
+            'LOCATION': _redis_cache_url,
+        }
+    }
+
 CELERY_BROKER_URL = os.getenv('CELERY_BROKER_URL', 'redis://localhost:6379/0')
 CELERY_RESULT_BACKEND = os.getenv('CELERY_RESULT_BACKEND', 'redis://localhost:6379/0')
 CELERY_ACCEPT_CONTENT = ['json']

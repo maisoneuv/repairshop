@@ -83,6 +83,11 @@ class FormTemplate(models.Model):
 
     def save(self, *args, **kwargs):
         """Deactivate other templates of same type when activating this one"""
+        # Sanitize on every write path (API, admin, shell): stored template HTML
+        # is rendered as text/html and in the PDF browser, so it must never
+        # carry script.
+        from .sanitizer import sanitize_template_html
+        self.html_content = sanitize_template_html(self.html_content)
         if self.is_active:
             # Deactivate all other templates of the same type for this tenant
             FormTemplate.objects.filter(
