@@ -239,15 +239,28 @@ EMAIL_HOST_USER = os.getenv('EMAIL_HOST_USER', '')
 EMAIL_HOST_PASSWORD = os.getenv('EMAIL_HOST_PASSWORD', '')
 EMAIL_TIMEOUT = 10
 
-# django-anymail — configure both providers; EMAIL_BACKEND env var selects the active one.
-# Dev:  EMAIL_BACKEND=anymail.backends.mailgun.EmailBackend + MAILGUN_* vars
-# Prod: EMAIL_BACKEND=anymail.backends.resend.EmailBackend  + RESEND_API_KEY
+# django-anymail — Resend is the committed production provider.
+# Dev:  console backend (default). Prod: EMAIL_BACKEND=anymail.backends.resend.EmailBackend + RESEND_API_KEY.
+# Mailgun settings are kept for legacy/fallback only; no new code paths use them.
 ANYMAIL = {
     'MAILGUN_API_KEY': os.getenv('MAILGUN_API_KEY', ''),
     'MAILGUN_SENDER_DOMAIN': os.getenv('MAILGUN_SENDER_DOMAIN', ''),
     'MAILGUN_API_URL': os.getenv('MAILGUN_API_URL', 'https://api.mailgun.net/v3'),
     'RESEND_API_KEY': os.getenv('RESEND_API_KEY', ''),
+    # svix secrets (whsec_…) from the Resend dashboard, one per webhook endpoint.
+    # When unset, Anymail accepts unsigned posts (fine for dev, required in prod).
+    'RESEND_SIGNING_SECRET': os.getenv('RESEND_SIGNING_SECRET', '') or None,
+    'RESEND_INBOUND_SECRET': os.getenv('RESEND_INBOUND_SECRET', '') or None,
 }
+
+# Platform-owned sending domain for tenant default From addresses
+# (e.g. "repairhero@mail.mydomain.com"). Must be verified in the platform Resend account.
+PLATFORM_EMAIL_DOMAIN = os.getenv('PLATFORM_EMAIL_DOMAIN', 'mail.example.com')
+# Inbound reply subdomain (MX record -> Resend inbound). Outbound customer emails set
+# Reply-To: reply+<token>@PLATFORM_REPLY_DOMAIN so replies thread back into the app.
+PLATFORM_REPLY_DOMAIN = os.getenv('PLATFORM_REPLY_DOMAIN', 'reply.example.com')
+
+EMAIL_SEND_MAX_RETRIES = int(os.getenv('EMAIL_SEND_MAX_RETRIES', '5'))
 FRONTEND_BASE_URL = os.getenv('FRONTEND_BASE_URL', 'http://localhost:5173')
 PASSWORD_RESET_TIMEOUT = 3 * 24 * 60 * 60  # 3 days
 

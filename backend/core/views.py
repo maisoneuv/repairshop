@@ -291,96 +291,180 @@ class PasswordResetConfirmView(APIView):
         return Response({'success': True})
 
 
+def _email_settings_payload(obj):
+    """Serialize TenantEmailSettings for the settings UI."""
+    slug = obj.sending_slug or obj.tenant.subdomain
+    return {
+        'from_name': obj.from_name,
+        'from_email': obj.from_email,
+        'sending_slug': slug,
+        'default_from_address': f"{slug}@{django_settings.PLATFORM_EMAIL_DOMAIN}",
+        'reply_forward_email': obj.reply_forward_email,
+        'custom_domain': obj.custom_domain,
+        'domain_status': obj.domain_status,
+        'dns_records': obj.dns_records,
+        'domain_verified_at': obj.domain_verified_at,
+    }
+
+
+def _get_or_create_email_settings(tenant):
+    obj, created = TenantEmailSettings.objects.get_or_create(tenant=tenant)
+    if created or not obj.sending_slug:
+        obj.sending_slug = tenant.subdomain
+        obj.save(update_fields=['sending_slug'])
+    return obj
+
+
 class TenantEmailSettingsView(APIView):
     permission_classes = [IsAuthenticated, ManageUsersPermission]
 
-    def _get_or_create_settings(self, tenant):
-        obj, _ = TenantEmailSettings.objects.get_or_create(tenant=tenant)
-        return obj
-
     def get(self, request):
-        obj = self._get_or_create_settings(request.tenant)
-        return Response({
-            'from_name': obj.from_name,
-            'from_email': obj.from_email,
-            'is_verified': obj.is_verified,
-            'verification_sent_at': obj.verification_sent_at,
-            'verified_at': obj.verified_at,
-        })
+        obj = _get_or_create_email_settings(request.tenant)
+        return Response(_email_settings_payload(obj))
 
     def patch(self, request):
-        obj = self._get_or_create_settings(request.tenant)
-        new_email = request.data.get('from_email', obj.from_email)
-        if new_email != obj.from_email:
-            obj.is_verified = False
-            obj.verified_at = None
-        obj.from_name = request.data.get('from_name', obj.from_name)
-        obj.from_email = new_email
+        obj = _get_or_create_email_settings(request.tenant)
+
+        if 'from_name' in request.data:
+            obj.from_name = request.data.get('from_name') or ''
+
+        if 'reply_forward_email' in request.data:
+            obj.reply_forward_email = (request.data.get('reply_forward_email') or '').strip()
+
+        if 'sending_slug' in request.data:
+            from django.core.validators import validate_slug
+            new_slug = (request.data.get('sending_slug') or '').strip().lower()
+            if not new_slug:
+                return Response({'detail': 'sending_slug cannot be empty.'}, status=status.HTTP_400_BAD_REQUEST)
+            try:
+                validate_slug(new_slug)
+            except DjangoValidationError:
+                return Response({'detail': 'sending_slug may only contain letters, numbers, hyphens and underscores.'},
+                                status=status.HTTP_400_BAD_REQUEST)
+            if TenantEmailSettings.objects.exclude(pk=obj.pk).filter(sending_slug=new_slug).exists():
+                return Response({'detail': 'This sending address is already taken.'}, status=status.HTTP_400_BAD_REQUEST)
+            obj.sending_slug = new_slug
+
+        if 'from_email' in request.data:
+            new_email = (request.data.get('from_email') or '').strip()
+            if new_email:
+                if obj.domain_status != 'verified':
+                    return Response(
+                        {'detail': 'Verify your custom domain before setting a custom From address.'},
+                        status=status.HTTP_400_BAD_REQUEST,
+                    )
+                if new_email.rsplit('@', 1)[-1].lower() != obj.custom_domain.lower():
+                    return Response(
+                        {'detail': f'From address must be on your verified domain ({obj.custom_domain}).'},
+                        status=status.HTTP_400_BAD_REQUEST,
+                    )
+            obj.from_email = new_email
+
         obj.save()
-        return Response({
-            'from_name': obj.from_name,
-            'from_email': obj.from_email,
-            'is_verified': obj.is_verified,
-            'verification_sent_at': obj.verification_sent_at,
-            'verified_at': obj.verified_at,
-        })
+        return Response(_email_settings_payload(obj))
 
 
-class SendEmailVerificationView(APIView):
+class TenantEmailDomainView(APIView):
+    """Custom sending-domain wizard backed by the Resend Domains API."""
     permission_classes = [IsAuthenticated, ManageUsersPermission]
 
     def post(self, request):
-        obj, _ = TenantEmailSettings.objects.get_or_create(tenant=request.tenant)
-        if not obj.from_email:
-            return Response({'detail': 'No from_email configured.'}, status=status.HTTP_400_BAD_REQUEST)
+        from tenants.resend_domains import ResendDomainError, create_domain
 
-        import uuid as _uuid
-        obj.verification_token = _uuid.uuid4()
-        obj.verification_sent_at = timezone.now()
-        obj.is_verified = False
-        obj.verified_at = None
+        obj = _get_or_create_email_settings(request.tenant)
+        if obj.resend_domain_id:
+            return Response({'detail': 'A domain is already configured. Remove it first.'},
+                            status=status.HTTP_400_BAD_REQUEST)
+
+        domain = (request.data.get('domain') or '').strip().lower().rstrip('.')
+        import re as _re
+        if not _re.fullmatch(r'(?=.{4,253}$)([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,}', domain):
+            return Response({'detail': 'Enter a valid domain name (e.g. repairhero.com).'},
+                            status=status.HTTP_400_BAD_REQUEST)
+        if TenantEmailSettings.objects.exclude(pk=obj.pk).filter(custom_domain=domain).exists():
+            return Response({'detail': 'This domain is already registered by another account.'},
+                            status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            result = create_domain(domain)
+        except ResendDomainError as exc:
+            return Response({'detail': str(exc)}, status=status.HTTP_502_BAD_GATEWAY)
+
+        obj.custom_domain = domain
+        obj.resend_domain_id = result.get('id', '')
+        obj.dns_records = result.get('records', [])
+        obj.domain_status = 'pending'
+        obj.domain_verified_at = None
+        obj.save()
+        return Response(_email_settings_payload(obj), status=status.HTTP_201_CREATED)
+
+    def get(self, request):
+        obj = _get_or_create_email_settings(request.tenant)
+        if obj.resend_domain_id:
+            from tenants.resend_domains import ResendDomainError, get_domain
+            try:
+                result = get_domain(obj.resend_domain_id)
+            except ResendDomainError as exc:
+                logger.warning("Resend get_domain failed for tenant %s: %s", request.tenant.pk, exc)
+            else:
+                self._apply_domain_result(obj, result)
+        return Response(_email_settings_payload(obj))
+
+    def post_verify(self, request):
+        from tenants.resend_domains import ResendDomainError, get_domain, verify_domain
+
+        obj = _get_or_create_email_settings(request.tenant)
+        if not obj.resend_domain_id:
+            return Response({'detail': 'No domain configured.'}, status=status.HTTP_400_BAD_REQUEST)
+        try:
+            verify_domain(obj.resend_domain_id)
+            result = get_domain(obj.resend_domain_id)
+        except ResendDomainError as exc:
+            return Response({'detail': str(exc)}, status=status.HTTP_502_BAD_GATEWAY)
+
+        self._apply_domain_result(obj, result)
+        return Response(_email_settings_payload(obj))
+
+    def delete(self, request):
+        from tenants.resend_domains import ResendDomainError, delete_domain
+
+        obj = _get_or_create_email_settings(request.tenant)
+        if obj.resend_domain_id:
+            try:
+                delete_domain(obj.resend_domain_id)
+            except ResendDomainError as exc:
+                # Best effort — clear our side regardless so the tenant isn't stuck.
+                logger.warning("Resend delete_domain failed for tenant %s: %s", request.tenant.pk, exc)
+
+        obj.custom_domain = ''
+        obj.resend_domain_id = ''
+        obj.dns_records = []
+        obj.domain_status = 'none'
+        obj.domain_verified_at = None
+        obj.from_email = ''  # was only valid on the removed domain
+        obj.save()
+        return Response(_email_settings_payload(obj))
+
+    @staticmethod
+    def _apply_domain_result(obj, result):
+        resend_status = result.get('status', '')
+        obj.dns_records = result.get('records', obj.dns_records)
+        if resend_status == 'verified':
+            if obj.domain_status != 'verified':
+                obj.domain_verified_at = timezone.now()
+            obj.domain_status = 'verified'
+        elif resend_status in ('failed', 'temporary_failure'):
+            obj.domain_status = 'failed'
+        else:  # not_started / pending
+            obj.domain_status = 'pending'
         obj.save()
 
-        verify_url = request.build_absolute_uri(f"/api/core/email-settings/verify/{obj.verification_token}/")
-        tenant_name = request.tenant.name
-        subject = f"Confirm your sending address for {tenant_name}"
-        body = (
-            f"Hi,\n\n"
-            f"Someone requested to use this email address as the From address for {tenant_name} on Fixed.\n\n"
-            f"Click the link below to confirm:\n\n"
-            f"{verify_url}\n\n"
-            "If you didn't request this, you can safely ignore this email.\n"
-        )
-        try:
-            send_system_email(subject, body, obj.from_email)
-        except Exception as exc:
-            return Response({'detail': f'Failed to send verification email: {exc}'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
-        return Response({'sent': True})
+class TenantEmailDomainVerifyView(APIView):
+    permission_classes = [IsAuthenticated, ManageUsersPermission]
 
-
-class VerifyEmailAddressView(APIView):
-    permission_classes = [AllowAny]
-    authentication_classes = []
-
-    def get(self, _request, token):
-        try:
-            obj = TenantEmailSettings.objects.get(verification_token=token)
-        except TenantEmailSettings.DoesNotExist:
-            from django.http import HttpResponse
-            return HttpResponse(
-                "<html><body><h2>Invalid or expired verification link.</h2></body></html>",
-                content_type='text/html',
-                status=400,
-            )
-        obj.is_verified = True
-        obj.verified_at = timezone.now()
-        obj.save(update_fields=['is_verified', 'verified_at'])
-        from django.http import HttpResponse
-        return HttpResponse(
-            "<html><body><h2>Email address verified successfully. You can close this window.</h2></body></html>",
-            content_type='text/html',
-        )
+    def post(self, request):
+        return TenantEmailDomainView().post_verify(request)
 
 
 class PermissionViewSet(viewsets.ReadOnlyModelViewSet):
@@ -1064,10 +1148,18 @@ class CustomFieldViewSet(viewsets.ModelViewSet):
 
 
 class SendEmailView(APIView):
+    """Persist the email + attachments, then enqueue delivery on Celery.
+
+    The task retries transient provider failures with backoff; delivery/bounce
+    status arrives later via the Resend tracking webhook.
+    """
     permission_classes = [IsAuthenticated]
 
     def post(self, request):
-        from .email_utils import send_customer_email_html
+        from django.core.files.base import ContentFile
+        from django.db import transaction
+        from .email_utils import new_reply_token
+        from .tasks import send_email_message
 
         tenant = request.tenant
         data = request.data
@@ -1105,13 +1197,6 @@ class SendEmailView(APIView):
         except ContentType.DoesNotExist:
             return Response({'error': f'Unknown model: {model_name}'}, status=status.HTTP_400_BAD_REQUEST)
 
-        # Read uploaded files into memory as (filename, bytes, mime_type) tuples
-        # before saving them to storage, so we can attach them to the email.
-        attachment_tuples = []
-        for f in files:
-            attachment_tuples.append((f.name, f.read(), getattr(f, 'content_type', '') or 'application/octet-stream'))
-            f.seek(0)  # rewind so the file can still be saved to storage below
-
         # Load document attachments from work item form documents
         doc_attachment_data = []  # (filename, content) for creating EmailAttachment records
         if document_ids:
@@ -1127,60 +1212,45 @@ class SendEmailView(APIView):
                 if os.path.exists(abs_path):
                     with open(abs_path, 'rb') as fobj:
                         content = fobj.read()
-                    filename = os.path.basename(doc.file_path)
-                    attachment_tuples.append((filename, content, 'application/pdf'))
-                    doc_attachment_data.append((filename, content))
+                    doc_attachment_data.append((os.path.basename(doc.file_path), content))
 
-        send_status = 'sent'
-        error_msg = ''
-        try:
-            send_customer_email_html(
-                tenant, subject, body_html, body_text, to_email,
-                cc_emails=cc_emails, attachments=attachment_tuples,
-            )
-        except Exception as exc:
-            send_status = 'failed'
-            error_msg = str(exc)
-            logger.exception("Email send failed (tenant=%s, to=%s): %s", tenant, to_email, exc)
-
-        sent_email = EmailMessage.objects.create(
-            tenant=tenant,
-            author=request.user,
-            to_email=to_email,
-            cc_emails=cc_emails,
-            subject=subject,
-            body_html=body_html,
-            body_text=body_text,
-            status=send_status,
-            error_message=error_msg,
-            content_type=content_type,
-            object_id=object_id,
-        )
-
-        for f in files:
-            EmailAttachment.objects.create(
-                email=sent_email,
-                file=f,
-                filename=f.name,
-                mime_type=getattr(f, 'content_type', ''),
-                size=f.size,
+        # Persist everything first, then enqueue the send after commit so the
+        # Celery worker (which shares the media volume) can read the attachments.
+        with transaction.atomic():
+            sent_email = EmailMessage.objects.create(
+                tenant=tenant,
+                author=request.user,
+                direction='outbound',
+                to_email=to_email,
+                cc_emails=cc_emails,
+                subject=subject,
+                body_html=body_html,
+                body_text=body_text,
+                status='queued',
+                reply_token=new_reply_token(),
+                content_type=content_type,
+                object_id=object_id,
             )
 
-        from django.core.files.base import ContentFile
-        for filename, content in doc_attachment_data:
-            EmailAttachment.objects.create(
-                email=sent_email,
-                file=ContentFile(content, name=filename),
-                filename=filename,
-                mime_type='application/pdf',
-                size=len(content),
-            )
+            for f in files:
+                EmailAttachment.objects.create(
+                    email=sent_email,
+                    file=f,
+                    filename=f.name,
+                    mime_type=getattr(f, 'content_type', ''),
+                    size=f.size,
+                )
 
-        if send_status == 'failed':
-            return Response(
-                {'error': error_msg},
-                status=status.HTTP_502_BAD_GATEWAY,
-            )
+            for filename, content in doc_attachment_data:
+                EmailAttachment.objects.create(
+                    email=sent_email,
+                    file=ContentFile(content, name=filename),
+                    filename=filename,
+                    mime_type='application/pdf',
+                    size=len(content),
+                )
+
+            transaction.on_commit(lambda: send_email_message.delay(sent_email.id))
 
         return Response(
             EmailMessageSerializer(sent_email, context={'request': request}).data,

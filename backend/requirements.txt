@@ -25,3 +25,6 @@ phonenumbers==8.13.47
 
 # Transactional email — Mailgun (dev/sandbox) or Resend (production)
 django-anymail[mailgun,resend]
+
+# HTML sanitation for inbound customer emails
+nh3

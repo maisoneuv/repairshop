@@ -1,9 +1,14 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { NavLink, Routes, Route, Navigate, useNavigate, useParams, useLocation } from "react-router-dom";
 import PicklistContentPane from "../features/Settings/PicklistContentPane";
 import CustomFieldsInline from "../features/Settings/CustomFieldsInline";
 import { fetchCustomFields } from "../api/customFields";
-import { getEmailSettings, updateEmailSettings, sendVerificationEmail } from "../api/emailSettings";
+import {
+    getEmailSettings, updateEmailSettings,
+    createEmailDomain, getEmailDomain, verifyEmailDomain, deleteEmailDomain,
+} from "../api/emailSettings";
+import { getEmailTemplates, createEmailTemplate, updateEmailTemplate, deleteEmailTemplate } from "../api/emails";
+import RichTextEditor from "../components/RichTextEditor";
 import UserManagementPage from "./UserManagementPage";
 
 // ─── Data ────────────────────────────────────────────────────────────────────
@@ -335,52 +340,153 @@ function GlobalPicklistsView() {
 
 // ─── Email Settings ───────────────────────────────────────────────────────────
 
+function DnsRecordsTable({ records }) {
+    const [copiedIdx, setCopiedIdx] = useState(null);
+
+    function copy(value, idx) {
+        navigator.clipboard?.writeText(value);
+        setCopiedIdx(idx);
+        setTimeout(() => setCopiedIdx(null), 1500);
+    }
+
+    if (!records?.length) return null;
+
+    return (
+        <div className="overflow-x-auto">
+            <table className="w-full text-xs">
+                <thead>
+                    <tr className="text-left text-gray-400 uppercase tracking-wide">
+                        <th className="py-1.5 pr-3 font-semibold">Type</th>
+                        <th className="py-1.5 pr-3 font-semibold">Host / Name</th>
+                        <th className="py-1.5 pr-3 font-semibold">Value</th>
+                        <th className="py-1.5 font-semibold">Status</th>
+                    </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100">
+                    {records.map((rec, idx) => (
+                        <tr key={idx}>
+                            <td className="py-2 pr-3 font-mono text-gray-700">{rec.type ?? rec.record}</td>
+                            <td className="py-2 pr-3 font-mono text-gray-700 break-all">{rec.name}</td>
+                            <td className="py-2 pr-3">
+                                <button
+                                    type="button"
+                                    onClick={() => copy(rec.value, idx)}
+                                    title="Click to copy"
+                                    className="font-mono text-gray-600 hover:text-gray-900 break-all text-left max-w-[220px] inline-block truncate align-middle"
+                                >
+                                    {copiedIdx === idx ? "Copied!" : rec.value}
+                                </button>
+                            </td>
+                            <td className="py-2">
+                                {rec.status === 'verified' ? (
+                                    <span className="inline-block w-2 h-2 rounded-full bg-green-500" title="Verified" />
+                                ) : (
+                                    <span className="inline-block w-2 h-2 rounded-full bg-amber-400" title={rec.status || 'pending'} />
+                                )}
+                            </td>
+                        </tr>
+                    ))}
+                </tbody>
+            </table>
+        </div>
+    );
+}
+
 function EmailSettingsPanel() {
     const [settings, setSettings] = useState(null);
     const [fromName, setFromName] = useState("");
+    const [sendingSlug, setSendingSlug] = useState("");
+    const [replyForwardEmail, setReplyForwardEmail] = useState("");
     const [fromEmail, setFromEmail] = useState("");
+    const [newDomain, setNewDomain] = useState("");
     const [saving, setSaving] = useState(false);
-    const [sendingVerification, setSendingVerification] = useState(false);
-    const [verificationSent, setVerificationSent] = useState(false);
+    const [domainBusy, setDomainBusy] = useState(false);
     const [error, setError] = useState(null);
 
+    function applySettings(data) {
+        setSettings(data);
+        setFromName(data.from_name ?? "");
+        setSendingSlug(data.sending_slug ?? "");
+        setReplyForwardEmail(data.reply_forward_email ?? "");
+        setFromEmail(data.from_email ?? "");
+    }
+
     useEffect(() => {
-        getEmailSettings().then(data => {
-            setSettings(data);
-            setFromName(data.from_name);
-            setFromEmail(data.from_email);
-        }).catch(() => setError("Failed to load email settings."));
+        getEmailSettings().then(applySettings).catch(() => setError("Failed to load email settings."));
     }, []);
 
-    const isDirty = settings && (fromName !== settings.from_name || fromEmail !== settings.from_email);
-    const emailChanged = settings && fromEmail !== settings.from_email;
+    const isDirty = settings && (
+        fromName !== (settings.from_name ?? "") ||
+        sendingSlug !== (settings.sending_slug ?? "") ||
+        replyForwardEmail !== (settings.reply_forward_email ?? "") ||
+        fromEmail !== (settings.from_email ?? "")
+    );
 
     async function handleSave() {
         setSaving(true);
         setError(null);
         try {
-            const updated = await updateEmailSettings({ from_name: fromName, from_email: fromEmail });
-            setSettings(updated);
-        } catch {
-            setError("Failed to save settings.");
+            const updated = await updateEmailSettings({
+                from_name: fromName,
+                sending_slug: sendingSlug,
+                reply_forward_email: replyForwardEmail,
+                from_email: fromEmail,
+            });
+            applySettings(updated);
+        } catch (err) {
+            setError(err?.response?.data?.detail ?? "Failed to save settings.");
         } finally {
             setSaving(false);
         }
     }
 
-    async function handleSendVerification() {
-        setSendingVerification(true);
+    async function handleConnectDomain() {
+        if (!newDomain.trim()) return;
+        setDomainBusy(true);
         setError(null);
         try {
-            await sendVerificationEmail();
-            setVerificationSent(true);
-            setTimeout(() => setVerificationSent(false), 4000);
+            applySettings(await createEmailDomain(newDomain.trim()));
+            setNewDomain("");
         } catch (err) {
-            setError(err?.response?.data?.detail ?? "Failed to send verification email.");
+            setError(err?.response?.data?.detail ?? "Failed to connect domain.");
         } finally {
-            setSendingVerification(false);
+            setDomainBusy(false);
         }
     }
+
+    async function handleVerifyDomain() {
+        setDomainBusy(true);
+        setError(null);
+        try {
+            applySettings(await verifyEmailDomain());
+        } catch (err) {
+            setError(err?.response?.data?.detail ?? "Verification check failed.");
+        } finally {
+            setDomainBusy(false);
+        }
+    }
+
+    async function handleRemoveDomain() {
+        if (!window.confirm("Remove this domain? Emails will be sent from your default platform address again.")) return;
+        setDomainBusy(true);
+        setError(null);
+        try {
+            applySettings(await deleteEmailDomain());
+        } catch (err) {
+            setError(err?.response?.data?.detail ?? "Failed to remove domain.");
+        } finally {
+            setDomainBusy(false);
+        }
+    }
+
+    // Refresh DNS record status from the server while verification is pending.
+    useEffect(() => {
+        if (settings?.domain_status !== 'pending') return;
+        const interval = setInterval(() => {
+            getEmailDomain().then(applySettings).catch(() => {});
+        }, 10000);
+        return () => clearInterval(interval);
+    }, [settings?.domain_status]);
 
     if (!settings) {
         return (
@@ -390,20 +496,21 @@ function EmailSettingsPanel() {
         );
     }
 
-    const isVerified = settings.is_verified && !emailChanged;
+    const domainStatus = settings.domain_status ?? 'none';
+    const slugPreview = settings.default_from_address ?? "";
 
     return (
         <div className="px-8 py-8 max-w-xl">
             <div className="mb-8">
                 <h2 className="text-[15px] font-semibold text-gray-900">Email Settings</h2>
                 <p className="text-sm text-gray-500 mt-1 leading-relaxed">
-                    Configure the From address used when sending emails to your customers.
+                    Configure how emails to your customers are sent.
                     System emails (password resets, invitations) always come from the platform address.
                 </p>
             </div>
 
+            {/* ── Sender identity ── */}
             <div className="bg-white border border-gray-200 rounded-lg divide-y divide-gray-100">
-                {/* From name */}
                 <div className="px-5 py-4">
                     <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">
                         Display name
@@ -418,35 +525,40 @@ function EmailSettingsPanel() {
                     <p className="text-xs text-gray-400 mt-1">Shown as the sender name in your customers' inboxes.</p>
                 </div>
 
-                {/* From email */}
                 <div className="px-5 py-4">
                     <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">
-                        From email address
+                        Default sending address
                     </label>
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-1.5">
                         <input
-                            type="email"
-                            value={fromEmail}
-                            onChange={e => setFromEmail(e.target.value)}
-                            placeholder="e.g. repairs@yourshop.com"
-                            className="flex-1 text-sm border border-gray-200 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-transparent"
+                            type="text"
+                            value={sendingSlug}
+                            onChange={e => setSendingSlug(e.target.value.toLowerCase())}
+                            className="w-40 text-sm border border-gray-200 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-transparent font-mono"
                         />
-                        {isVerified ? (
-                            <span className="shrink-0 inline-flex items-center gap-1 text-xs font-medium bg-green-50 text-green-700 border border-green-200 rounded-full px-2.5 py-1">
-                                <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
-                                </svg>
-                                Verified
-                            </span>
-                        ) : (
-                            <span className="shrink-0 inline-flex items-center text-xs font-medium bg-amber-50 text-amber-700 border border-amber-200 rounded-full px-2.5 py-1">
-                                Unverified
-                            </span>
-                        )}
+                        <span className="text-sm text-gray-500 font-mono">@{slugPreview.split('@')[1] ?? ''}</span>
                     </div>
+                    <p className="text-xs text-gray-400 mt-1">
+                        Works out of the box — no setup needed. Used unless you verify a custom domain below.
+                    </p>
                 </div>
 
-                {/* Save + verify actions */}
+                <div className="px-5 py-4">
+                    <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">
+                        Forward replies to
+                    </label>
+                    <input
+                        type="email"
+                        value={replyForwardEmail}
+                        onChange={e => setReplyForwardEmail(e.target.value)}
+                        placeholder="e.g. andrzej@yourshop.com"
+                        className="w-full text-sm border border-gray-200 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-transparent"
+                    />
+                    <p className="text-xs text-gray-400 mt-1">
+                        Customer replies are captured in the app and also forwarded to this inbox.
+                    </p>
+                </div>
+
                 <div className="px-5 py-4 flex items-center gap-3">
                     <button
                         onClick={handleSave}
@@ -455,34 +567,296 @@ function EmailSettingsPanel() {
                     >
                         {saving ? "Saving…" : "Save"}
                     </button>
-                    <button
-                        onClick={handleSendVerification}
-                        disabled={!settings.from_email || emailChanged || isVerified || sendingVerification}
-                        className="text-sm font-medium px-4 py-2 rounded-md border border-gray-200 text-gray-700 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-                    >
-                        {verificationSent ? "Email sent!" : sendingVerification ? "Sending…" : "Send verification email"}
-                    </button>
+                </div>
+            </div>
+
+            {/* ── Custom domain (optional) ── */}
+            <div className="mt-6 bg-white border border-gray-200 rounded-lg divide-y divide-gray-100">
+                <div className="px-5 py-4">
+                    <div className="flex items-center justify-between gap-3">
+                        <div>
+                            <h3 className="text-sm font-semibold text-gray-900">Custom sending domain</h3>
+                            <p className="text-xs text-gray-400 mt-0.5">
+                                Optional: send from your own address (e.g. andrzej@yourshop.com) by verifying your domain.
+                            </p>
+                        </div>
+                        {domainStatus === 'verified' && (
+                            <span className="shrink-0 inline-flex items-center gap-1 text-xs font-medium bg-green-50 text-green-700 border border-green-200 rounded-full px-2.5 py-1">
+                                <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
+                                </svg>
+                                {settings.custom_domain} verified
+                            </span>
+                        )}
+                        {domainStatus === 'pending' && (
+                            <span className="shrink-0 inline-flex items-center text-xs font-medium bg-amber-50 text-amber-700 border border-amber-200 rounded-full px-2.5 py-1">
+                                Pending DNS verification
+                            </span>
+                        )}
+                        {domainStatus === 'failed' && (
+                            <span className="shrink-0 inline-flex items-center text-xs font-medium bg-red-50 text-red-700 border border-red-200 rounded-full px-2.5 py-1">
+                                Verification failed
+                            </span>
+                        )}
+                    </div>
                 </div>
 
-                {/* Deliverability note */}
-                <div className="px-5 py-4 bg-blue-50">
-                    <p className="text-xs text-blue-700 leading-relaxed">
-                        <span className="font-semibold">Tip:</span> For best deliverability, add{" "}
-                        <code className="font-mono bg-blue-100 px-1 rounded">include:spf.migadu.com</code>{" "}
-                        to your domain's SPF DNS record. This prevents emails from landing in spam.
-                    </p>
-                </div>
+                {domainStatus === 'none' && (
+                    <div className="px-5 py-4 flex items-center gap-2">
+                        <input
+                            type="text"
+                            value={newDomain}
+                            onChange={e => setNewDomain(e.target.value)}
+                            placeholder="yourshop.com"
+                            className="flex-1 text-sm border border-gray-200 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-transparent font-mono"
+                        />
+                        <button
+                            onClick={handleConnectDomain}
+                            disabled={!newDomain.trim() || domainBusy}
+                            className="text-sm font-medium px-4 py-2 rounded-md bg-gray-900 text-white hover:bg-gray-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                        >
+                            {domainBusy ? "Connecting…" : "Connect domain"}
+                        </button>
+                    </div>
+                )}
+
+                {(domainStatus === 'pending' || domainStatus === 'failed') && (
+                    <>
+                        <div className="px-5 py-4">
+                            <p className="text-xs text-gray-500 mb-3">
+                                Add these DNS records at your domain provider for{" "}
+                                <span className="font-mono font-medium text-gray-700">{settings.custom_domain}</span>,
+                                then check verification. DNS changes can take up to an hour to propagate.
+                            </p>
+                            <DnsRecordsTable records={settings.dns_records} />
+                        </div>
+                        <div className="px-5 py-4 flex items-center gap-3">
+                            <button
+                                onClick={handleVerifyDomain}
+                                disabled={domainBusy}
+                                className="text-sm font-medium px-4 py-2 rounded-md bg-gray-900 text-white hover:bg-gray-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                            >
+                                {domainBusy ? "Checking…" : "Check verification"}
+                            </button>
+                            <button
+                                onClick={handleRemoveDomain}
+                                disabled={domainBusy}
+                                className="text-sm font-medium px-4 py-2 rounded-md border border-gray-200 text-gray-700 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                            >
+                                Remove domain
+                            </button>
+                        </div>
+                    </>
+                )}
+
+                {domainStatus === 'verified' && (
+                    <>
+                        <div className="px-5 py-4">
+                            <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">
+                                From email address
+                            </label>
+                            <input
+                                type="email"
+                                value={fromEmail}
+                                onChange={e => setFromEmail(e.target.value)}
+                                placeholder={`e.g. repairs@${settings.custom_domain}`}
+                                className="w-full text-sm border border-gray-200 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-transparent"
+                            />
+                            <p className="text-xs text-gray-400 mt-1">
+                                Must be an address on <span className="font-mono">{settings.custom_domain}</span>.
+                                Save above to apply.
+                            </p>
+                        </div>
+                        <div className="px-5 py-4">
+                            <button
+                                onClick={handleRemoveDomain}
+                                disabled={domainBusy}
+                                className="text-sm font-medium px-4 py-2 rounded-md border border-gray-200 text-gray-700 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                            >
+                                Remove domain
+                            </button>
+                        </div>
+                    </>
+                )}
             </div>
 
             {error && (
                 <p className="mt-4 text-sm text-red-600">{error}</p>
             )}
+        </div>
+    );
+}
 
-            {isVerified && settings.verified_at && (
-                <p className="mt-3 text-xs text-gray-400">
-                    Verified on {new Date(settings.verified_at).toLocaleDateString()}
-                </p>
-            )}
+// ─── Email Templates ──────────────────────────────────────────────────────────
+
+function EmailTemplatesPanel() {
+    const [templates, setTemplates] = useState([]);
+    const [loading, setLoading] = useState(true);
+    const [selectedId, setSelectedId] = useState(null); // null = new template
+    const [form, setForm] = useState({ name: '', subject: '', body_html: '' });
+    const [saving, setSaving] = useState(false);
+    const [dirty, setDirty] = useState(false);
+    const editorRef = useRef(null);
+
+    useEffect(() => {
+        getEmailTemplates()
+            .then(setTemplates)
+            .finally(() => setLoading(false));
+    }, []);
+
+    function loadIntoEditor(t) {
+        setSelectedId(t.id);
+        setForm({ name: t.name, subject: t.subject ?? '', body_html: t.body_html ?? '' });
+        editorRef.current?.commands.setContent(t.body_html ?? '');
+        setDirty(false);
+    }
+
+    function startNew() {
+        setSelectedId(null);
+        setForm({ name: '', subject: '', body_html: '' });
+        editorRef.current?.commands.clearContent();
+        setDirty(false);
+    }
+
+    function handleFormChange(field, value) {
+        setForm(f => ({ ...f, [field]: value }));
+        setDirty(true);
+    }
+
+    async function handleSave() {
+        if (!form.name.trim()) return;
+        const body_html = editorRef.current?.getHTML() ?? '';
+        setSaving(true);
+        try {
+            if (selectedId) {
+                const updated = await updateEmailTemplate(selectedId, { ...form, body_html });
+                setTemplates(prev => prev.map(t => t.id === selectedId ? updated : t));
+            } else {
+                const created = await createEmailTemplate({ ...form, body_html });
+                setTemplates(prev => [...prev, created]);
+                setSelectedId(created.id);
+            }
+            setDirty(false);
+        } finally {
+            setSaving(false);
+        }
+    }
+
+    async function handleDelete(id) {
+        if (!confirm('Delete this template?')) return;
+        await deleteEmailTemplate(id);
+        setTemplates(prev => prev.filter(t => t.id !== id));
+        if (selectedId === id) startNew();
+    }
+
+    return (
+        <div className="flex h-full min-h-0">
+            {/* ── Template list ── */}
+            <div className="w-64 shrink-0 border-r border-gray-200 bg-white flex flex-col min-h-0">
+                <div className="px-4 py-3 border-b border-gray-100 flex items-center justify-between">
+                    <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Templates</span>
+                    <button
+                        onClick={startNew}
+                        className="text-xs text-blue-600 hover:text-blue-800 font-medium"
+                    >
+                        + New
+                    </button>
+                </div>
+                <div className="flex-1 overflow-y-auto">
+                    {loading ? (
+                        <p className="px-4 py-3 text-sm text-gray-400">Loading…</p>
+                    ) : templates.length === 0 ? (
+                        <p className="px-4 py-6 text-sm text-gray-400 text-center">No templates yet.<br/>Click + New to create one.</p>
+                    ) : (
+                        templates.map(t => (
+                            <button
+                                key={t.id}
+                                type="button"
+                                onClick={() => loadIntoEditor(t)}
+                                className={`w-full text-left px-4 py-3 border-b border-gray-100 hover:bg-gray-50 transition-colors group ${
+                                    selectedId === t.id ? 'bg-blue-50 border-l-2 border-l-blue-500' : ''
+                                }`}
+                            >
+                                <p className="text-sm font-medium text-gray-800 truncate">{t.name}</p>
+                                {t.subject && (
+                                    <p className="text-xs text-gray-400 truncate mt-0.5">{t.subject}</p>
+                                )}
+                            </button>
+                        ))
+                    )}
+                </div>
+            </div>
+
+            {/* ── Editor pane ── */}
+            <div className="flex-1 min-w-0 flex flex-col min-h-0 overflow-y-auto">
+                <div className="p-6 max-w-3xl w-full">
+                    <div className="flex items-center justify-between mb-5">
+                        <h2 className="text-[15px] font-semibold text-gray-900">
+                            {selectedId ? 'Edit template' : 'New template'}
+                        </h2>
+                        {selectedId && (
+                            <button
+                                onClick={() => handleDelete(selectedId)}
+                                className="text-sm text-red-500 hover:text-red-700"
+                            >
+                                Delete
+                            </button>
+                        )}
+                    </div>
+
+                    <div className="space-y-4">
+                        <div>
+                            <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">
+                                Template name <span className="text-red-400">*</span>
+                            </label>
+                            <input
+                                type="text"
+                                value={form.name}
+                                onChange={e => handleFormChange('name', e.target.value)}
+                                placeholder="e.g. Repair completed"
+                                className="w-full text-sm border border-gray-200 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-transparent"
+                            />
+                        </div>
+
+                        <div>
+                            <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">
+                                Default subject
+                            </label>
+                            <input
+                                type="text"
+                                value={form.subject}
+                                onChange={e => handleFormChange('subject', e.target.value)}
+                                placeholder="e.g. Your repair is ready for pickup"
+                                className="w-full text-sm border border-gray-200 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-transparent"
+                            />
+                        </div>
+
+                        <div>
+                            <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">
+                                Body
+                            </label>
+                            <RichTextEditor
+                                onReady={editor => { editorRef.current = editor; }}
+                                placeholder="Write your template body…"
+                                minHeight="320px"
+                            />
+                        </div>
+
+                        <div className="flex items-center gap-3 pt-1">
+                            <button
+                                onClick={handleSave}
+                                disabled={!form.name.trim() || saving}
+                                className="text-sm font-medium px-4 py-2 rounded-md bg-gray-900 text-white hover:bg-gray-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                            >
+                                {saving ? 'Saving…' : dirty ? 'Save changes' : 'Saved'}
+                            </button>
+                            {dirty && (
+                                <span className="text-xs text-gray-400">Unsaved changes</span>
+                            )}
+                        </div>
+                    </div>
+                </div>
+            </div>
         </div>
     );
 }
@@ -493,6 +867,7 @@ const TABS = [
     { label: "Object & Field Settings", matchPath: ["/system-settings/fields", "/system-settings/global"], path: "fields" },
     { label: "User Management",         matchPath: ["/system-settings/users"],                              path: "users" },
     { label: "Email",                   matchPath: ["/system-settings/email"],                              path: "email" },
+    { label: "Email Templates",         matchPath: ["/system-settings/email-templates"],                    path: "email-templates" },
 ];
 
 export default function SystemSettingsPage() {
@@ -538,6 +913,7 @@ export default function SystemSettingsPage() {
                     <Route path="global/*" element={<GlobalPicklistsView />} />
                     <Route path="users" element={<UserManagementPage />} />
                     <Route path="email" element={<EmailSettingsPanel />} />
+                    <Route path="email-templates" element={<EmailTemplatesPanel />} />
                     {/* Legacy URLs from old navigation — redirect to new structure */}
                     <Route path="picklists/:category" element={<LegacyPicklistRedirect />} />
                     <Route path="custom-fields/:model" element={<LegacyCustomFieldsRedirect />} />

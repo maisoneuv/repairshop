@@ -1,3 +1,5 @@
+import secrets
+
 from django.conf import settings
 from django.core.mail import EmailMessage, EmailMultiAlternatives
 from django.utils.html import strip_tags
@@ -13,54 +15,66 @@ def send_system_email(subject, body, to_email):
     ).send(fail_silently=False)
 
 
-def send_customer_email(tenant, subject, body, to_email):
-    """Send a plain-text email to a customer on behalf of a tenant."""
-    from_email, reply_to = _resolve_from(tenant)
-    msg = EmailMessage(
-        subject=subject,
-        body=body,
-        from_email=from_email,
-        to=[to_email],
-        reply_to=reply_to,
-    )
-    msg.send(fail_silently=False)
+def new_reply_token():
+    """Generate a reply-token safe for plus-addressing (reply+<token>@REPLY_DOMAIN)."""
+    return secrets.token_urlsafe(12).lower()
 
 
-def send_customer_email_html(tenant, subject, body_html, body_text, to_email,
-                             cc_emails=None, attachments=None):
-    """Send an HTML email to a customer on behalf of a tenant.
+def resolve_sender(tenant):
+    """Return the From header for tenant→customer email.
 
-    attachments: optional list of (filename, content_bytes, mime_type) tuples.
+    White-label path: only when the tenant's custom domain is ESP-verified
+    (SPF/DKIM via the Resend Domains API) AND from_email is on that domain —
+    otherwise the ESP would reject the send or it would fail DMARC.
+    Default path: always-deliverable platform address <slug>@PLATFORM_EMAIL_DOMAIN.
     """
-    from_email, reply_to = _resolve_from(tenant)
-    plain_text = body_text or strip_tags(body_html)
-
-    msg = EmailMultiAlternatives(
-        subject=subject,
-        body=plain_text,
-        from_email=from_email,
-        to=[to_email],
-        cc=list(cc_emails) if cc_emails else [],
-        reply_to=reply_to,
-    )
-    msg.attach_alternative(body_html, "text/html")
-
-    for filename, content, mime_type in (attachments or []):
-        msg.attach(filename, content, mime_type or 'application/octet-stream')
-
-    msg.send(fail_silently=False)
-
-
-def _resolve_from(tenant):
-    """Return (from_email_str, reply_to_list) for a tenant."""
     try:
         email_settings = tenant.email_settings
     except Exception:
         email_settings = None
 
-    if email_settings and email_settings.is_verified and email_settings.from_email:
-        from_name = email_settings.from_name or tenant.name
-        return f"{from_name} <{email_settings.from_email}>", None
+    display_name = (email_settings.from_name if email_settings else '') or tenant.name
 
-    reply_to = [email_settings.from_email] if email_settings and email_settings.from_email else None
-    return settings.DEFAULT_FROM_EMAIL, reply_to
+    if (
+        email_settings
+        and email_settings.domain_status == 'verified'
+        and email_settings.from_email
+        and email_settings.custom_domain
+        and email_settings.from_email.rsplit('@', 1)[-1].lower() == email_settings.custom_domain.lower()
+    ):
+        return f"{display_name} <{email_settings.from_email}>"
+
+    slug = (email_settings.sending_slug if email_settings else '') or tenant.subdomain
+    return f"{display_name} <{slug}@{settings.PLATFORM_EMAIL_DOMAIN}>"
+
+
+def build_reply_to(reply_token):
+    """Reply-To address that routes customer replies back into the app thread."""
+    return f"reply+{reply_token}@{settings.PLATFORM_REPLY_DOMAIN}"
+
+
+def build_customer_message(email_message):
+    """Build an EmailMultiAlternatives for an outbound EmailMessage DB row.
+
+    Attachments are read from storage (EmailAttachment rows), so this works
+    from a Celery worker as long as it shares the media volume.
+    """
+    tenant = email_message.tenant
+    plain_text = email_message.body_text or strip_tags(email_message.body_html)
+    reply_to = [build_reply_to(email_message.reply_token)] if email_message.reply_token else None
+
+    msg = EmailMultiAlternatives(
+        subject=email_message.subject,
+        body=plain_text,
+        from_email=resolve_sender(tenant),
+        to=[email_message.to_email],
+        cc=list(email_message.cc_emails or []),
+        reply_to=reply_to,
+    )
+    msg.attach_alternative(email_message.body_html, "text/html")
+
+    for attachment in email_message.attachments.all():
+        with attachment.file.open('rb') as fobj:
+            msg.attach(attachment.filename, fobj.read(), attachment.mime_type or 'application/octet-stream')
+
+    return msg
