@@ -1,6 +1,7 @@
 from rest_framework import serializers
 
 from core.serializers import AddressSerializer
+from core.serializer_fields import TenantScopedPrimaryKeyRelatedField
 from .models import CashRegister, CashTransaction, Employee, Location, LocationType, RepairShop
 from core.models import User, Address
 
@@ -12,6 +13,7 @@ class EmployeeSerializer(serializers.ModelSerializer):
     class Meta:
         model = Employee
         fields = ['id', 'name', 'email', 'role', 'tenant']
+        read_only_fields = ['tenant']
 
     def get_name(self, obj):
         user = obj.user
@@ -205,10 +207,10 @@ class CashTransactionSerializer(serializers.ModelSerializer):
 
 
 class CashTransferSerializer(serializers.Serializer):
-    source_register = serializers.PrimaryKeyRelatedField(
+    source_register = TenantScopedPrimaryKeyRelatedField(
         queryset=CashRegister.objects.all()
     )
-    destination_register = serializers.PrimaryKeyRelatedField(
+    destination_register = TenantScopedPrimaryKeyRelatedField(
         queryset=CashRegister.objects.all()
     )
     amount = serializers.DecimalField(max_digits=10, decimal_places=2)

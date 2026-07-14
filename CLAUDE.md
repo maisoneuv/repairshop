@@ -33,7 +33,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 This is a multi-tenant service management application with Django REST Framework backend and React frontend.
 
 ### Multi-Tenancy
-- **Tenant-based isolation**: All core models inherit from `TenantModelMixin` and are filtered by tenant
+- **Tenant-based isolation**: Tenant-scoped models carry a `tenant` FK (some via `TenantModelMixin`). Querysets are NOT auto-filtered — scoping is enforced at the view layer by `TenantScopedMixin` (`backend/core/mixins.py`); `backend/tenants/test_route_coverage.py` fails if any `/api/` route is neither scoped nor allowlisted
 - **Tenant resolution**: Uses `TenantMiddleware` which resolves tenants from:
   1. Authenticated user's active tenant
   2. `X-Tenant` HTTP header

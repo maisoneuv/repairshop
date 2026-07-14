@@ -69,10 +69,11 @@ class FormTemplateSerializer(serializers.ModelSerializer):
         """Set tenant and created_by on creation"""
         request = self.context.get('request')
         if request and hasattr(request, 'user'):
-            validated_data['created_by'] = request.user
-            # Tenant should be set by view/permission
-            if hasattr(request.user, 'tenant'):
-                validated_data['tenant'] = request.user.tenant
+            validated_data.setdefault('created_by', request.user)
+            # Tenant is normally injected by the view (TenantScopedMixin);
+            # fall back to request.tenant so API-key requests work too
+            if 'tenant' not in validated_data and getattr(request, 'tenant', None):
+                validated_data['tenant'] = request.tenant
         return super().create(validated_data)
 
 

@@ -181,7 +181,7 @@ class Task(models.Model):
     work_item = models.ForeignKey(WorkItem, blank=True, null=True, on_delete=models.CASCADE, related_name="tasks")
     status = models.CharField(max_length=100, default='To do')
     task_type = models.ForeignKey(TaskType, on_delete=models.PROTECT, null=True, blank=True, related_name='tasks')
-    assigned_employee = models.ForeignKey(Employee, on_delete=models.CASCADE)
+    assigned_employee = models.ForeignKey(Employee, on_delete=models.PROTECT)
     due_date = models.DateField(null=True, blank=True)
     created_date = models.DateTimeField(auto_now_add=True)
     completed_date = models.DateTimeField(null=True, blank=True)

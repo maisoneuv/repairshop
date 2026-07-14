@@ -2,6 +2,7 @@ import logging
 from rest_framework import serializers
 from .models import WorkItem, Task, TaskType, TaskTypeValidationRule
 from core.models import PicklistValue
+from core.serializer_fields import TenantScopedPrimaryKeyRelatedField
 
 logger = logging.getLogger(__name__)
 from service.serializers import CashRegisterSerializer, EmployeeSerializer, LocationSerializer, ShopSerializer
@@ -88,25 +89,25 @@ class WorkItemSerializer(serializers.ModelSerializer):
     pickup_point = LocationSerializer()
     dropoff_point = LocationSerializer()
     fulfillment_shop = ShopSerializer(read_only=True)
-    fulfillment_shop_id = serializers.PrimaryKeyRelatedField(
+    fulfillment_shop_id = TenantScopedPrimaryKeyRelatedField(
         source="fulfillment_shop",
-        queryset=RepairShop.objects.all(),
+        queryset=RepairShop.objects.filter(active=True),
         write_only=True, required=False, allow_null=True
     )
     owner = EmployeeSerializer(read_only=True)
-    owner_id = serializers.PrimaryKeyRelatedField(
+    owner_id = TenantScopedPrimaryKeyRelatedField(
         source="owner",
         queryset=Employee.objects.all(),
         write_only=True, required=False, allow_null=True
     )
     technician = EmployeeSerializer(read_only=True)
-    technician_id = serializers.PrimaryKeyRelatedField(
+    technician_id = TenantScopedPrimaryKeyRelatedField(
         source="technician",
         queryset=Employee.objects.all(),
         write_only=True, required=False, allow_null=True
     )
     payment_register = CashRegisterSerializer(read_only=True)
-    payment_register_id = serializers.PrimaryKeyRelatedField(
+    payment_register_id = TenantScopedPrimaryKeyRelatedField(
         source="payment_register",
         queryset=CashRegister.objects.all(),
         write_only=True, required=False, allow_null=True
@@ -126,24 +127,8 @@ class WorkItemSerializer(serializers.ModelSerializer):
             "summary_request_id": {"read_only": True},
         }
 
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        # Get tenant from context (preferred) or from request on context
-        tenant = self.context.get("tenant")
-        if tenant is None:
-            req = self.context.get("request")
-            tenant = getattr(req, "tenant", None) if req else None
-
-        qs = RepairShop.objects.none()
-        if tenant is not None:
-            qs = RepairShop.objects.filter(tenant=tenant, active=True)
-        self.fields["fulfillment_shop_id"].queryset = qs
-
     def validate(self, attrs):
         tenant = self.context.get("tenant") or getattr(self.context.get("request"), "tenant", None)
-        shop = attrs.get("fulfillment_shop")
-        if tenant and shop and shop.tenant_id != tenant.id:
-            raise serializers.ValidationError({"fulfillment_shop_id": "Unknown for this tenant."})
         if tenant and 'custom_fields' in attrs:
             from core.utils import validate_custom_field_values
             validate_custom_field_values(tenant, 'workitem', attrs['custom_fields'])
@@ -324,13 +309,13 @@ class TaskSerializer(serializers.ModelSerializer):
     assigned_employee = EmployeeSerializer(read_only=True)
     task_type = TaskTypeSerializer(read_only=True)
 
-    assigned_employee_id = serializers.PrimaryKeyRelatedField(
+    assigned_employee_id = TenantScopedPrimaryKeyRelatedField(
         queryset=Employee.objects.all(),
         source="assigned_employee",
         write_only=True,
     )
 
-    task_type_id = serializers.PrimaryKeyRelatedField(
+    task_type_id = TenantScopedPrimaryKeyRelatedField(
         queryset=TaskType.objects.all(),
         source="task_type",
         write_only=True,
@@ -351,14 +336,6 @@ class TaskSerializer(serializers.ModelSerializer):
             "completed_date": {"read_only": True},
             "summary": {"required": False, "allow_blank": True},
         }
-
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.fields["assigned_employee_id"] = serializers.PrimaryKeyRelatedField(
-            queryset=Employee.objects.all(),
-            source="assigned_employee",
-            write_only=True,
-        )
 
     def validate(self, attrs):
         """

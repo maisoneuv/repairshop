@@ -21,7 +21,7 @@ class Category(TenantModelMixin, MPTTModel):
     name = models.CharField(max_length=255)
     parent = TreeForeignKey(
         'self',
-        on_delete=models.CASCADE,
+        on_delete=models.PROTECT,
         null=True,
         blank=True,
         related_name='children'

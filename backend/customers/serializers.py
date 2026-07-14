@@ -3,6 +3,7 @@ from inventory.models import Device
 from .models import Customer, Asset, Lead
 from rest_framework import serializers
 from core.serializers import AddressSerializer
+from core.serializer_fields import TenantScopedPrimaryKeyRelatedField
 from core.models import Address
 from tasks.models import WorkItem
 
@@ -28,8 +29,12 @@ class CustomerSerializer(serializers.ModelSerializer):
         return attrs
 
     def create(self, validated_data):
+        # Tenant is injected by TenantScopedMixin via serializer.save(tenant=...);
+        # fall back to request.tenant for callers outside scoped views
         request = self.context.get("request")
-        tenant = getattr(request, "tenant", None) if request else None
+        tenant = validated_data.pop("tenant", None) or (
+            getattr(request, "tenant", None) if request else None
+        )
         if tenant is None:
             raise serializers.ValidationError({"detail": "Tenant not resolved"})
 
@@ -68,7 +73,7 @@ class AssetSerializer(serializers.ModelSerializer):
         write_only=True,
         required=False
     )
-    customer_id = serializers.PrimaryKeyRelatedField(
+    customer_id = TenantScopedPrimaryKeyRelatedField(
         queryset=Customer.objects.all(),
         source='customer',
         write_only=True,

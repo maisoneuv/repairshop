@@ -9,6 +9,20 @@ class Tenant(models.Model):
     def __str__(self):
         return self.name
 
+    def delete(self, *args, force=False, **kwargs):
+        """Guard against accidentally wiping an entire tenant.
+
+        Deleting a Tenant CASCADEs across ~30 related models. Require an
+        explicit force=True so a stray Tenant.objects.get(...).delete() in a
+        shell cannot silently destroy all of a tenant's data.
+        """
+        if not force:
+            raise RuntimeError(
+                f"Refusing to delete tenant '{self}' and all its data. "
+                "Pass force=True to confirm (this cascades ~30 related models)."
+            )
+        return super().delete(*args, **kwargs)
+
 
 class TenantEmailSettings(models.Model):
     DOMAIN_STATUS_CHOICES = [

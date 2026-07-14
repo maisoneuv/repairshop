@@ -384,11 +384,15 @@ def replace_variables_in_html(html_content, variables):
     Returns:
         str: HTML with all variables replaced
     """
+    from html import escape
+
     result = html_content
 
     for key, value in variables.items():
-        # Replace {{key}} with value
+        # Values come from user-entered records (customer names, descriptions…)
+        # and land inside an HTML document, so escape them — otherwise a
+        # crafted record value injects markup past the template sanitizer.
         placeholder = f"{{{{{key}}}}}"
-        result = result.replace(placeholder, str(value))
+        result = result.replace(placeholder, escape(str(value)))
 
     return result

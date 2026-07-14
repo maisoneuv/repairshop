@@ -525,7 +525,9 @@ def ensure_customer_address_location(request):
         return Response({"detail": "Customer not found"}, status=404)
 
     try:
-        address = Address.objects.get(id=address_id)
+        # Address has no tenant column; scope it via the (tenant-checked)
+        # customer it belongs to so foreign address ids can't be probed
+        address = Address.objects.get(id=address_id, customer=customer)
     except (Address.DoesNotExist, ValueError, TypeError):
         return Response({"detail": "Address not found"}, status=404)
 
@@ -605,7 +607,7 @@ def transfer_between_registers(request):
     if not request.tenant:
         return Response({"detail": "Tenant not resolved"}, status=400)
 
-    serializer = CashTransferSerializer(data=request.data)
+    serializer = CashTransferSerializer(data=request.data, context={'request': request})
     serializer.is_valid(raise_exception=True)
 
     source = serializer.validated_data['source_register']
