@@ -272,8 +272,10 @@ class EmailMessageSerializer(serializers.ModelSerializer):
     class Meta:
         model = EmailMessage
         fields = [
-            'id', 'to_email', 'cc_emails', 'subject', 'body_html', 'body_text',
-            'status', 'error_message', 'sent_at', 'author_name', 'attachments',
+            'id', 'direction', 'from_email', 'to_email', 'cc_emails', 'subject',
+            'body_html', 'body_text', 'status', 'error_message',
+            'created_at', 'sent_at', 'delivered_at', 'in_reply_to',
+            'author_name', 'attachments',
         ]
 
     def get_author_name(self, obj):

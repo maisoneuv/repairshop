@@ -71,6 +71,7 @@ This is a multi-tenant service management application with Django REST Framework
 ## Documentation
 
 All integration and deployment documentation is in the [`docs/`](docs/) directory:
+- **[docs/EMAIL_SETUP.md](docs/EMAIL_SETUP.md)** - Email composer, provider config, tenant from-address setup
 - **[docs/API_KEYS.md](docs/API_KEYS.md)** - API key authentication for external systems
 - **[docs/INTEGRATION_SETUP.md](docs/INTEGRATION_SETUP.md)** - Quick start guide for integrations
 - **[docs/INTEGRATION_REQUEST_LOGS.md](docs/INTEGRATION_REQUEST_LOGS.md)** - HTTP request/response logging for integrations

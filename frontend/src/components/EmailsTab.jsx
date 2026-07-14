@@ -1,7 +1,11 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { getSentEmails } from '../api/emails';
 
+const PENDING_STATUSES = ['queued', 'sending'];
+const POLL_INTERVAL_MS = 5000;
+
 function formatDate(dateString) {
+    if (!dateString) return '';
     const d = new Date(dateString);
     return d.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' }) +
         ' ' + d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
@@ -9,12 +13,24 @@ function formatDate(dateString) {
 
 function StatusBadge({ status }) {
     const styles = {
-        sent:   'bg-green-100 text-green-700',
-        failed: 'bg-red-100 text-red-700',
+        queued:     'bg-gray-100 text-gray-600 animate-pulse',
+        sending:    'bg-gray-100 text-gray-600 animate-pulse',
+        sent:       'bg-blue-100 text-blue-700',
+        delivered:  'bg-green-100 text-green-700',
+        bounced:    'bg-red-100 text-red-700',
+        failed:     'bg-red-100 text-red-700',
+        complained: 'bg-amber-100 text-amber-700',
+        received:   'bg-indigo-100 text-indigo-700',
     };
     const labels = {
-        sent:   '✓ Sent',
-        failed: '✗ Failed',
+        queued:     'Queued…',
+        sending:    'Sending…',
+        sent:       '✓ Sent',
+        delivered:  '✓✓ Delivered',
+        bounced:    '✗ Bounced',
+        failed:     '✗ Failed',
+        complained: '⚠ Marked as spam',
+        received:   '↩ Reply',
     };
     return (
         <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${styles[status] ?? 'bg-gray-100 text-gray-600'}`}>
@@ -23,11 +39,17 @@ function StatusBadge({ status }) {
     );
 }
 
-function EmailCard({ email }) {
+function EmailCard({ email, nested = false }) {
     const [expanded, setExpanded] = useState(false);
+    const isInbound = email.direction === 'inbound';
+    const hasError = ['failed', 'bounced', 'complained'].includes(email.status) && email.error_message;
 
     return (
-        <div className="border border-gray-200 rounded-xl overflow-hidden hover:border-blue-200 transition-colors">
+        <div className={`border rounded-xl overflow-hidden transition-colors ${
+            isInbound
+                ? 'border-indigo-200 bg-indigo-50/40 hover:border-indigo-300'
+                : 'border-gray-200 hover:border-blue-200'
+        } ${nested ? 'ml-6' : ''}`}>
             {/* Header row */}
             <button
                 type="button"
@@ -40,9 +62,15 @@ function EmailCard({ email }) {
                         <StatusBadge status={email.status} />
                     </div>
                     <div className="flex items-center gap-3 mt-1 flex-wrap">
-                        <span className="text-xs text-gray-500">
-                            <span className="font-medium">To:</span> {email.to_email}
-                        </span>
+                        {isInbound ? (
+                            <span className="text-xs text-gray-500">
+                                <span className="font-medium">From:</span> {email.from_email}
+                            </span>
+                        ) : (
+                            <span className="text-xs text-gray-500">
+                                <span className="font-medium">To:</span> {email.to_email}
+                            </span>
+                        )}
                         {email.cc_emails?.length > 0 && (
                             <span className="text-xs text-gray-500">
                                 <span className="font-medium">CC:</span> {email.cc_emails.join(', ')}
@@ -59,7 +87,7 @@ function EmailCard({ email }) {
                             📎 {email.attachments.length}
                         </span>
                     )}
-                    <span className="text-xs text-gray-400 whitespace-nowrap">{formatDate(email.sent_at)}</span>
+                    <span className="text-xs text-gray-400 whitespace-nowrap">{formatDate(email.created_at)}</span>
                     <svg
                         className={`w-4 h-4 text-gray-400 transition-transform shrink-0 ${expanded ? 'rotate-180' : ''}`}
                         fill="none" stroke="currentColor" viewBox="0 0 24 24"
@@ -72,9 +100,9 @@ function EmailCard({ email }) {
             {/* Body */}
             {expanded && (
                 <div className="border-t border-gray-100 px-4 py-4">
-                    {email.status === 'failed' && email.error_message && (
+                    {hasError && (
                         <div className="mb-3 p-3 bg-red-50 border border-red-200 rounded-lg text-xs text-red-700">
-                            <span className="font-medium">Send error:</span> {email.error_message}
+                            <span className="font-medium">Delivery error:</span> {email.error_message}
                         </div>
                     )}
 
@@ -83,6 +111,8 @@ function EmailCard({ email }) {
                             className="prose prose-sm max-w-none text-gray-800"
                             dangerouslySetInnerHTML={{ __html: email.body_html }}
                         />
+                    ) : email.body_text ? (
+                        <p className="text-sm text-gray-800 whitespace-pre-wrap">{email.body_text}</p>
                     ) : (
                         <p className="text-sm text-gray-500 italic">No message body</p>
                     )}
@@ -116,18 +146,71 @@ function EmailCard({ email }) {
     );
 }
 
+// Order chronologically (newest thread first) and nest replies under their parent.
+function buildThreads(emails) {
+    const repliesByParent = new Map();
+    const roots = [];
+    for (const email of emails) {
+        if (email.direction === 'inbound' && email.in_reply_to) {
+            const list = repliesByParent.get(email.in_reply_to) ?? [];
+            list.push(email);
+            repliesByParent.set(email.in_reply_to, list);
+        } else {
+            roots.push(email);
+        }
+    }
+    // Orphan replies (parent missing from this object's list) render as roots.
+    for (const [parentId, list] of repliesByParent) {
+        if (!roots.some((e) => e.id === parentId)) {
+            roots.push(...list);
+            repliesByParent.delete(parentId);
+        }
+    }
+    return { roots, repliesByParent };
+}
+
 export default function EmailsTab({ model, objectId, refreshKey }) {
     const [emails, setEmails] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
+    const pollRef = useRef(null);
 
     useEffect(() => {
-        setLoading(true);
-        getSentEmails(model, objectId)
-            .then(setEmails)
-            .catch(() => setError('Failed to load emails'))
-            .finally(() => setLoading(false));
+        let cancelled = false;
+
+        const load = (showSpinner) => {
+            if (showSpinner) setLoading(true);
+            getSentEmails(model, objectId)
+                .then((data) => { if (!cancelled) { setEmails(data); setError(null); } })
+                .catch(() => { if (!cancelled) setError('Failed to load emails'); })
+                .finally(() => { if (!cancelled && showSpinner) setLoading(false); });
+        };
+
+        load(true);
+        return () => {
+            cancelled = true;
+            if (pollRef.current) clearInterval(pollRef.current);
+        };
     }, [model, objectId, refreshKey]);
+
+    // Poll while any email is still queued/sending so the user sees it progress.
+    useEffect(() => {
+        const hasPending = emails.some((e) => PENDING_STATUSES.includes(e.status));
+        if (hasPending && !pollRef.current) {
+            pollRef.current = setInterval(() => {
+                getSentEmails(model, objectId).then(setEmails).catch(() => {});
+            }, POLL_INTERVAL_MS);
+        } else if (!hasPending && pollRef.current) {
+            clearInterval(pollRef.current);
+            pollRef.current = null;
+        }
+        return () => {
+            if (pollRef.current) {
+                clearInterval(pollRef.current);
+                pollRef.current = null;
+            }
+        };
+    }, [emails, model, objectId]);
 
     if (loading) {
         return (
@@ -153,17 +236,24 @@ export default function EmailsTab({ model, objectId, refreshKey }) {
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1}
                         d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
                 </svg>
-                <p className="text-sm text-gray-500">No emails sent yet</p>
+                <p className="text-sm text-gray-500">No emails yet</p>
                 <p className="text-xs text-gray-400 mt-1">Use "Compose Email" to send your first message</p>
             </div>
         );
     }
 
+    const { roots, repliesByParent } = buildThreads(emails);
+
     return (
         <div className="space-y-3">
-            <p className="text-xs text-gray-500 font-medium">{emails.length} email{emails.length !== 1 ? 's' : ''} sent</p>
-            {emails.map((email) => (
-                <EmailCard key={email.id} email={email} />
+            <p className="text-xs text-gray-500 font-medium">{emails.length} email{emails.length !== 1 ? 's' : ''}</p>
+            {roots.map((email) => (
+                <div key={email.id} className="space-y-2">
+                    <EmailCard email={email} />
+                    {(repliesByParent.get(email.id) ?? []).map((reply) => (
+                        <EmailCard key={reply.id} email={reply} nested />
+                    ))}
+                </div>
             ))}
         </div>
     );

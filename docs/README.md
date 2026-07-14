@@ -14,6 +14,22 @@ Complete documentation for the Fixed Service integration and deployment system.
 
 ---
 
+## 🚦 Go-Live Review
+
+**[GO_LIVE_REVIEW.md](GO_LIVE_REVIEW.md)** — Pre-launch functional & security review (2026-07-07): prioritized security gaps (P0–P2), functional blockers, product improvements, and 30/60/90-day feature roadmap.
+
+---
+
+## ✉️ Email
+
+Staff can send HTML emails to customers directly from work items. See **[EMAIL_SETUP.md](EMAIL_SETUP.md)** for:
+- Provider configuration (Resend, Mailgun, SMTP, console)
+- Per-tenant from-address setup and email verification
+- Composing emails, attachments, and document PDFs
+- Email templates and the send history API
+
+---
+
 ## 🚀 Quick Start
 
 **New to the integration system?** Start here:
@@ -266,6 +282,7 @@ Generate intelligent summaries of work items using AI via n8n integration.
 | INTEGRATION_MONITORING_SUMMARY.md | ✅ Complete | Nov 2025 |
 | INTEGRATION_UPDATE_FIX.md | ✅ Complete | Nov 2025 |
 | REMOVE_INTEGRATION_NOTES.md | ✅ Complete | Nov 2025 |
+| EMAIL_SETUP.md | ✅ Complete | Jul 2026 |
 
 ---
 

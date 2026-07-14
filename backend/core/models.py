@@ -657,25 +657,52 @@ class Setting(models.Model):
 
 
 class EmailMessage(models.Model):
-    STATUS_CHOICES = [('pending', 'Pending'), ('sent', 'Sent'), ('failed', 'Failed')]
+    STATUS_CHOICES = [
+        ('queued', 'Queued'),
+        ('sending', 'Sending'),
+        ('sent', 'Sent'),
+        ('delivered', 'Delivered'),
+        ('bounced', 'Bounced'),
+        ('complained', 'Complained'),
+        ('failed', 'Failed'),
+        ('received', 'Received'),
+    ]
+    DIRECTION_CHOICES = [('outbound', 'Outbound'), ('inbound', 'Inbound')]
 
     tenant = models.ForeignKey(Tenant, on_delete=models.CASCADE, related_name='email_messages')
     author = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True)
+    direction = models.CharField(max_length=10, choices=DIRECTION_CHOICES, default='outbound', db_index=True)
+    from_email = models.CharField(max_length=320, blank=True)  # resolved From (outbound) / customer address (inbound)
     to_email = models.EmailField()
     cc_emails = models.JSONField(default=list, blank=True)
     subject = models.CharField(max_length=998)
     body_html = models.TextField()
     body_text = models.TextField(blank=True)
-    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='sent')
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='queued')
     error_message = models.TextField(blank=True)
-    sent_at = models.DateTimeField(auto_now_add=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    sent_at = models.DateTimeField(null=True, blank=True)
+    delivered_at = models.DateTimeField(null=True, blank=True)
+
+    # Threading / provider correlation
+    provider_message_id = models.CharField(max_length=255, blank=True, db_index=True)  # ESP id (Resend UUID)
+    message_id_header = models.CharField(max_length=998, blank=True)  # RFC 5322 Message-ID
+    in_reply_to = models.ForeignKey('self', on_delete=models.SET_NULL, null=True, blank=True, related_name='replies')
+    reply_token = models.CharField(max_length=32, blank=True, db_index=True)  # reply+<token>@REPLY_DOMAIN
 
     content_type = models.ForeignKey(ContentType, on_delete=models.CASCADE)
     object_id = models.PositiveIntegerField()
     content_object = GenericForeignKey("content_type", "object_id")
 
     class Meta:
-        ordering = ["-sent_at"]
+        ordering = ["-created_at"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=['reply_token'],
+                condition=~models.Q(reply_token=''),
+                name='unique_nonempty_reply_token',
+            ),
+        ]
 
 
 class EmailAttachment(models.Model):
