@@ -14,28 +14,8 @@ Usage:
 from django.core.management.base import BaseCommand, CommandError
 from django.contrib.auth.models import Permission
 
-from core.models import Role, RolePermission
+from core.provisioning import ROLE_NAME, INCLUDED_APP_LABELS, ensure_tenant_admin_role
 from tenants.models import Tenant
-
-
-ROLE_NAME = "Tenant Admin"
-ROLE_DESCRIPTION = (
-    "Full access to all tenant data and configuration. "
-    "Not a superuser — cannot access Django admin or other tenants' data."
-)
-
-# App labels whose permissions are included in this role.
-# 'tenants' is intentionally excluded: tenants themselves are managed by superusers only.
-INCLUDED_APP_LABELS = {
-    "customers",
-    "tasks",
-    "service",
-    "documents",
-    "inventory",
-    "integrations",
-    "core",
-    "calls",
-}
 
 
 class Command(BaseCommand):
@@ -65,51 +45,31 @@ class Command(BaseCommand):
             except Tenant.DoesNotExist:
                 raise CommandError(f'Tenant "{options["tenant"]}" not found.')
 
-        all_permissions = Permission.objects.filter(
-            content_type__app_label__in=INCLUDED_APP_LABELS
-        ).select_related("content_type").order_by("content_type__app_label", "codename")
-
-        if not all_permissions.exists():
+        if not Permission.objects.filter(content_type__app_label__in=INCLUDED_APP_LABELS).exists():
             raise CommandError(
                 "No permissions found for the included app labels. "
                 "Make sure migrations have been run."
             )
 
         for tenant in tenants:
-            self._create_role_for_tenant(tenant, all_permissions)
+            self._create_role_for_tenant(tenant)
 
-    def _create_role_for_tenant(self, tenant, all_permissions):
+    def _create_role_for_tenant(self, tenant):
         self.stdout.write(f"\n=== Tenant: {tenant.name} ({tenant.subdomain}) ===")
 
-        role, created = Role.objects.get_or_create(
-            tenant=tenant,
-            name=ROLE_NAME,
-            defaults={"description": ROLE_DESCRIPTION},
-        )
-        if created:
+        role_existed = tenant.roles.filter(name=ROLE_NAME).exists()
+        before = 0 if not role_existed else tenant.roles.get(name=ROLE_NAME).role_permissions.count()
+
+        role = ensure_tenant_admin_role(tenant)
+
+        if not role_existed:
             self.stdout.write(self.style.SUCCESS(f'  ✓ Role "{ROLE_NAME}" created'))
         else:
             self.stdout.write(self.style.WARNING(f'  ~ Role "{ROLE_NAME}" already exists — updating permissions'))
 
-        assigned = 0
-        skipped = 0
-
-        for permission in all_permissions:
-            _, perm_created = RolePermission.objects.get_or_create(
-                role=role,
-                permission=permission,
-            )
-            if perm_created:
-                assigned += 1
-                self.stdout.write(
-                    f"    + {permission.content_type.app_label}.{permission.codename}"
-                )
-            else:
-                skipped += 1
-
         total = role.role_permissions.count()
         self.stdout.write(
-            f"  Permissions: {assigned} added, {skipped} already present, {total} total"
+            f"  Permissions: {total - before} added, {before} already present, {total} total"
         )
         self.stdout.write(
             self.style.WARNING(
