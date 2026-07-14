@@ -585,31 +585,20 @@ def manufacturer_search(request):
     return Response([{"id": m, "name": m} for m in manufacturers])
 
 
-class CategoryAPISearchView(generics.ListAPIView):
+class CategoryAPISearchView(TenantScopedMixin, generics.ListAPIView):
+    queryset = Category.objects.all()
     serializer_class = CategorySerializer
 
     def get_queryset(self):
         query = self.request.query_params.get('q', '')
-        return Category.objects.filter(
+        return super().get_queryset().filter(
             Q(name__icontains=query)
         )[:10]
 
 
-class CategoryCreateListView(generics.ListCreateAPIView):
+class CategoryCreateListView(TenantScopedMixin, generics.ListCreateAPIView):
+    queryset = Category.objects.all()
     serializer_class = CategorySerializer
-
-    def get_queryset(self):
-        tenant = getattr(self.request, 'tenant', None)
-        if not tenant:
-            return Category.objects.none()
-        return Category.objects.filter(tenant=tenant)
-
-    def perform_create(self, serializer):
-        tenant = getattr(self.request, 'tenant', None)
-        if not tenant:
-            from rest_framework.exceptions import ValidationError
-            raise ValidationError({"detail": "Tenant required"})
-        serializer.save(tenant=tenant)
 
 
 # ── Legacy template views (kept for backward compatibility) ─────────────

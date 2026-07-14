@@ -13,6 +13,7 @@ class EmployeeSerializer(serializers.ModelSerializer):
     class Meta:
         model = Employee
         fields = ['id', 'name', 'email', 'role', 'tenant']
+        read_only_fields = ['tenant']
 
     def get_name(self, obj):
         user = obj.user

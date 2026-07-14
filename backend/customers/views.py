@@ -77,37 +77,21 @@ class CustomerAssetUpdateView(UpdateView):
         return reverse("customers:asset_list")
 
 
-class AssetRetrieveUpdateAPIView(generics.RetrieveUpdateAPIView):
+class AssetRetrieveUpdateAPIView(TenantScopedMixin, generics.RetrieveUpdateAPIView):
     """API endpoint for retrieving and updating asset information"""
+    queryset = Asset.objects.select_related("device", "customer")
+    tenant_field = "customer__tenant"
     serializer_class = AssetSerializer
 
-    def get_queryset(self):
-        tenant = getattr(self.request, "tenant", None)
-        if tenant is None:
-            return Asset.objects.none()
-        return Asset.objects.select_related("device", "customer").filter(
-            customer__tenant=tenant
-        )
 
-
-class AssetViewSet(viewsets.ModelViewSet):
+class AssetViewSet(TenantScopedMixin, viewsets.ModelViewSet):
     """API endpoint for listing and creating customer assets (devices)"""
+    queryset = Asset.objects.select_related("device", "customer")
+    tenant_field = "customer__tenant"
     serializer_class = AssetSerializer
 
     def get_queryset(self):
-        user = self.request.user
-        tenant = getattr(self.request, "tenant", None)
-
-        if user.is_superuser and tenant:
-            qs = Asset.objects.select_related("device", "customer").filter(customer__tenant=tenant)
-        elif user.is_superuser:
-            qs = Asset.objects.select_related("device", "customer").all()
-        else:
-            if not tenant:
-                return Asset.objects.none()
-            qs = Asset.objects.select_related("device", "customer").filter(
-                customer__tenant=tenant
-            )
+        qs = super().get_queryset()
 
         # Optional filtering by customer_id
         customer_id = self.request.query_params.get('customer_id')
@@ -115,36 +99,6 @@ class AssetViewSet(viewsets.ModelViewSet):
             qs = qs.filter(customer_id=customer_id)
 
         return qs
-
-    def perform_create(self, serializer):
-        user = self.request.user
-        tenant = getattr(self.request, "tenant", None)
-
-        if not user.is_superuser and not tenant:
-            raise PermissionDenied("Tenant not resolved")
-
-        serializer.save()
-
-    def perform_update(self, serializer):
-        user = self.request.user
-        tenant = getattr(self.request, "tenant", None)
-
-        if not user.is_superuser:
-            instance = self.get_object()
-            if instance.customer.tenant_id != tenant.id:
-                raise PermissionDenied("Cannot modify assets from another tenant")
-
-        serializer.save()
-
-    def perform_destroy(self, instance):
-        user = self.request.user
-        tenant = getattr(self.request, "tenant", None)
-
-        if not user.is_superuser:
-            if instance.customer.tenant_id != tenant.id:
-                raise PermissionDenied("Cannot delete assets from another tenant")
-
-        instance.delete()
 
 
 class CustomerSearchView(autocomplete.Select2QuerySetView):
@@ -257,24 +211,18 @@ def get_customer_assets(request, pk):
     html = render_to_string("partials/customer_assets_table.html", {"assets": assets})
     return HttpResponse(html)
 
-class CustomerAPISearchView(generics.ListAPIView):
+class CustomerAPISearchView(TenantScopedMixin, generics.ListAPIView):
+    queryset = Customer.objects.select_related("address")
     serializer_class = CustomerSerializer
 
     def get_queryset(self):
+        qs = super().get_queryset()
         user = self.request.user
+        tenant = getattr(self.request, "tenant", None)
 
-        if user.is_superuser and self.request.tenant:
-            qs = Customer.objects.select_related("address").filter(tenant=self.request.tenant)
-        elif user.is_superuser:
-            qs = Customer.objects.select_related("address").all()
-        else:
-            if not self.request.tenant:
-                return Customer.objects.none()
-
-            if not user.has_permission('view_all_customers', self.request.tenant):
-                return Customer.objects.none()
-
-            qs = Customer.objects.select_related("address").filter(tenant=self.request.tenant)
+        if not user.is_superuser:
+            if not tenant or not user.has_permission('view_all_customers', tenant):
+                return qs.none()
 
         query = self.request.query_params.get('q', '').strip()
         if not query:
@@ -297,26 +245,22 @@ class CustomerAPISearchView(generics.ListAPIView):
 #     serializer_class = CustomerSerializer
 
 class CustomerViewSet(TenantScopedMixin, viewsets.ModelViewSet):
+    queryset = Customer.objects.select_related("address")
     serializer_class = CustomerSerializer
 
     def get_queryset(self):
+        # Tenant scoping handled by TenantScopedMixin; narrow by user permissions here
+        qs = super().get_queryset()
         user = self.request.user
+        tenant = getattr(self.request, "tenant", None)
 
-        if user.is_superuser and self.request.tenant:
-            return Customer.objects.select_related("address").filter(tenant=self.request.tenant)
-
-        if user.is_superuser:
-            return Customer.objects.select_related("address").all()
-
-        if not self.request.tenant:
-            return Customer.objects.none()
-
-        qs = Customer.objects.select_related("address").filter(tenant=self.request.tenant)
-
-        if user.has_permission('view_all_customers', self.request.tenant):
+        if user.is_superuser or not tenant:
             return qs
 
-        return Customer.objects.none()
+        if user.has_permission('view_all_customers', tenant):
+            return qs
+
+        return qs.none()
 
     def perform_create(self, serializer):
         user = self.request.user
@@ -327,7 +271,7 @@ class CustomerViewSet(TenantScopedMixin, viewsets.ModelViewSet):
         if not user.has_permission('customers.add_customer', self.request.tenant):
             raise PermissionDenied("You don't have permission to add customers.")
 
-        serializer.save(tenant=self.request.tenant)
+        super().perform_create(serializer)
 
     def perform_update(self, serializer):
         user = self.request.user
@@ -496,21 +440,9 @@ def customer_lookup(request):
 
 
 class LeadViewSet(TenantScopedMixin, viewsets.ModelViewSet):
+    queryset = Lead.objects.all()
     serializer_class = LeadSerializer
     http_method_names = ['get', 'post', 'patch', 'head', 'options']
-
-    def get_queryset(self):
-        tenant = getattr(self.request, 'tenant', None)
-        if self.request.user.is_superuser and tenant:
-            return Lead.objects.filter(tenant=tenant)
-        if self.request.user.is_superuser:
-            return Lead.objects.all()
-        if tenant:
-            return Lead.objects.filter(tenant=tenant)
-        return Lead.objects.none()
-
-    def perform_create(self, serializer):
-        serializer.save(tenant=self.request.tenant)
 
     @action(detail=True, methods=['post'], url_path='convert')
     @transaction.atomic

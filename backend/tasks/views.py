@@ -24,6 +24,7 @@ from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated  # or AllowAny for dev
 from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework.exceptions import PermissionDenied
+from core.mixins import TenantScopedMixin
 from core.models import Note, PicklistValue
 
 from core.utils import get_model_schema
@@ -269,7 +270,17 @@ _WORK_ITEM_LOOKUP_PARAM = OpenApiParameter(
     list=extend_schema(tags=["Work Items"]),
     create=extend_schema(tags=["Work Items"]),
 )
-class WorkItemViewSet(viewsets.ModelViewSet):
+class WorkItemViewSet(TenantScopedMixin, viewsets.ModelViewSet):
+    queryset = WorkItem.objects.select_related(
+        'customer_asset__device__category',
+        'customer_asset__device',
+        'customer',
+        'owner',
+        'technician',
+        'pickup_point',
+        'dropoff_point',
+        'fulfillment_shop',
+    )
     serializer_class = WorkItemSerializer
     filter_backends = [filters.SearchFilter, DjangoFilterBackend]
     filterset_class = WorkItemFilter
@@ -288,32 +299,13 @@ class WorkItemViewSet(viewsets.ModelViewSet):
         return super().get_object()
 
     def get_queryset(self):
+        # Tenant scoping handled by TenantScopedMixin; narrow by user permissions here
+        qs = super().get_queryset()
         user = self.request.user
-
-        # Optimize queries by selecting related objects
-        base_qs = WorkItem.objects.select_related(
-            'customer_asset__device__category',
-            'customer_asset__device',
-            'customer',
-            'owner',
-            'technician',
-            'pickup_point',
-            'dropoff_point',
-            'fulfillment_shop'
-        )
-
         tenant = getattr(self.request, 'tenant', None)
 
-        if user.is_superuser and tenant:
-            return base_qs.filter(tenant=tenant)
-
-        if user.is_superuser:
-            return base_qs.all()
-
-        if not tenant:
-            return WorkItem.objects.none()
-
-        qs = base_qs.filter(tenant=tenant)
+        if user.is_superuser or not tenant:
+            return qs
 
         # Allow search requests (used by the task form autocomplete) to skip user-level filtering
         if self.request.query_params.get('search'):
@@ -328,21 +320,13 @@ class WorkItemViewSet(viewsets.ModelViewSet):
                 Q(owner__user=user)
             )
 
-        return WorkItem.objects.none()
-
-    def get_serializer_context(self):
-        ctx = super().get_serializer_context()
-        ctx["tenant"] = getattr(self.request, "tenant", None)
-        return ctx
+        return qs.none()
 
     def perform_create(self, serializer):
-        if not self.request.tenant:
-            from rest_framework.exceptions import ValidationError
-            raise ValidationError({"detail": "X-Tenant header required"})
-        if not self.request.user.has_permission('tasks.add_workitem', self.request.tenant):
-            from rest_framework.exceptions import PermissionDenied
+        tenant = self._require_tenant()
+        if not self.request.user.has_permission('tasks.add_workitem', tenant):
             raise PermissionDenied("You do not have permission to create a work item")
-        serializer.save(tenant=self.request.tenant)
+        super().perform_create(serializer)
 
     def perform_update(self, serializer):
         user = self.request.user
@@ -675,7 +659,8 @@ class TaskFilter(django_filters.FilterSet):
         model = Task
         fields = ['reference_id', 'work_item', 'assigned_employee', 'status', 'task_type']
 
-class TaskViewSet(viewsets.ModelViewSet):
+class TaskViewSet(TenantScopedMixin, viewsets.ModelViewSet):
+    queryset = Task.objects.select_related('assigned_employee', 'task_type')
     serializer_class = TaskSerializer
     filter_backends = [filters.SearchFilter, DjangoFilterBackend, filters.OrderingFilter]
     filterset_class = TaskFilter
@@ -689,57 +674,42 @@ class TaskViewSet(viewsets.ModelViewSet):
     ordering = ["-created_date"]
 
     def get_queryset(self):
+        # Tenant scoping handled by TenantScopedMixin; narrow by user permissions here
+        qs = super().get_queryset()
         user = self.request.user
-
-        # Base queryset with common select_related for performance
-        base_qs = Task.objects.select_related('assigned_employee', 'task_type')
+        tenant = getattr(self.request, "tenant", None)
 
         # Check for include parameter to optimize queries
         include = self.request.query_params.get("include", "")
         includes = [part.strip() for part in include.split(",") if part.strip()]
 
         if "workItem" in includes or "deviceName" in includes:
-            base_qs = base_qs.select_related('work_item')
+            qs = qs.select_related('work_item')
 
         if "deviceName" in includes:
-            base_qs = base_qs.select_related('work_item__customer_asset__device')
+            qs = qs.select_related('work_item__customer_asset__device')
 
-        if user.is_superuser and self.request.tenant:
-            return base_qs.filter(tenant=self.request.tenant)
-
-        if user.is_superuser:
-            return base_qs.all()
-
-        if not self.request.tenant:
-            return Task.objects.none()
-
-        qs = base_qs.filter(tenant=self.request.tenant)
-
-        if user.has_permission('view_all_tasks', self.request.tenant):
+        if user.is_superuser or not tenant:
             return qs
 
-        if user.has_permission('view_own_tasks', self.request.tenant):
+        if user.has_permission('view_all_tasks', tenant):
+            return qs
+
+        if user.has_permission('view_own_tasks', tenant):
             return qs.filter(assigned_employee__user=user)
 
-        return Task.objects.none()
+        return qs.none()
 
     def perform_create(self, serializer):
         user = self.request.user
-        tenant = getattr(self.request, "tenant", None)
+        self._require_tenant()
 
-        if tenant is None:
-            from rest_framework.exceptions import ValidationError
-            raise ValidationError({"detail": "X-Tenant header required"})
+        if not user.is_superuser:
+            has_perm = hasattr(user, "has_permission") and user.has_permission('tasks.add_task', self.request.tenant)
+            if not has_perm:
+                raise PermissionDenied("You don't have permission to add tasks.")
 
-        if user.is_superuser:
-            serializer.save(tenant=tenant)
-            return
-
-        has_perm = hasattr(user, "has_permission") and user.has_permission('tasks.add_task', tenant)
-        if not has_perm:
-            raise PermissionDenied("You don't have permission to add tasks.")
-
-        serializer.save(tenant=tenant)
+        super().perform_create(serializer)
 
     def perform_update(self, serializer):
         user = self.request.user
@@ -882,11 +852,12 @@ class TaskViewSet(viewsets.ModelViewSet):
         return Response(data)
 
 
-class TaskTypeViewSet(viewsets.ModelViewSet):
+class TaskTypeViewSet(TenantScopedMixin, viewsets.ModelViewSet):
     """
     ViewSet for managing task types.
     Allows listing, creating, updating, and deleting task types.
     """
+    queryset = TaskType.objects.all()
     serializer_class = TaskTypeSerializer
     filter_backends = [filters.SearchFilter, filters.OrderingFilter]
     search_fields = ['name']
@@ -894,42 +865,11 @@ class TaskTypeViewSet(viewsets.ModelViewSet):
     ordering = ['name']
 
     def get_queryset(self):
-        """Filter task types by tenant and active status"""
-        user = self.request.user
-
-        if user.is_superuser and self.request.tenant:
-            return TaskType.objects.filter(tenant=self.request.tenant)
-
-        if user.is_superuser:
-            return TaskType.objects.all()
-
-        if not self.request.tenant:
-            return TaskType.objects.none()
-
-        # Return only active task types for the current tenant
-        return TaskType.objects.filter(tenant=self.request.tenant, is_active=True)
-
-    def perform_create(self, serializer):
-        """Set tenant when creating a new task type"""
-        tenant = getattr(self.request, "tenant", None)
-
-        if tenant is None:
-            from rest_framework.exceptions import ValidationError
-            raise ValidationError({"detail": "X-Tenant header required"})
-
-        serializer.save(tenant=tenant)
-
-    def perform_update(self, serializer):
-        """Allow updating task types"""
-        user = self.request.user
-
-        if user.is_superuser:
-            serializer.save()
-            return
-
-        # Check if user has permission to change task types
-        # For now, allow any authenticated user to update task types
-        serializer.save()
+        # Tenant scoping handled by TenantScopedMixin; non-superusers only see active types
+        qs = super().get_queryset()
+        if self.request.user.is_superuser:
+            return qs
+        return qs.filter(is_active=True)
 
     def perform_destroy(self, instance):
         """Soft delete by marking as inactive instead of hard delete"""

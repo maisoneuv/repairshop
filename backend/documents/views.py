@@ -11,6 +11,7 @@ from django.shortcuts import get_object_or_404
 from django.http import FileResponse, Http404, HttpResponse
 from django_filters.rest_framework import DjangoFilterBackend
 
+from core.mixins import TenantScopedMixin
 from tasks.models import WorkItem
 from .models import FormTemplate, FormDocument
 from .serializers import (
@@ -109,7 +110,7 @@ def get_sample_template_data():
     }
 
 
-class FormTemplateViewSet(viewsets.ModelViewSet):
+class FormTemplateViewSet(TenantScopedMixin, viewsets.ModelViewSet):
     """
     ViewSet for managing form templates.
 
@@ -123,11 +124,8 @@ class FormTemplateViewSet(viewsets.ModelViewSet):
     filterset_fields = ['form_type', 'is_active']
 
     def get_queryset(self):
-        """Filter templates by user's tenant"""
-        user = self.request.user
-        if hasattr(user, 'tenant') and user.tenant:
-            return FormTemplate.objects.filter(tenant=user.tenant).order_by('-is_active', '-updated_at')
-        return FormTemplate.objects.none()
+        # Scoped by request.tenant (works for API-key users too, unlike user.tenant)
+        return super().get_queryset().order_by('-is_active', '-updated_at')
 
     def get_serializer_class(self):
         """Use lightweight serializer for list action"""
@@ -138,7 +136,7 @@ class FormTemplateViewSet(viewsets.ModelViewSet):
     def perform_create(self, serializer):
         """Set tenant and created_by on template creation"""
         serializer.save(
-            tenant=self.request.user.tenant,
+            tenant=self._require_tenant(),
             created_by=self.request.user
         )
 
@@ -302,7 +300,7 @@ class FormTemplateViewSet(viewsets.ModelViewSet):
             )
 
 
-class FormDocumentViewSet(viewsets.ReadOnlyModelViewSet):
+class FormDocumentViewSet(TenantScopedMixin, viewsets.ReadOnlyModelViewSet):
     """
     ViewSet for viewing form documents.
 
@@ -310,24 +308,15 @@ class FormDocumentViewSet(viewsets.ReadOnlyModelViewSet):
     Documents are created via auto-generation or manual trigger.
     """
 
-    queryset = FormDocument.objects.all()
+    queryset = FormDocument.objects.select_related(
+        'template',
+        'work_item',
+        'generated_by',
+    ).order_by('-generated_at')
     serializer_class = FormDocumentSerializer
     permission_classes = [IsAuthenticated]
     filter_backends = [DjangoFilterBackend]
     filterset_fields = ['form_type', 'status', 'work_item']
-
-    def get_queryset(self):
-        """Filter documents by user's tenant"""
-        user = self.request.user
-        if hasattr(user, 'tenant') and user.tenant:
-            return FormDocument.objects.filter(
-                tenant=user.tenant
-            ).select_related(
-                'template',
-                'work_item',
-                'generated_by'
-            ).order_by('-generated_at')
-        return FormDocument.objects.none()
 
     @action(detail=True, methods=['get'])
     def download(self, request, pk=None):
@@ -474,10 +463,8 @@ class WorkItemFormDocumentViewSet(viewsets.ViewSet):
 
     def _get_work_item(self, request, work_item_pk):
         """Get work item and verify tenant access"""
-        work_item = get_object_or_404(WorkItem, pk=work_item_pk)
-
-        # Verify user has access to this work item's tenant
-        if hasattr(request.user, 'tenant') and work_item.tenant != request.user.tenant:
+        # request.tenant covers both session and API-key auth
+        tenant = getattr(request, "tenant", None)
+        if tenant is None:
             raise Http404("Work item not found")
-
-        return work_item
+        return get_object_or_404(WorkItem, pk=work_item_pk, tenant=tenant)

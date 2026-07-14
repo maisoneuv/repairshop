@@ -40,6 +40,7 @@ from .security import (
     pin_login_locked, register_pin_failure, clear_pin_failures,
     issue_device_cookie, has_valid_device_cookie,
 )
+from .mixins import TenantScopedMixin
 from .utils import create_system_note
 from tenants.managers import TenantAwareManager
 from tenants.models import TenantEmailSettings
@@ -228,7 +229,9 @@ class NoteViewSet(viewsets.ModelViewSet):
             )
 
 
-class UserViewSet(viewsets.ModelViewSet):
+class UserViewSet(TenantScopedMixin, viewsets.ModelViewSet):
+    queryset = User.objects.filter(is_superuser=False, is_staff=False)
+
     def get_serializer_class(self):
         if self.action == 'create':
             return UserCreateSerializer
@@ -239,15 +242,8 @@ class UserViewSet(viewsets.ModelViewSet):
             return [IsAuthenticated(), ManageUsersPermission()]
         return [IsAuthenticated(), TenantUserMatchesRequestTenant()]
 
-    def get_queryset(self):
-        return User.objects.filter(
-            tenant=self.request.tenant,
-            is_superuser=False,
-            is_staff=False,
-        )
-
     def perform_create(self, serializer):
-        user = serializer.save(tenant=self.request.tenant, created_by=self.request.user)
+        user = serializer.save(tenant=self._require_tenant(), created_by=self.request.user)
         user.set_unusable_password()
         user.save(update_fields=['password'])
         try:
@@ -419,7 +415,8 @@ class PermissionViewSet(viewsets.ReadOnlyModelViewSet):
         return Permission.objects.filter(content_type__app_label__in=INCLUDED_APP_LABELS)
 
 
-class RoleViewSet(viewsets.ModelViewSet):
+class RoleViewSet(TenantScopedMixin, viewsets.ModelViewSet):
+    queryset = Role.objects.all()
     serializer_class = RoleSerializer
 
     def get_permissions(self):
@@ -427,19 +424,15 @@ class RoleViewSet(viewsets.ModelViewSet):
             return [IsAuthenticated(), ManageUsersPermission()]
         return [IsAuthenticated(), TenantUserMatchesRequestTenant()]
 
-    def get_queryset(self):
-        return Role.objects.filter(tenant=self.request.tenant)
-
-    def perform_create(self, serializer):
-        serializer.save(tenant=self.request.tenant)
-
     def perform_destroy(self, instance):
         if instance.name == 'Tenant Admin':
             raise ValidationError('The Tenant Admin role cannot be deleted.')
         instance.delete()
 
 
-class RolePermissionViewSet(viewsets.ModelViewSet):
+class RolePermissionViewSet(TenantScopedMixin, viewsets.ModelViewSet):
+    queryset = RolePermission.objects.all()
+    tenant_field = "role__tenant"
     serializer_class = RolePermissionSerializer
 
     def get_permissions(self):
@@ -447,24 +440,24 @@ class RolePermissionViewSet(viewsets.ModelViewSet):
             return [IsAuthenticated(), ManageUsersPermission()]
         return [IsAuthenticated(), TenantUserMatchesRequestTenant()]
 
-    def get_queryset(self):
-        return RolePermission.objects.filter(role__tenant=self.request.tenant)
-
     def perform_create(self, serializer):
-        role = serializer.validated_data['permission'].content_type.app_label
-        if role not in INCLUDED_APP_LABELS:
+        app_label = serializer.validated_data['permission'].content_type.app_label
+        if app_label not in INCLUDED_APP_LABELS:
             raise ValidationError('Permission from this app cannot be assigned via this API.')
-        serializer.save()
+        super().perform_create(serializer)
 
 
-class UserRoleViewSet(viewsets.ModelViewSet):
+class UserRoleViewSet(TenantScopedMixin, viewsets.ModelViewSet):
+    queryset = UserRole.objects.all()
+    tenant_field = "role__tenant"
+
     def get_permissions(self):
         if self.action in ('create', 'update', 'partial_update', 'destroy'):
             return [IsAuthenticated(), ManageUsersPermission()]
         return [IsAuthenticated(), TenantUserMatchesRequestTenant()]
 
     def get_queryset(self):
-        qs = UserRole.objects.filter(role__tenant=self.request.tenant)
+        qs = super().get_queryset()
         user_id = self.request.query_params.get('user')
         if user_id:
             qs = qs.filter(user_id=user_id)
@@ -1075,21 +1068,12 @@ class PicklistAdminViewSet(viewsets.ViewSet):
         return Response({'detail': 'Reordered successfully.'})
 
 
-class CustomFieldViewSet(viewsets.ModelViewSet):
+class CustomFieldViewSet(TenantScopedMixin, viewsets.ModelViewSet):
+    queryset = CustomField.objects.all()
     serializer_class = CustomFieldSerializer
 
-    def _get_tenant(self, request):
-        tenant = getattr(request, 'tenant', None)
-        if not tenant:
-            from rest_framework.exceptions import ValidationError
-            raise ValidationError({'detail': 'X-Tenant header required.'})
-        return tenant
-
     def get_queryset(self):
-        tenant = getattr(self.request, 'tenant', None)
-        if not tenant:
-            return CustomField.objects.none()
-        qs = CustomField.objects.filter(tenant=tenant)
+        qs = super().get_queryset()
         model_name = self.request.query_params.get('model_name')
         if model_name:
             qs = qs.filter(model_name=model_name)
@@ -1099,19 +1083,19 @@ class CustomFieldViewSet(viewsets.ModelViewSet):
         return qs
 
     def perform_create(self, serializer):
-        tenant = self._get_tenant(self.request)
+        tenant = self._require_tenant()
         if not self.request.user.has_permission('core.manage_custom_fields', tenant):
             raise PermissionDenied("You do not have permission to manage custom fields.")
-        serializer.save(tenant=tenant)
+        super().perform_create(serializer)
 
     def perform_update(self, serializer):
-        tenant = self._get_tenant(self.request)
+        tenant = self._require_tenant()
         if not self.request.user.has_permission('core.manage_custom_fields', tenant):
             raise PermissionDenied("You do not have permission to manage custom fields.")
-        serializer.save()
+        super().perform_update(serializer)
 
     def perform_destroy(self, instance):
-        tenant = self._get_tenant(self.request)
+        tenant = self._require_tenant()
         if not self.request.user.has_permission('core.manage_custom_fields', tenant):
             raise PermissionDenied("You do not have permission to manage custom fields.")
         instance.is_active = False
@@ -1260,12 +1244,10 @@ class EmailMessageListView(APIView):
         return Response(EmailMessageSerializer(emails, many=True, context={'request': request}).data)
 
 
-class EmailTemplateViewSet(viewsets.ModelViewSet):
+class EmailTemplateViewSet(TenantScopedMixin, viewsets.ModelViewSet):
+    queryset = EmailTemplate.objects.all()
     permission_classes = [IsAuthenticated]
     serializer_class = EmailTemplateSerializer
 
-    def get_queryset(self):
-        return EmailTemplate.objects.filter(tenant=self.request.tenant)
-
     def perform_create(self, serializer):
-        serializer.save(tenant=self.request.tenant, created_by=self.request.user)
+        serializer.save(tenant=self._require_tenant(), created_by=self.request.user)

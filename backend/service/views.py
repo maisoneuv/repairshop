@@ -525,7 +525,9 @@ def ensure_customer_address_location(request):
         return Response({"detail": "Customer not found"}, status=404)
 
     try:
-        address = Address.objects.get(id=address_id)
+        # Address has no tenant column; scope it via the (tenant-checked)
+        # customer it belongs to so foreign address ids can't be probed
+        address = Address.objects.get(id=address_id, customer=customer)
     except (Address.DoesNotExist, ValueError, TypeError):
         return Response({"detail": "Address not found"}, status=404)
 
