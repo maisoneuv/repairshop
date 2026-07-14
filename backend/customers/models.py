@@ -21,7 +21,7 @@ class Customer(models.Model):
     first_name = models.CharField(max_length=255)
     last_name = models.CharField(max_length=255, blank=True, null=True)
     email = models.EmailField(blank=True, null=True)
-    address = models.OneToOneField(Address, on_delete=models.CASCADE, blank=True, null=True)
+    address = models.OneToOneField(Address, on_delete=models.SET_NULL, blank=True, null=True)
     referral_source = models.CharField(max_length=100, blank=True, null=True)
 
     phone_regex = RegexValidator(
@@ -146,7 +146,7 @@ class Opportunity(models.Model):
 
 
 class Asset(models.Model):
-    customer = models.ForeignKey(Customer, on_delete=models.CASCADE, null=False, blank=False)
+    customer = models.ForeignKey(Customer, on_delete=models.PROTECT, null=False, blank=False)
     serial_number = models.CharField(max_length=255, null=True, blank=True)
     device = models.ForeignKey(Device, on_delete=models.CASCADE, related_name='assets', null=True)
 

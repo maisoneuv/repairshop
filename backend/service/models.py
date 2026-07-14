@@ -63,9 +63,9 @@ employee_roles = [
 
 class Employee(models.Model):
     tenant = models.ForeignKey(Tenant, on_delete=models.CASCADE)
-    user = models.OneToOneField(User, on_delete=models.CASCADE)
+    user = models.OneToOneField(User, on_delete=models.PROTECT)
     role = models.CharField(max_length=100)
-    location = models.ForeignKey(Location, on_delete=models.CASCADE)
+    location = models.ForeignKey(Location, on_delete=models.PROTECT)
 
     def __str__(self):
         return f"{self.user.first_name} {self.user.last_name}"
