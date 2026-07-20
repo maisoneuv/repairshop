@@ -33,6 +33,7 @@ from .serializers import (
 )
 from django.db.models import Q
 from django.db import transaction
+from decimal import Decimal, InvalidOperation
 
 
 # ── REST API ViewSets ──────────────────────────────────────────────────
@@ -374,11 +375,11 @@ class ReceiveDeliveryView(APIView):
             if not inv_list:
                 line_errors.append('inventory_list_id is required and must belong to tenant.')
 
-            # Validate unit_cost
+            # Validate unit_cost (Decimal to avoid float drift on average-cost math)
             try:
-                unit_cost = float(unit_cost or 0)
-            except (ValueError, TypeError):
-                unit_cost = 0
+                unit_cost = Decimal(str(unit_cost or 0))
+            except (InvalidOperation, ValueError, TypeError):
+                unit_cost = Decimal('0')
 
             # Validate PO if provided
             po = None
@@ -413,10 +414,12 @@ class ReceiveDeliveryView(APIView):
         updated_count = 0
 
         with transaction.atomic():
-            # Prefetch existing balances for upsert
+            # Prefetch existing balances for upsert. select_for_update locks the
+            # rows so concurrent receipts (or a receipt racing a usage deduction)
+            # serialize their read-modify-write instead of losing updates.
             balance_keys = [(v['item'].id, v['inv_list'].id) for v in validated]
             existing_balances = {}
-            for bal in InventoryBalance.objects.filter(
+            for bal in InventoryBalance.objects.select_for_update().filter(
                 tenant=tenant,
                 inventory_item_id__in=[k[0] for k in balance_keys],
                 inventory_list_id__in=[k[1] for k in balance_keys],
@@ -455,9 +458,9 @@ class ReceiveDeliveryView(APIView):
                         bal.rack = v['rack']
                     if v['shelf_slot']:
                         bal.shelf_slot = v['shelf_slot']
-                    # Update average cost
+                    # Update average cost (Decimal math throughout to avoid drift)
                     if v['unit_cost'] > 0 and qty > 0:
-                        old_total = float(bal.average_cost) * (bal.current_quantity - qty)
+                        old_total = bal.average_cost * (bal.current_quantity - qty)
                         new_total = v['unit_cost'] * qty
                         if bal.current_quantity > 0:
                             bal.average_cost = (old_total + new_total) / bal.current_quantity

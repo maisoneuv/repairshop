@@ -98,13 +98,24 @@ class PurchaseOrder(TenantModelMixin):
         (COMPLETED, 'Completed'),
     ]
 
-    order_number = models.CharField(max_length=50, unique=True, null=True, blank=True)
+    order_number = models.CharField(max_length=50, null=True, blank=True)
     order_date = models.DateField(auto_now_add=True)
     order_amount = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
     tracking_number = models.CharField(max_length=50, null=True, blank=True)
     origin_work_item = models.ForeignKey('tasks.WorkItem', on_delete=models.SET_NULL, blank=True, null=True, related_name='purchase_orders')
     supplier = models.ForeignKey(Supplier, on_delete=models.SET_NULL, null=True, blank=True, related_name='purchase_orders')
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default=DRAFT)
+
+    class Meta:
+        constraints = [
+            # Scope order numbers per tenant so tenants don't collide with each
+            # other's numbering (NULLs stay distinct, so drafts without a number
+            # are unaffected).
+            models.UniqueConstraint(
+                fields=['tenant', 'order_number'],
+                name='unique_order_number_per_tenant',
+            ),
+        ]
 
     def __str__(self):
         return self.order_number or f"PO-{self.pk}"
