@@ -124,6 +124,10 @@ class Note(models.Model):
 
     class Meta:
         ordering = ["-created_at"]
+        indexes = [
+            # Every detail page resolves notes via the generic FK.
+            models.Index(fields=['content_type', 'object_id'], name='note_content_object_idx'),
+        ]
 
 
 class PicklistValue(models.Model):
@@ -702,6 +706,10 @@ class EmailMessage(models.Model):
                 condition=~models.Q(reply_token=''),
                 name='unique_nonempty_reply_token',
             ),
+        ]
+        indexes = [
+            # Every detail page resolves its emails via the generic FK.
+            models.Index(fields=['content_type', 'object_id'], name='email_content_object_idx'),
         ]
 
 

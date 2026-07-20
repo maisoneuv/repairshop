@@ -1,6 +1,6 @@
 from _decimal import Decimal
 
-from django.db import models
+from django.db import models, transaction, IntegrityError
 from customers.models import Customer, Asset
 from service.models import Employee, Location
 from core.models import Address
@@ -140,31 +140,53 @@ class WorkItem(models.Model):
     def __str__(self):
         return self.reference_id
 
+    def _next_reference_id(self):
+        max_id = WorkItem.objects.filter(
+            tenant=self.tenant,
+            reference_id__startswith="RMA-"
+        ).annotate(
+            # Extract numeric suffix from reference_id and cast to int for max computation
+            num=models.functions.Cast(
+                models.functions.Substr(models.F('reference_id'), 5),
+                models.IntegerField(),
+            )
+        ).aggregate(
+            max_num=Max('num')
+        )['max_num'] or 0
+        return f"RMA-{max_id + 1}"
+
     def save(self, *args, **kwargs):
-        if not self.reference_id:
-            if not self.tenant:
-                raise ValueError("Cannot generate reference_id without tenant.")
+        if self.reference_id:
+            super().save(*args, **kwargs)
+            return
 
-            max_id = WorkItem.objects.filter(
-                tenant=self.tenant,
-                reference_id__startswith="RMA-"
-            ).annotate(
-                # Extract numeric suffix from reference_id and cast to int for max computation
-                num=models.functions.Cast(
-                    models.functions.Substr(models.F('reference_id'), 5),
-                    models.IntegerField(),
-                )
-            ).aggregate(
-                max_num=Max('num')
-            )['max_num'] or 0
+        if not self.tenant:
+            raise ValueError("Cannot generate reference_id without tenant.")
 
-            self.reference_id = f"RMA-{max_id + 1}"
-
-        super().save(*args, **kwargs)
+        # Computing Max(existing)+1 races under concurrent creates: two intakes
+        # can pick the same RMA-n and hit the unique constraint. Retry on the
+        # resulting IntegrityError with a freshly computed number. Each attempt
+        # runs in a savepoint so a failure doesn't poison an outer transaction.
+        for attempt in range(5):
+            self.reference_id = self._next_reference_id()
+            try:
+                with transaction.atomic():
+                    super().save(*args, **kwargs)
+                return
+            except IntegrityError:
+                if attempt == 4:
+                    raise
+                self.reference_id = None
 
     class Meta:
         constraints = [
             models.UniqueConstraint(fields=['tenant', 'reference_id'], name='unique_reference_per_tenant')
+        ]
+        indexes = [
+            # List views filter by (tenant, status) and sort by created_date.
+            models.Index(fields=['tenant', 'status', 'created_date'], name='workitem_tenant_status_idx'),
+            # Overdue / due-soon queries filter by (tenant, due_date).
+            models.Index(fields=['tenant', 'due_date'], name='workitem_tenant_due_idx'),
         ]
 
         permissions = [
@@ -191,24 +213,22 @@ class Task(models.Model):
     def __str__(self):
         return self.reference_id or self.summary or (f"Task #{self.pk}" if self.pk else "Task")
 
+    def _next_reference_id(self):
+        max_id = Task.objects.filter(
+            tenant=self.tenant_id,
+            reference_id__startswith="T-"
+        ).annotate(
+            num=models.functions.Cast(
+                models.functions.Substr(models.F('reference_id'), 3),
+                models.IntegerField(),
+            )
+        ).aggregate(max_num=Max('num'))['max_num'] or 0
+        return f"T-{max_id + 1}"
+
     def save(self, *args, **kwargs):
         """
         Override save to auto-generate reference_id and calculate actual_duration when task is completed.
         """
-        if not self.reference_id:
-            if not self.tenant_id:
-                raise ValueError("Cannot generate reference_id without tenant.")
-            max_id = Task.objects.filter(
-                tenant=self.tenant_id,
-                reference_id__startswith="T-"
-            ).annotate(
-                num=models.functions.Cast(
-                    models.functions.Substr(models.F('reference_id'), 3),
-                    models.IntegerField(),
-                )
-            ).aggregate(max_num=Max('num'))['max_num'] or 0
-            self.reference_id = f"T-{max_id + 1}"
-
         # If status is being changed to 'Done' and completed_date is not set
         if self.status == 'Done' and not self.completed_date:
             from django.utils import timezone
@@ -225,11 +245,36 @@ class Task(models.Model):
             except Task.DoesNotExist:
                 pass
 
-        super().save(*args, **kwargs)
+        if self.reference_id:
+            super().save(*args, **kwargs)
+            return
+
+        if not self.tenant_id:
+            raise ValueError("Cannot generate reference_id without tenant.")
+
+        # Computing Max(existing)+1 races under concurrent creates; retry on the
+        # unique-constraint violation with a freshly computed number. Each attempt
+        # runs in a savepoint so a failure doesn't poison an outer transaction.
+        for attempt in range(5):
+            self.reference_id = self._next_reference_id()
+            try:
+                with transaction.atomic():
+                    super().save(*args, **kwargs)
+                return
+            except IntegrityError:
+                if attempt == 4:
+                    raise
+                self.reference_id = None
 
     class Meta:
         constraints = [
             models.UniqueConstraint(fields=['tenant', 'reference_id'], name='unique_task_reference_per_tenant')
+        ]
+        indexes = [
+            # List views filter by (tenant, status) and sort by created_date.
+            models.Index(fields=['tenant', 'status', 'created_date'], name='task_tenant_status_idx'),
+            # Overdue / due-soon queries filter by (tenant, due_date).
+            models.Index(fields=['tenant', 'due_date'], name='task_tenant_due_idx'),
         ]
         permissions = [
             ("view_all_tasks", "Can view all tasks in tenant"),
