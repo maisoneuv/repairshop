@@ -26,9 +26,20 @@ import LockScreen from "./components/LockScreen";
 import { useUser } from "./context/UserContext";
 import LeadBoard from "./pages/LeadBoard";
 import CarMode from "./pages/CarMode";
+import MobilePhotoUpload from "./pages/MobilePhotoUpload";
 
 function App() {
     const { user, loading, isLocked } = useUser();
+
+    // Token-gated mobile photo upload lives outside the authenticated shell: a
+    // phone scanning the QR has no session. Match it before any auth/lock gate.
+    if (window.location.pathname.startsWith("/m/upload/")) {
+        return (
+            <Routes>
+                <Route path="/m/upload/:token" element={<MobilePhotoUpload />} />
+            </Routes>
+        );
+    }
 
     if (loading) return null;
 

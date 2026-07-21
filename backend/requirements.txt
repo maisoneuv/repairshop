@@ -19,6 +19,7 @@ requests==2.32.3
 playwright==1.48.0
 django-ckeditor==6.7.0
 Pillow==10.4.0
+pillow-heif==0.18.0
 nh3==0.2.*  # HTML sanitization for form templates
 
 # Phone number parsing

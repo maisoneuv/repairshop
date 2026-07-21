@@ -6,7 +6,7 @@ from service.models import Employee, Location
 from core.models import Address
 from django.core.validators import MinValueValidator
 from django.contrib.contenttypes.fields import GenericRelation
-from core.models import Note
+from core.models import Note, Photo
 from django.db.models import Max
 
 from tenants.models import Tenant
@@ -135,6 +135,7 @@ class WorkItem(models.Model):
     # paid
 
     notes = GenericRelation(Note)
+    photos = GenericRelation(Photo)
     custom_fields = models.JSONField(default=dict, blank=True)
 
     def __str__(self):
@@ -209,6 +210,7 @@ class Task(models.Model):
     completed_date = models.DateTimeField(null=True, blank=True)
     actual_duration = models.DurationField(null=True, blank=True, help_text="Calculated duration from creation to completion")
     custom_fields = models.JSONField(default=dict, blank=True)
+    photos = GenericRelation(Photo)
 
     def __str__(self):
         return self.reference_id or self.summary or (f"Task #{self.pk}" if self.pk else "Task")

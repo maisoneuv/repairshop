@@ -13,6 +13,7 @@ from django.contrib.contenttypes.models import ContentType
 from django.contrib.auth.models import Permission
 from django.utils import timezone
 import secrets
+import uuid
 
 
 from tenants.models import Tenant
@@ -775,3 +776,124 @@ class CustomField(models.Model):
 
     def __str__(self):
         return f"{self.label} ({self.model_name}, {self.tenant})"
+
+
+def photo_upload_path(instance, filename):
+    """Tenant-namespaced storage path: photos/{tenant}/{model}/{object_id}/{uuid}.{ext}.
+
+    Isolating by tenant + parent object keeps a leaked/guessed path from
+    reaching another tenant's files, matching FORM_DOCUMENTS_PATH's intent.
+    """
+    ext = (filename.rsplit('.', 1)[-1] if '.' in filename else 'jpg').lower()
+    model = instance.content_type.model if instance.content_type_id else 'unknown'
+    return f"photos/{instance.tenant_id}/{model}/{instance.object_id}/{uuid.uuid4().hex}.{ext}"
+
+
+def photo_thumb_path(instance, filename):
+    ext = (filename.rsplit('.', 1)[-1] if '.' in filename else 'jpg').lower()
+    model = instance.content_type.model if instance.content_type_id else 'unknown'
+    return f"photos/{instance.tenant_id}/{model}/{instance.object_id}/thumbs/{uuid.uuid4().hex}.{ext}"
+
+
+class Photo(models.Model):
+    """A photo attached to any tenant-scoped object (WorkItem, Task, Asset).
+
+    Uses the same generic-FK shape as Note/EmailMessage so one model serves
+    every attach point. Primary use is intake condition photos, so records are
+    treated as evidence: no edit-in-place, soft delete only, always attributed.
+    """
+    CATEGORY_CHOICES = [
+        ('intake', 'Intake condition'),
+        ('progress', 'Repair progress'),
+        ('completion', 'Completion'),
+        ('other', 'Other'),
+    ]
+    UPLOADED_VIA_CHOICES = [
+        ('web', 'Desktop upload'),
+        ('mobile_link', 'QR mobile upload'),
+    ]
+
+    tenant = models.ForeignKey(Tenant, on_delete=models.CASCADE, related_name='photos')
+
+    # Generic relation — same shape as Note (see above) and EmailMessage.
+    content_type = models.ForeignKey(ContentType, on_delete=models.CASCADE)
+    object_id = models.PositiveIntegerField()
+    content_object = GenericForeignKey("content_type", "object_id")
+
+    image = models.ImageField(upload_to=photo_upload_path)
+    thumbnail = models.ImageField(upload_to=photo_thumb_path, null=True, blank=True)
+    filename = models.CharField(max_length=255)
+    mime_type = models.CharField(max_length=100, blank=True)
+    size = models.PositiveIntegerField(default=0)
+    width = models.PositiveIntegerField(null=True, blank=True)
+    height = models.PositiveIntegerField(null=True, blank=True)
+
+    caption = models.CharField(max_length=255, blank=True)
+    category = models.CharField(max_length=20, choices=CATEGORY_CHOICES, default='other')
+
+    uploaded_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='uploaded_photos',
+    )
+    uploaded_via = models.CharField(max_length=20, choices=UPLOADED_VIA_CHOICES, default='web')
+    upload_link = models.ForeignKey(
+        'PhotoUploadLink', on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='photos',
+    )
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    deleted_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+        indexes = [
+            models.Index(fields=['content_type', 'object_id'], name='photo_content_object_idx'),
+            models.Index(fields=['tenant', 'created_at']),
+        ]
+
+    def __str__(self):
+        return self.filename or f"Photo #{self.pk}"
+
+
+class PhotoUploadLink(models.Model):
+    """Short-lived, single-object token that authorizes photo uploads from an
+    unauthenticated phone (scanned QR). Hashed like APIKey; never stored
+    plaintext. Unlike APIKey it targets exactly one object and expires quickly
+    — it's a one-off upload session, not a standing credential.
+    """
+    tenant = models.ForeignKey(Tenant, on_delete=models.CASCADE, related_name='photo_upload_links')
+
+    content_type = models.ForeignKey(ContentType, on_delete=models.CASCADE)
+    object_id = models.PositiveIntegerField()
+    content_object = GenericForeignKey("content_type", "object_id")
+
+    token_hash = models.CharField(max_length=255, unique=True)
+    prefix = models.CharField(max_length=12, db_index=True)
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='created_photo_upload_links',
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    expires_at = models.DateTimeField()
+    used_count = models.PositiveIntegerField(default=0)
+    is_active = models.BooleanField(default=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+        indexes = [models.Index(fields=['prefix'])]
+
+    def __str__(self):
+        return f"UploadLink {self.prefix}… ({self.tenant})"
+
+    @staticmethod
+    def generate_token():
+        """Return (plaintext_token, prefix, token_hash). Plaintext is shown once."""
+        plaintext = f"put_{secrets.token_urlsafe(32)}"
+        prefix = plaintext[:12]
+        return plaintext, prefix, make_password(plaintext)
+
+    def check_token(self, plaintext):
+        return check_password(plaintext, self.token_hash)
+
+    def is_valid(self):
+        return self.is_active and timezone.now() <= self.expires_at

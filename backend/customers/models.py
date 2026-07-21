@@ -1,8 +1,9 @@
 from django.core.exceptions import ValidationError
 from django.db import models
 from django.core.validators import RegexValidator
+from django.contrib.contenttypes.fields import GenericRelation
 from inventory.models import Device
-from core.models import Address
+from core.models import Address, Photo
 from tenants.models import Tenant
 
 referral_sources = [
@@ -149,6 +150,7 @@ class Asset(models.Model):
     customer = models.ForeignKey(Customer, on_delete=models.PROTECT, null=False, blank=False)
     serial_number = models.CharField(max_length=255, null=True, blank=True)
     device = models.ForeignKey(Device, on_delete=models.CASCADE, related_name='assets', null=True)
+    photos = GenericRelation(Photo)
 
     class Meta:
         constraints = [
