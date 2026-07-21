@@ -27,7 +27,7 @@ A multi-tenant service management application for repair shops. Built with Djang
 Every data-bearing model is scoped to a **Tenant**. This is the foundational isolation mechanism.
 
 - `Tenant` — top-level org (identified by unique `subdomain`)
-- `TenantModelMixin` — abstract base that adds a `tenant` FK + `TenantAwareManager` (auto-filters queryset by tenant)
+- `TenantModelMixin` — abstract base that adds a `tenant` FK + `TenantAwareManager` (opt-in `.for_tenant()` / `.for_request()` helpers; the default queryset is NOT auto-filtered — view-layer `TenantScopedMixin` enforces scoping)
 - Tenant is resolved per-request by `TenantMiddleware` using, in order:
   1. Authenticated user's tenant
   2. `X-Tenant` HTTP header
@@ -372,7 +372,7 @@ documents/   — FormTemplate, FormDocument
 ## Key Concepts
 
 ### 1. Tenant Isolation
-Every record belongs to a tenant. `TenantModelMixin` injects the FK and a manager that transparently scopes all querysets. Superusers bypass this. The middleware resolves the active tenant on every request.
+Every record belongs to a tenant. The middleware resolves the active tenant on every request (`request.tenant`), and the view-layer `TenantScopedMixin` (`backend/core/mixins.py`) filters every API queryset to it. Superusers may switch tenants via `X-Tenant` (unfiltered when no tenant is set). Model managers do NOT auto-filter — use `.for_tenant()` / `.for_request()` outside scoped views.
 
 ### 2. WorkItem (core business object)
 The central entity. A **WorkItem** represents a device brought in for repair. It has:

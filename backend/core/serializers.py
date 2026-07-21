@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import Note, Address, User, Role, RolePermission, UserRole, Setting, PicklistValue, CustomField, EmailMessage, EmailAttachment, EmailTemplate
+from .models import Note, Address, User, Role, RolePermission, UserRole, Setting, PicklistValue, CustomField, EmailMessage, EmailAttachment, EmailTemplate, Photo
 from decimal import Decimal
 from datetime import datetime
 from django.contrib.auth.models import Permission
@@ -290,3 +290,39 @@ class EmailTemplateSerializer(serializers.ModelSerializer):
         model = EmailTemplate
         fields = ['id', 'name', 'subject', 'body_html', 'created_at', 'updated_at']
         read_only_fields = ['id', 'created_at', 'updated_at']
+
+
+class PhotoSerializer(serializers.ModelSerializer):
+    # URLs point at the authenticated, tenant-checked serving views — never the
+    # raw MEDIA_URL — so files aren't reachable by guessing a media path.
+    image_url = serializers.SerializerMethodField()
+    thumbnail_url = serializers.SerializerMethodField()
+    uploaded_by_name = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Photo
+        fields = [
+            'id', 'caption', 'category', 'filename', 'mime_type', 'size',
+            'width', 'height', 'uploaded_via', 'uploaded_by_name', 'created_at',
+            'image_url', 'thumbnail_url',
+        ]
+        read_only_fields = fields
+
+    def get_image_url(self, obj):
+        # Relative on purpose: an <img> resolves it against the app's own origin,
+        # so the browser sends the session cookie (same-origin) and it works in
+        # both the nginx single-origin prod and the Vite-proxied dev setup.
+        # An absolute URL to the API host would be cross-origin in dev and the
+        # <img> request would drop cookies → 403.
+        return f'/api/core/photos/{obj.id}/file/'
+
+    def get_thumbnail_url(self, obj):
+        if not obj.thumbnail:
+            return self.get_image_url(obj)
+        return f'/api/core/photos/{obj.id}/thumb/'
+
+    def get_uploaded_by_name(self, obj):
+        if not obj.uploaded_by:
+            return None
+        full = f"{obj.uploaded_by.first_name} {obj.uploaded_by.last_name}".strip()
+        return full or obj.uploaded_by.email

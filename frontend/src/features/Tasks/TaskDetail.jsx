@@ -13,6 +13,7 @@ import DeviceCard from "../../components/DeviceCard";
 import EnhancedActivityTimeline from "../../components/EnhancedActivityTimeline";
 import CompleteTaskModal from "../../components/CompleteTaskModal";
 import CustomActionsTab from "../CustomActions/CustomActionsTab";
+import PhotosSection from "../../components/PhotosSection";
 
 const formatStatusLabel = (value) => {
     if (!value) return "Unknown";
@@ -292,6 +293,11 @@ export default function TaskDetail() {
 
                         {/* Custom Actions */}
                         <CustomActionsTab target="task" targetId={task.id} />
+
+                        {/* Photos */}
+                        <div className="bg-white rounded-xl shadow-lg border border-gray-200 p-6">
+                            <PhotosSection model="task" objectId={task.id} category="progress" />
+                        </div>
 
                         {/* Activity Timeline */}
                         <EnhancedActivityTimeline model="task" objectId={task.id} refreshKey={notesRefreshKey} statusColorMap={{...wiStatusColorMap, ...taskStatusColorMap}} />

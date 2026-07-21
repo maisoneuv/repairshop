@@ -1,5 +1,9 @@
 from django.urls import path
 from .views import *
+from .photo_views import (
+    PhotoListCreateView, PhotoDetailView, PhotoFileView,
+    PhotoUploadLinkCreateView, MobilePhotoUploadView,
+)
 from django.contrib.auth.views import LoginView
 from rest_framework.routers import DefaultRouter
 
@@ -34,6 +38,13 @@ urlpatterns = [
     path("email-settings/domain/verify/", TenantEmailDomainVerifyView.as_view(), name="email-settings-domain-verify"),
     path("emails/send/", SendEmailView.as_view(), name="send-email"),
     path("emails/<str:model>/<int:obj_id>/", EmailMessageListView.as_view(), name="email-message-list"),
+    # Photos — int routes first so they aren't shadowed by <str:model>.
+    path("photos/<int:pk>/file/", PhotoFileView.as_view(), {"which": "file"}, name="photo-file"),
+    path("photos/<int:pk>/thumb/", PhotoFileView.as_view(), {"which": "thumb"}, name="photo-thumb"),
+    path("photos/<int:pk>/", PhotoDetailView.as_view(), name="photo-detail"),
+    path("photos/<str:model>/<int:obj_id>/", PhotoListCreateView.as_view(), name="photo-list-create"),
+    path("photo-upload-links/", PhotoUploadLinkCreateView.as_view(), name="photo-upload-link-create"),
+    path("photo-upload-links/<str:token>/photos/", MobilePhotoUploadView.as_view(), name="mobile-photo-upload"),
     path("session-ping/", session_ping, name="session-ping"),
     path("search/", GlobalSearchView.as_view(), name="global-search"),
     path("picklist/<str:category>/", PicklistValuesView.as_view(), name="picklist-values"),

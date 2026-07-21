@@ -25,6 +25,7 @@ import ResolvePaymentModal from "../components/ResolvePaymentModal";
 import CustomFieldsSection from "../components/CustomFieldsSection";
 import EmailComposer from "../components/EmailComposer";
 import EmailsTab from "../components/EmailsTab";
+import PhotosSection from "../components/PhotosSection";
 
 export default function WorkItemDetail() {
     const { id } = useParams();
@@ -369,6 +370,10 @@ export default function WorkItemDetail() {
 
                                     {activeTab === 'inventory' && (
                                         <WorkItemInventoryTab workItemId={workItem.id} />
+                                    )}
+
+                                    {activeTab === 'photos' && (
+                                        <PhotosSection model="workitem" objectId={workItem.id} category="intake" />
                                     )}
 
                                     {activeTab === 'documents' && (

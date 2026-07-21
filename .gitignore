@@ -19,6 +19,10 @@ dist/
 .vscode/
 .DS_Store
 
+# User-uploaded media (photos, email attachments, generated PDFs) — runtime
+# data, lives on the Docker `mediafiles` volume in prod, never in git.
+backend/media/
+
 #backups
 backups/
 

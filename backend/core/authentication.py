@@ -11,7 +11,7 @@ from rest_framework.exceptions import AuthenticationFailed
 from django.contrib.auth import get_user_model
 from django.utils.translation import gettext_lazy as _
 
-from core.models import APIKey
+from core.models import APIKey, PhotoUploadLink
 
 User = get_user_model()
 
@@ -192,3 +192,25 @@ class APIKeyAuthentication(BaseAuthentication):
         header in a 401 Unauthenticated response.
         """
         return self.keyword
+
+
+def resolve_upload_link(plaintext_token):
+    """Validate a photo-upload token (from the QR link path) and return its
+    PhotoUploadLink, or None if unknown/expired/inactive.
+
+    The token authorizes uploads to exactly one object — it is not a session
+    and grants no other access — so the mobile upload view stays AllowAny and
+    calls this to gate each request. Mirrors APIKey's prefix-then-hash lookup.
+    """
+    if not plaintext_token or len(plaintext_token) < 12:
+        return None
+
+    prefix = plaintext_token[:12]
+    candidates = PhotoUploadLink.objects.filter(
+        prefix=prefix, is_active=True
+    ).select_related('tenant', 'content_type')
+
+    for link in candidates:
+        if link.check_token(plaintext_token) and link.is_valid():
+            return link
+    return None

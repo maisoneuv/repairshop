@@ -63,6 +63,11 @@ AUDITED_VIEWS = {
     "core.views.MyPermissionsView",     # filters rolepermission__role__tenant=request.tenant
     "core.views.EmailMessageListView",  # filter(tenant=request.tenant)
     "core.views.SendEmailView",         # FormDocument + EmailMessage scoped to request.tenant
+    "core.photo_views.PhotoListCreateView",      # _resolve_parent + filter(tenant=request.tenant)
+    "core.photo_views.PhotoDetailView",          # get(pk, tenant=request.tenant)
+    "core.photo_views.PhotoFileView",            # filter(tenant=request.tenant); superuser only when no X-Tenant
+    "core.photo_views.PhotoUploadLinkCreateView",  # _resolve_parent scopes object to request.tenant
+    "core.photo_views.MobilePhotoUploadView",    # token (resolve_upload_link) is the sole tenant-scoped credential
     "core.views.TenantEmailSettingsView",       # get_or_create(tenant=request.tenant), manage_users gated
     "core.views.SendEmailVerificationView",     # get_or_create(tenant=request.tenant), manage_users gated
     "core.views.VerifyEmailAddressView",        # lookup by unguessable verification_token (email link)
