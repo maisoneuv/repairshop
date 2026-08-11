@@ -68,6 +68,9 @@ INSTALLED_APPS = [
     'documents',
     'ckeditor',
     'calls',
+    'mobile',
+    # Przechowuje zuzyte tokeny odswiezajace - warunek dzialania rotacji.
+    'rest_framework_simplejwt.token_blacklist',
 ]
 
 MIDDLEWARE = [
@@ -186,6 +189,10 @@ REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': [
         'rest_framework.authentication.SessionAuthentication',  # Frontend
         'core.authentication.APIKeyAuthentication',  # External systems
+        # Aplikacja mobilna. Dopisane na koncu, wiec sesje i klucze API
+        # dzialaja dokladnie jak dotad. Wlasna podklasa, bo tenant musi
+        # pochodzic z konta, a nie z naglowka X-Tenant (patrz mobile.authentication).
+        'mobile.authentication.MobileJWTAuthentication',
     ],
     # Deny-by-default: views that must be public opt in with AllowAny explicitly.
     'DEFAULT_PERMISSION_CLASSES': [
@@ -195,10 +202,30 @@ REST_FRAMEWORK = {
         'login': '10/min',
         'pin_login': '10/min',
         'pinned_users': '30/min',
+        # Jedno polaczenie przychodzace = jedno zapytanie. 30/min zostawia
+        # duzy zapas obsludze, a enumeracja bazy zajelaby przy nim godziny
+        # i zostawilaby slad w logach (patrz core.security).
+        'customer_lookup': '30/min',
     },
     'DEFAULT_SCHEMA_CLASS': 'drf_spectacular.openapi.AutoSchema',
     'DEFAULT_FILTER_BACKENDS': ['django_filters.rest_framework.DjangoFilterBackend'],
     'EXCEPTION_HANDLER': 'core.exceptions.json_exception_handler',
+}
+
+# --- Tokeny aplikacji mobilnej (par. 5.5 planu Caller ID) --------------------
+# Krotki token dostepu ogranicza szkody z przechwycenia, dlugi token
+# odswiezajacy sprawia, ze pracownik loguje sie raz przy wdrozeniu telefonu
+# i nigdy wiecej. Rotacja z blacklista zamyka okno na ponowne uzycie
+# wykradzionego tokenu.
+from datetime import timedelta  # noqa: E402  (blisko konfiguracji, ktorej dotyczy)
+
+SIMPLE_JWT = {
+    'ACCESS_TOKEN_LIFETIME': timedelta(minutes=15),
+    'REFRESH_TOKEN_LIFETIME': timedelta(days=180),
+    'ROTATE_REFRESH_TOKENS': True,
+    'BLACKLIST_AFTER_ROTATION': True,
+    'UPDATE_LAST_LOGIN': False,
+    'AUTH_HEADER_TYPES': ('Bearer',),
 }
 
 LOGIN_REDIRECT_URL = '/'

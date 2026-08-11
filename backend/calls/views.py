@@ -12,6 +12,7 @@ from drf_spectacular.utils import extend_schema, inline_serializer
 from rest_framework import serializers as drf_serializers
 
 from core.authentication import APIKeyAuthentication
+from core.phone import region_for_tenant, to_e164
 from .models import Call
 from .serializers import CallSerializer, CallUpdateSerializer, CompleteAfterCallSerializer
 from customers.models import Customer, Lead
@@ -62,10 +63,30 @@ def incoming_call(request):
         return Response({'detail': 'phone_number required.'}, status=400)
     tenant = request.tenant
 
-    customer = Customer.objects.filter(tenant=tenant, full_phone_number=phone).first()
+    # Dopasowanie idzie wylacznie po E.164 - tak samo jak w `customer_lookup`.
+    # Wczesniej bylo tu dokladne porownanie z `full_phone_number`, ktore dla
+    # numerow z prefiksem ("+48601234567") nie trafialo w nic, bo w bazie
+    # siedzi goly numer krajowy. Efekt na produkcji AL: 139 polaczen,
+    # 0 rozpoznanych klientow.
+    phone_e164 = to_e164(phone, region_for_tenant(tenant))
+
+    customer = None
     lead = None
-    if not customer:
-        lead = Lead.objects.filter(tenant=tenant, full_phone_number=phone).first()
+    if phone_e164:
+        # Ten sam numer potrafi wskazywac kilka rekordow (patrz raport
+        # `backfill_phone_e164`). Bierzemy najnowszy - ostatnio zalozona
+        # kartoteka jest tą, ktora obsluga aktualizowala.
+        customer = (
+            Customer.objects.filter(tenant=tenant, phone_e164=phone_e164)
+            .order_by('-id')
+            .first()
+        )
+        if not customer:
+            lead = (
+                Lead.objects.filter(tenant=tenant, phone_e164=phone_e164)
+                .order_by('-id')
+                .first()
+            )
 
     call = Call.objects.create(
         tenant=tenant,
@@ -157,7 +178,12 @@ def update_call(request, pk):
 
     with transaction.atomic():
         try:
-            call = Call.objects.select_related('customer', 'lead').select_for_update().get(
+            # of=('self',) blokuje tylko wiersz Call. Bez tego PostgreSQL
+            # odrzuca zapytanie: `customer` i `lead` sa nullowalne, wiec
+            # select_related robi LEFT JOIN, a FOR UPDATE nie moze objac
+            # nullowalnej strony zlaczenia. Skutek byl taki, ze endpoint
+            # zwracal 500 przy kazdym wywolaniu.
+            call = Call.objects.select_related('customer', 'lead').select_for_update(of=('self',)).get(
                 pk=pk, tenant=request.tenant
             )
         except Call.DoesNotExist:
@@ -189,7 +215,12 @@ def complete_after_call(request, pk):
 
     with transaction.atomic():
         try:
-            call = Call.objects.select_related('customer', 'lead').select_for_update().get(
+            # of=('self',) blokuje tylko wiersz Call. Bez tego PostgreSQL
+            # odrzuca zapytanie: `customer` i `lead` sa nullowalne, wiec
+            # select_related robi LEFT JOIN, a FOR UPDATE nie moze objac
+            # nullowalnej strony zlaczenia. Skutek byl taki, ze endpoint
+            # zwracal 500 przy kazdym wywolaniu.
+            call = Call.objects.select_related('customer', 'lead').select_for_update(of=('self',)).get(
                 pk=pk, tenant=request.tenant
             )
         except Call.DoesNotExist:

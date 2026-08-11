@@ -13,12 +13,26 @@ Three layers:
 from django.conf import settings
 from django.core import signing
 from django.core.cache import cache
-from rest_framework.throttling import AnonRateThrottle
+from rest_framework.throttling import AnonRateThrottle, UserRateThrottle
 
 # --- Scoped IP throttles -----------------------------------------------------
 
 class LoginRateThrottle(AnonRateThrottle):
     scope = 'login'
+
+
+class CustomerLookupThrottle(UserRateThrottle):
+    """Limit odpytywania bazy klientow po numerze telefonu.
+
+    Endpoint `customer_lookup` odpowiada na pytanie "czyj jest ten numer",
+    wiec kto ma wazny token, moze przelecac zakres numerow i wyciagnac liste
+    klientow z nazwiskami. Limit liczymy per uzytkownik, a nie per IP -
+    telefony pracownikow siedza za jednym NAT-em w serwisie i dzielilyby pule.
+
+    Realne uzycie to jedno zapytanie na polaczenie przychodzace, wiec limit
+    jest luzny dla obslugi i ciasny dla kogos, kto probuje zbierac dane.
+    """
+    scope = 'customer_lookup'
 
 
 class PinLoginRateThrottle(AnonRateThrottle):
