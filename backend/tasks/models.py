@@ -88,7 +88,7 @@ class WorkItem(models.Model):
     customer = models.ForeignKey(Customer, blank=False, null=False, on_delete=models.PROTECT)
     created_date = models.DateTimeField(auto_now_add=True)
     closed_date = models.DateTimeField(blank=True, null=True)
-    # Kursor dla przyrostowej synchronizacji cache'u na telefonie (par. 5.2).
+    # Kursor dla przyrostowej synchronizacji cache'u na telefonie.
     # Istniejace wiersze migracja wypelnia wartoscia created_date.
     updated_at = models.DateTimeField(auto_now=True, db_index=True, null=True)
     owner = models.ForeignKey(Employee, on_delete=models.PROTECT, related_name="owner") #todo

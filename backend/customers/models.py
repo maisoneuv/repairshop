@@ -49,7 +49,7 @@ class Customer(models.Model):
     # dla zgodnosci wstecz, ale dopasowywanie dzwoniacych idzie wylacznie tedy.
     phone_e164 = models.CharField(max_length=20, blank=True, null=True, db_index=True)
     custom_fields = models.JSONField(default=dict, blank=True)
-    # Kursor dla przyrostowej synchronizacji cache'u na telefonie (par. 5.2).
+    # Kursor dla przyrostowej synchronizacji cache'u na telefonie.
     updated_at = models.DateTimeField(auto_now=True, db_index=True, null=True)
 
     def full_name(self):

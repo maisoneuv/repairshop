@@ -1,15 +1,11 @@
-"""Logowanie aplikacji mobilnej (par. 5.5 planu Caller ID).
+"""Logowanie aplikacji mobilnej.
 
 Pracownik loguje sie raz przy wdrozeniu telefonu i wiecej nie wraca do tego
 ekranu: token dostepu zyje kilkanascie minut, a token odswiezajacy pol roku
-i rotuje sie przy kazdym uzyciu. Zuzyty token trafia na blackliste, wiec
-przechwycenie starego nic nie daje.
+i rotuje sie przy kazdym uzyciu. Zuzyty token trafia na blackliste.
 
-Czego to pilnuje poza samym logowaniem:
-- kazde zapytanie ma konkretnego autora, wiec wpisy w CRM maja autora,
-  a zadania kontrolne w ogole daja sie utworzyc (v1 tego nie mial),
-- da sie wylogowac pojedynczy telefon, nie unieważniajac dostepu calej zalodze,
-- kazde urzadzenie zostawia slad: kto, jaki telefon, kiedy ostatnio widziany.
+Kazde zapytanie ma dzieki temu konkretnego autora - to warunek przypisania
+wpisow w CRM do pracownika i utworzenia zadania kontrolnego po rozmowie.
 """
 
 import logging

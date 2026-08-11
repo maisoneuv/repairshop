@@ -7,7 +7,7 @@ poza wierszami, ktore realnie sie rozjechaly.
 Raport na koncu jest wazniejszy niz sam zapis: pokazuje numery, ktorych nie
 da sie sparsowac, numery technicznie mozliwe ale niepoprawne oraz numery
 przypisane do wiecej niz jednego rekordu. Te ostatnie decyduja, czy da sie
-pozniej zalozyc na tym polu ograniczenie unikalnosci (par. 5.1 pkt 5).
+pozniej zalozyc na tym polu ograniczenie unikalnosci.
 """
 
 import phonenumbers

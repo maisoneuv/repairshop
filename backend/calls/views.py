@@ -63,19 +63,15 @@ def incoming_call(request):
         return Response({'detail': 'phone_number required.'}, status=400)
     tenant = request.tenant
 
-    # Dopasowanie idzie wylacznie po E.164 - tak samo jak w `customer_lookup`.
-    # Wczesniej bylo tu dokladne porownanie z `full_phone_number`, ktore dla
-    # numerow z prefiksem ("+48601234567") nie trafialo w nic, bo w bazie
-    # siedzi goly numer krajowy. Efekt na produkcji AL: 139 polaczen,
-    # 0 rozpoznanych klientow.
+    # Dopasowanie po E.164 - ta sama normalizacja co w `customer_lookup`,
+    # zeby oba endpointy wskazywaly tego samego klienta.
     phone_e164 = to_e164(phone, region_for_tenant(tenant))
 
     customer = None
     lead = None
     if phone_e164:
-        # Ten sam numer potrafi wskazywac kilka rekordow (patrz raport
-        # `backfill_phone_e164`). Bierzemy najnowszy - ostatnio zalozona
-        # kartoteka jest tą, ktora obsluga aktualizowala.
+        # Ten sam numer potrafi wskazywac kilka rekordow. Bierzemy najnowszy -
+        # ostatnio zalozona kartoteka jest ta, ktora obsluga aktualizowala.
         customer = (
             Customer.objects.filter(tenant=tenant, phone_e164=phone_e164)
             .order_by('-id')
@@ -178,11 +174,9 @@ def update_call(request, pk):
 
     with transaction.atomic():
         try:
-            # of=('self',) blokuje tylko wiersz Call. Bez tego PostgreSQL
-            # odrzuca zapytanie: `customer` i `lead` sa nullowalne, wiec
-            # select_related robi LEFT JOIN, a FOR UPDATE nie moze objac
-            # nullowalnej strony zlaczenia. Skutek byl taki, ze endpoint
-            # zwracal 500 przy kazdym wywolaniu.
+            # of=('self',) blokuje wylacznie wiersz Call. `customer` i `lead`
+            # sa nullowalne, wiec select_related robi LEFT JOIN, a PostgreSQL
+            # nie potrafi zalozyc FOR UPDATE na nullowalnej stronie zlaczenia.
             call = Call.objects.select_related('customer', 'lead').select_for_update(of=('self',)).get(
                 pk=pk, tenant=request.tenant
             )
@@ -215,11 +209,9 @@ def complete_after_call(request, pk):
 
     with transaction.atomic():
         try:
-            # of=('self',) blokuje tylko wiersz Call. Bez tego PostgreSQL
-            # odrzuca zapytanie: `customer` i `lead` sa nullowalne, wiec
-            # select_related robi LEFT JOIN, a FOR UPDATE nie moze objac
-            # nullowalnej strony zlaczenia. Skutek byl taki, ze endpoint
-            # zwracal 500 przy kazdym wywolaniu.
+            # of=('self',) blokuje wylacznie wiersz Call. `customer` i `lead`
+            # sa nullowalne, wiec select_related robi LEFT JOIN, a PostgreSQL
+            # nie potrafi zalozyc FOR UPDATE na nullowalnej stronie zlaczenia.
             call = Call.objects.select_related('customer', 'lead').select_for_update(of=('self',)).get(
                 pk=pk, tenant=request.tenant
             )

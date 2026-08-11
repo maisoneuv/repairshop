@@ -1,12 +1,7 @@
 """Rejestr telefonow sluzbowych korzystajacych z aplikacji Caller ID.
 
-Wczesniejsze podejscie (v1) wkompilowywalo jeden wspolny klucz API w APK.
-Skutki byly trzy: klucz dalo sie wyciagnac z pliku, nie dalo sie odebrac
-dostepu jednej osobie, a wpisy w CRM nie mialy autora - bo `request.user`
-przy takim kluczu czesto w ogole nie istnial.
-
-Ten model daje odpowiedz na pytanie "kto i z jakiego telefonu", pozwala
-wylogowac zdalnie pojedyncze urzadzenie i stanowi slad audytowy dostepu
+Odpowiada na pytanie "kto i z jakiego urzadzenia", pozwala zdalnie wylogowac
+pojedynczy telefon bez ruszania pozostalych i stanowi slad audytowy dostepu
 do danych klientow.
 """
 

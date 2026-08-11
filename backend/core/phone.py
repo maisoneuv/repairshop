@@ -1,15 +1,12 @@
 """Normalizacja numerow telefonu do E.164.
 
-Jedno miejsce prawdy dla calego backendu. Do tej pory kazdy endpoint
-dopasowywal numery po swojemu: `incoming_call` robil dokladne porownanie
-stringow z `full_phone_number`, a `customer_lookup` zgadywal podzial na
-prefiks w petli po bazie. Skutek na produkcji AL: 139 zarejestrowanych
-polaczen, z czego 0 powiazanych z klientem, przy 1931 klientach z numerem.
+Jedno miejsce prawdy dla calego backendu: kazdy kod dopasowujacy numer
+dzwoniacego ma uzywac tych funkcji, zeby dwa endpointy nie mogly udzielic
+roznych odpowiedzi na to samo pytanie.
 
-Aplikacja mobilna dostaje od Androida numer raz jako "+48601234567",
-a raz jako "601234567" - zaleznie od tego, jak przekaze go siec. Bez
-wspolnej normalizacji po obu stronach ten sam klient bywa rozpoznany
-albo nie, w zaleznosci od operatora dzwoniacego.
+Android przekazuje numer raz jako "+48601234567", a raz jako "601234567" -
+zaleznie od tego, jak poda go siec. Bez wspolnej normalizacji po obu stronach
+rozpoznanie klienta zalezaloby od operatora dzwoniacego.
 """
 
 import re
@@ -20,22 +17,19 @@ from phonenumbers import NumberParseException
 # Uzywany, gdy tenant nie ma ustawionego wlasnego regionu.
 DEFAULT_REGION = "PL"
 
-# Fraza zlozona wylacznie ze znakow spotykanych w zapisie numeru.
-# Bez tego filtra `phonenumbers` wyluskuje cyfry z czegokolwiek:
-# "RMA-2026-1234" stawaloby sie "+4820261234" i mogloby przypadkiem
-# trafic w czyjas kartoteke.
+# Fraza zlozona wylacznie ze znakow spotykanych w zapisie numeru. Filtr jest
+# konieczny, bo `phonenumbers` wyluskuje cyfry z czegokolwiek - "RMA-2026-1234"
+# stalby sie "+4820261234" i mogl trafic w czyjas kartoteke.
 _PHONE_LIKE = re.compile(r"^[+\d\s()\-.]+$")
 
 
 def to_e164(raw, region=DEFAULT_REGION):
     """Sprowadz numer do E.164 (np. "+48601234567") albo zwroc None.
 
-    Akceptujemy numery "mozliwe" (is_possible_number), a nie tylko
-    "poprawne" (is_valid_number). Roznica jest celowa: baza zawiera numery
-    wpisywane recznie latami i lepiej znormalizowac je deterministycznie,
-    niz odrzucic i zostawic klienta nierozpoznanego. Komenda
-    `backfill_phone_e164` raportuje osobno te, ktore sa mozliwe, ale
-    niepoprawne - zeby rozjazd byl widoczny, a nie cichy.
+    Prog akceptacji to is_possible_number, a nie is_valid_number: baza zawiera
+    numery wpisywane recznie latami i lepiej znormalizowac je deterministycznie,
+    niz odrzucic i zostawic klienta nierozpoznanego. Numery mozliwe, ale
+    niepoprawne, raportuje osobno komenda `backfill_phone_e164`.
 
     >>> to_e164("601234567")
     '+48601234567'

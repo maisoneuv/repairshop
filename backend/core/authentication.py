@@ -63,10 +63,9 @@ class APIKeyAuthentication(BaseAuthentication):
         api_key_value = auth_parts[1]
 
         # "Bearer" jest wspoldzielony z tokenami JWT aplikacji mobilnej.
-        # Klucze API zawsze zaczynaja sie od sk_live_ / sk_test_ (patrz
-        # APIKey.generate_key), a JWT od "eyJ". Bez tego rozroznienia kazdy
-        # token JWT konczyl sie tu wyjatkiem "Invalid API key format",
-        # co przerywalo lancuch uwierzytelniania, zanim doszlo do JWT.
+        # Klucze API zawsze maja prefiks sk_live_ / sk_test_ (APIKey.generate_key),
+        # wiec cokolwiek innego oddajemy nastepnej klasie uwierzytelniajacej
+        # zamiast konczyc lancuch wyjatkiem.
         if not api_key_value.startswith('sk_'):
             return None
 

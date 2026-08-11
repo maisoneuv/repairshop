@@ -1,15 +1,12 @@
 """Uwierzytelnianie JWT dla aplikacji mobilnej, wiazace tenanta z kontem.
 
-`TenantMiddleware` dziala jako middleware Django, czyli **przed** tym, jak DRF
-uwierzytelni zadanie. Przy logowaniu sesja jest juz rozwiazana, wiec middleware
-widzi uzytkownika i przypina jego serwis. Przy tokenie JWT jest inaczej:
-w momencie dzialania middleware uzytkownik jest jeszcze anonimowy, wiec serwis
-zostalby wziety z naglowka `X-Tenant`.
+`TenantMiddleware` dziala przed uwierzytelnieniem DRF, wiec przy tokenie JWT
+uzytkownik jest w tym momencie jeszcze anonimowy i serwis zostalby ustalony
+z naglowka `X-Tenant`. Telefon z tokenem jednego serwisu moglby wtedy czytac
+kartoteki drugiego.
 
-To bylby problem: telefon z tokenem serwisu A moglby podac `X-Tenant: B`
-i czytac kartoteki klientow serwisu B. Dlatego zaraz po uwierzytelnieniu
-nadpisujemy `request.tenant` wartoscia z konta pracownika - naglowek przestaje
-mieć w tej sciezce jakiekolwiek znaczenie.
+Dlatego zaraz po uwierzytelnieniu nadpisujemy `request.tenant` wartoscia
+z konta pracownika - naglowek nie ma w tej sciezce znaczenia.
 """
 
 from rest_framework_simplejwt.authentication import JWTAuthentication

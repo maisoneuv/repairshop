@@ -1,4 +1,4 @@
-"""Testy logowania aplikacji mobilnej (par. 5.5)."""
+"""Testy logowania aplikacji mobilnej."""
 
 from django.test import TestCase
 from rest_framework.test import APIClient
@@ -70,8 +70,8 @@ class MobileLoginTest(TestCase):
         self.assertEqual(self._login(tenant="obcy").status_code, 401)
 
     def test_user_without_employee_record_is_rejected(self):
-        """Bez pracownika nie da sie przypisac autora wpisom ani utworzyc
-        zadania kontrolnego - v1 dowiadywal sie o tym dopiero przy zapisie."""
+        """Bez powiazanego pracownika nie da sie przypisac autora wpisom
+        w CRM ani utworzyc zadania kontrolnego po rozmowie."""
         User.objects.create_user(
             username="ktos", email="ktos@fixed.test", password=PASSWORD, tenant=self.tenant
         )

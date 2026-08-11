@@ -339,9 +339,8 @@ lookup_audit_log = logging.getLogger("customers.lookup_audit")
 def _mask_phone(e164):
     """+48601234567 -> +48601***567
 
-    W logach zostaje tyle, ile potrzeba do skorelowania zapytan i wykrycia
-    kogos, kto przelatuje zakres numerow. Pelny numer w logu to dane osobowe
-    lezace poza kontrola dostepu do bazy (par. 10 planu).
+    W logu zostaje tyle, ile potrzeba do skorelowania zapytan. Pelny numer to
+    dane osobowe lezace poza kontrola dostepu do bazy.
     """
     if not e164 or len(e164) < 8:
         return "***"
@@ -351,7 +350,7 @@ def _mask_phone(e164):
 def _device_label(work_item):
     """Nazwa sprzetu do pokazania obsludze, np. "Apple iPhone 13".
 
-    Kolejnosc zrodel wg par. 5.3 pkt 3: producent i model, potem kategoria,
+    Kolejnosc zrodel : producent i model, potem kategoria,
     na koncu skrocony opis usterki. Na produkcji AL zaden z 395 rekordow nie
     schodzi do ostatniego kroku, ale pole `model` bywa puste (3 przypadki),
     wiec sam `device.model` to za malo.
@@ -495,7 +494,7 @@ def customer_lookup(request):
     )
 
     # Aplikacja mobilna prosi o ?v=2: inny kontrakt, bo musi odroznic
-    # "to nie jest klient" od "zapytanie sie nie udalo" (par. 5.3 pkt 1).
+    # "to nie jest klient" od "zapytanie sie nie udalo".
     # Bez tego parametru zachowujemy stare zachowanie wraz z 404 - korzysta
     # z niego frontend i istniejace testy.
     if request.GET.get('v') == '2':

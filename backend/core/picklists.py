@@ -1,16 +1,13 @@
 """Odczyt semantyki statusow z konfigurowalnych picklist.
 
-Statusy zlecen sa per tenant i mieszaja jezyki ("Resolved", "wydane_bez_naprawy",
-"UTYLIZACJA"). Nazwa statusu nie mowi wiec nic o tym, czy naprawa trwa - ta
-informacja siedzi w `PicklistValue.status_role`.
+Statusy zlecen sa definiowane per tenant i mieszaja jezyki ("Resolved",
+"wydane_bez_naprawy", "UTYLIZACJA"), wiec sama nazwa nie mowi, czy naprawa
+trwa. Ta informacja siedzi w `PicklistValue.status_role`.
 
-Dlatego zaden kod nie powinien porownywac statusu do literalu. Sprawdzenie
-`status != 'Resolved'` na produkcji AL uznaje `wydane_bez_naprawy` (24 zlecenia)
-i `UTYLIZACJA` (11) za trwajace naprawy - aplikacja pokazalaby "w naprawie"
-dla sprzetu, ktory klient dawno odebral albo ktory poszedl na zlom.
-
-Dzieki temu modulowi dodanie nowego statusu w CRM nie wymaga zmiany kodu:
-wystarczy, ze admin nada mu role.
+Dlatego kod nie powinien porownywac statusu do literalu - inaczej zlecenie
+wydane klientowi albo oddane do utylizacji liczyloby sie jako trwajaca
+naprawa. Dodanie nowego statusu w CRM nie wymaga tu zmian: wystarczy,
+ze admin nada mu role.
 """
 
 from core.models import PicklistValue

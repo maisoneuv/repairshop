@@ -1,9 +1,8 @@
 """Testy normalizacji numerow do E.164 i zgodnosci obu sciezek dopasowania.
 
-Chronia przed nawrotem bledu, ktory na produkcji AL dal 139 zarejestrowanych
-polaczen i 0 rozpoznanych klientow przy 1931 klientach z numerem w bazie:
-`incoming_call` porownywal numer doslownie z `full_phone_number` (czyli golym
-numerem krajowym), a telefon podawal go z prefiksem.
+Numer zapisany w bazie bez prefiksu i numer podany przez telefon z prefiksem
+musza wskazac tego samego klienta - niezaleznie od tego, ktorym endpointem
+sie pyta.
 """
 
 from unittest.mock import patch
@@ -21,7 +20,7 @@ from service.models import Employee, Location, RepairShop
 from tasks.models import WorkItem
 from tenants.models import Tenant
 
-# Klient zapisany tak, jak wyglada 1931 z 1931 rekordow na produkcji AL:
+# Klient zapisany tak, jak wyglada zdecydowana wiekszosc rekordow w bazie:
 # gole 9 cyfr, pole `prefix` puste.
 NATIONAL = "601234567"
 E164 = "+48601234567"
@@ -83,11 +82,10 @@ class CustomerPhoneE164Test(TestCase):
 
 
 class EndpointAgreementTest(TestCase):
-    """Par. 9: oba endpointy musza wskazac tego samego klienta dla tego samego numeru.
+    """Oba endpointy musza wskazac tego samego klienta dla tego samego numeru.
 
-    To wlasnie ta rozbieznosc sprawiala, ze aplikacja wygladala na zepsuta -
-    jeden endpoint zapisywal polaczenie bez klienta, a drugi tego klienta
-    znajdowal.
+    Rozjazd miedzy nimi objawia sie tak, ze polaczenie zapisuje sie bez
+    klienta, a rownolegly lookup tego samego klienta znajduje.
     """
 
     def setUp(self):
@@ -114,7 +112,7 @@ class EndpointAgreementTest(TestCase):
         return self.client.get("/api/customers/api/customers/lookup/", params)
 
     def test_both_endpoints_agree_for_e164_input(self):
-        """Numer z prefiksem - dokladnie ten przypadek, ktory dawal 0 trafien."""
+        """Numer z prefiksem wobec kartoteki zapisanej bez prefiksu."""
         call_resp = self._register_call(E164)
         self.assertEqual(call_resp.status_code, 201)
         call = Call.objects.get(pk=call_resp.json()["id"])
@@ -157,7 +155,7 @@ class EndpointAgreementTest(TestCase):
 
 
 class LookupV2ContractTest(TestCase):
-    """Kontrakt ?v=2 uzywany przez aplikacje mobilna (par. 5.3)."""
+    """Kontrakt ?v=2 uzywany przez aplikacje mobilna."""
 
     def setUp(self):
         self.tenant = Tenant.objects.create(name="V2 Tenant", subdomain="v2test")
@@ -237,11 +235,8 @@ class LookupV2ContractTest(TestCase):
         self.assertFalse(item["is_closed"])
 
     def test_resolved_role_marks_item_closed(self):
-        """`wydane_bez_naprawy` to zamkniete zlecenie, mimo ze nie nazywa sie 'Resolved'.
-
-        Stara logika (status != 'Resolved') uznawala je za trwajaca naprawe -
-        na produkcji AL dotyczylo to 35 zlecen.
-        """
+        """Status o roli `resolved` zamyka zlecenie, nawet jesli nie nazywa
+        sie 'Resolved' - liczy sie rola z picklisty, nie nazwa."""
         self._picklist("wydane_bez_naprawy", "resolved", "Wydane bez naprawy")
         self._work_item(status="wydane_bez_naprawy")
 
@@ -269,7 +264,7 @@ class LookupV2ContractTest(TestCase):
 
 
 class LookupThrottleTest(TestCase):
-    """Par. 5.3 pkt 5: endpoint pozwala pytac "czyj jest ten numer", wiec bez
+    """endpoint pozwala pytac "czyj jest ten numer", wiec bez
     limitu da sie z niego wyciagnac liste klientow z nazwiskami."""
 
     def setUp(self):
@@ -299,7 +294,7 @@ class LookupThrottleTest(TestCase):
 
 
 class LookupTenantIsolationTest(TestCase):
-    """Par. 9: telefon podpiety do tenanta A nie moze rozpoznac numeru z tenanta B."""
+    """telefon podpiety do tenanta A nie moze rozpoznac numeru z tenanta B."""
 
     def setUp(self):
         self.tenant_a = Tenant.objects.create(name="A", subdomain="tenanta")
