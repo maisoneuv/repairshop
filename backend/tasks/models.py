@@ -88,6 +88,9 @@ class WorkItem(models.Model):
     customer = models.ForeignKey(Customer, blank=False, null=False, on_delete=models.PROTECT)
     created_date = models.DateTimeField(auto_now_add=True)
     closed_date = models.DateTimeField(blank=True, null=True)
+    # Cursor for incremental sync of the on-device cache. The migration seeds
+    # existing rows with created_date.
+    updated_at = models.DateTimeField(auto_now=True, db_index=True, null=True)
     owner = models.ForeignKey(Employee, on_delete=models.PROTECT, related_name="owner") #todo
     due_date = models.DateField(null=True, blank=True)
     type = models.CharField(max_length=100, default='Chargeable Repair')

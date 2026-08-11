@@ -68,6 +68,9 @@ INSTALLED_APPS = [
     'documents',
     'ckeditor',
     'calls',
+    'mobile',
+    # Stores spent refresh tokens - required for rotation to work.
+    'rest_framework_simplejwt.token_blacklist',
 ]
 
 MIDDLEWARE = [
@@ -186,6 +189,7 @@ REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': [
         'rest_framework.authentication.SessionAuthentication',  # Frontend
         'core.authentication.APIKeyAuthentication',  # External systems
+        'mobile.authentication.MobileJWTAuthentication',  # Mobile app
     ],
     # Deny-by-default: views that must be public opt in with AllowAny explicitly.
     'DEFAULT_PERMISSION_CLASSES': [
@@ -195,10 +199,24 @@ REST_FRAMEWORK = {
         'login': '10/min',
         'pin_login': '10/min',
         'pinned_users': '30/min',
+        'customer_lookup': '30/min',
     },
     'DEFAULT_SCHEMA_CLASS': 'drf_spectacular.openapi.AutoSchema',
     'DEFAULT_FILTER_BACKENDS': ['django_filters.rest_framework.DjangoFilterBackend'],
     'EXCEPTION_HANDLER': 'core.exceptions.json_exception_handler',
+}
+
+# Mobile app tokens. A short access token limits the damage from interception;
+# a long, rotating refresh token means a phone is signed in once, at setup.
+from datetime import timedelta  # noqa: E402
+
+SIMPLE_JWT = {
+    'ACCESS_TOKEN_LIFETIME': timedelta(minutes=15),
+    'REFRESH_TOKEN_LIFETIME': timedelta(days=180),
+    'ROTATE_REFRESH_TOKENS': True,
+    'BLACKLIST_AFTER_ROTATION': True,
+    'UPDATE_LAST_LOGIN': False,
+    'AUTH_HEADER_TYPES': ('Bearer',),
 }
 
 LOGIN_REDIRECT_URL = '/'

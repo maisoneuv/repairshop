@@ -80,6 +80,14 @@ AUDITED_VIEWS = {
     # customers
     "customers.views.customer_assets_api",  # get_object_or_404(Customer, tenant=request.tenant)
     "customers.views.customer_lookup",      # tenant-checked lookup
+    # mobile: Caller ID app sign-in. These views read no tenant data - they work
+    # on tokens and the device register. The tenant is validated here rather than
+    # filtered on: login checks that the account belongs to the given shop, and
+    # MobileJWTAuthentication pins request.tenant to the employee's own tenant,
+    # ignoring the X-Tenant header.
+    "mobile.views.MobileLoginView",     # Tenant + Employee verified before a token is issued
+    "mobile.views.MobileRefreshView",   # operates on the token; checks MobileDevice.revoked_at
+    "mobile.views.MobileLogoutView",    # invalidates the caller's own token and device
     # documents
     "documents.views.WorkItemFormDocumentViewSet",  # _get_work_item scopes by request.tenant
     # integrations

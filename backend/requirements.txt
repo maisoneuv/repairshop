@@ -30,3 +30,7 @@ django-anymail[mailgun,resend]
 
 # HTML sanitation for inbound customer emails
 nh3
+
+# Auth dla aplikacji mobilnej (par. 5.5 planu Caller ID): tokeny JWT
+# z rotacja refresh i blocklista. Frontend dalej korzysta z sesji.
+djangorestframework-simplejwt==5.3.1

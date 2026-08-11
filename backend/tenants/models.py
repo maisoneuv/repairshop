@@ -5,6 +5,14 @@ class Tenant(models.Model):
     name = models.CharField(max_length=255)
     subdomain = models.SlugField(unique=True)
     created_at = models.DateTimeField(auto_now_add=True)
+    # Region used when reducing phone numbers to E.164, for numbers without an
+    # explicit international prefix. ISO 3166-1 alpha-2 code.
+    default_phone_region = models.CharField(
+        max_length=2,
+        default="PL",
+        help_text="Country code (ISO 3166-1 alpha-2) used to normalise numbers "
+                  "without a prefix, e.g. 'PL'.",
+    )
 
     def __str__(self):
         return self.name

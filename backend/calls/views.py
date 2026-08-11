@@ -12,6 +12,7 @@ from drf_spectacular.utils import extend_schema, inline_serializer
 from rest_framework import serializers as drf_serializers
 
 from core.authentication import APIKeyAuthentication
+from core.phone import region_for_tenant, to_e164
 from .models import Call
 from .serializers import CallSerializer, CallUpdateSerializer, CompleteAfterCallSerializer
 from customers.models import Customer, Lead
@@ -62,10 +63,26 @@ def incoming_call(request):
         return Response({'detail': 'phone_number required.'}, status=400)
     tenant = request.tenant
 
-    customer = Customer.objects.filter(tenant=tenant, full_phone_number=phone).first()
+    # Match on E.164 - the same normalisation as in `customer_lookup`, so both
+    # endpoints resolve to the same customer.
+    phone_e164 = to_e164(phone, region_for_tenant(tenant))
+
+    customer = None
     lead = None
-    if not customer:
-        lead = Lead.objects.filter(tenant=tenant, full_phone_number=phone).first()
+    if phone_e164:
+        # One number can point at several records. We take the most recent one:
+        # the newest record is the one staff have been updating.
+        customer = (
+            Customer.objects.filter(tenant=tenant, phone_e164=phone_e164)
+            .order_by('-id')
+            .first()
+        )
+        if not customer:
+            lead = (
+                Lead.objects.filter(tenant=tenant, phone_e164=phone_e164)
+                .order_by('-id')
+                .first()
+            )
 
     call = Call.objects.create(
         tenant=tenant,
@@ -157,7 +174,10 @@ def update_call(request, pk):
 
     with transaction.atomic():
         try:
-            call = Call.objects.select_related('customer', 'lead').select_for_update().get(
+            # of=('self',) locks the Call row only. `customer` and `lead` are
+            # nullable, so select_related produces a LEFT JOIN, and PostgreSQL
+            # cannot apply FOR UPDATE to the nullable side of a join.
+            call = Call.objects.select_related('customer', 'lead').select_for_update(of=('self',)).get(
                 pk=pk, tenant=request.tenant
             )
         except Call.DoesNotExist:
@@ -189,7 +209,10 @@ def complete_after_call(request, pk):
 
     with transaction.atomic():
         try:
-            call = Call.objects.select_related('customer', 'lead').select_for_update().get(
+            # of=('self',) locks the Call row only. `customer` and `lead` are
+            # nullable, so select_related produces a LEFT JOIN, and PostgreSQL
+            # cannot apply FOR UPDATE to the nullable side of a join.
+            call = Call.objects.select_related('customer', 'lead').select_for_update(of=('self',)).get(
                 pk=pk, tenant=request.tenant
             )
         except Call.DoesNotExist:

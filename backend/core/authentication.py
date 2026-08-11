@@ -62,6 +62,13 @@ class APIKeyAuthentication(BaseAuthentication):
 
         api_key_value = auth_parts[1]
 
+        # "Bearer" is shared with the mobile app's JWTs. API keys always carry
+        # the sk_live_ / sk_test_ prefix (APIKey.generate_key), so anything else
+        # is handed to the next authentication class instead of ending the chain
+        # with an exception.
+        if not api_key_value.startswith('sk_'):
+            return None
+
         # Validate and authenticate
         return self.authenticate_credentials(api_key_value, request)
 

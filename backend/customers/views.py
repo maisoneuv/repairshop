@@ -1,14 +1,22 @@
+import logging
+
 from django.shortcuts import render, reverse, get_object_or_404
 from django.template.loader import render_to_string
 from rest_framework import generics, viewsets
-from rest_framework.decorators import api_view, action
+from rest_framework.decorators import api_view, action, throttle_classes
 from rest_framework.exceptions import PermissionDenied
 from rest_framework.response import Response
 from django.db import transaction
-import phonenumbers
-from phonenumbers import NumberParseException
 
 from core.mixins import TenantScopedMixin
+from core.phone import region_for_tenant, to_e164
+from core.security import CustomerLookupThrottle
+from core.picklists import (
+    CLOSED_ROLES,
+    is_closed_status,
+    status_label,
+    workitem_status_index,
+)
 from .serializers import CustomerSerializer, LeadSerializer, AssetSerializer
 from .models import Customer, Asset, Lead
 from tasks.models import WorkItem
@@ -319,7 +327,122 @@ def customer_assets_api(request, pk):
     return Response(serializer.data)
 
 
+# Where we cut the fault description when it is used as a last-resort device
+# name. The call screen has one line, not a paragraph.
+DEVICE_LABEL_MAX = 40
+
+# A separate logger so the lookup audit trail can be routed to its own file or
+# to an alerting system without mixing it into the rest of the app's logs.
+lookup_audit_log = logging.getLogger("customers.lookup_audit")
+
+
+def _mask_phone(e164):
+    """+48601234567 -> +48601***567
+
+    Enough stays in the log to correlate queries. A full number would be
+    personal data sitting outside the database's access controls.
+    """
+    if not e164 or len(e164) < 8:
+        return "***"
+    return f"{e164[:6]}***{e164[-3:]}"
+
+
+def _device_label(work_item):
+    """Device name to show the person answering, e.g. "Apple iPhone 13".
+
+    Source order: manufacturer and model, then category, and finally a truncated
+    fault description. `device.model` alone is not enough, because it is
+    sometimes empty.
+    """
+    asset = work_item.customer_asset
+    device = asset.device if asset else None
+
+    if device:
+        label = " ".join(part for part in (device.manufacturer, device.model) if part).strip()
+        if label:
+            return label
+        if device.category and device.category.name:
+            return device.category.name
+
+    description = (work_item.description or "").strip()
+    if len(description) > DEVICE_LABEL_MAX:
+        return description[:DEVICE_LABEL_MAX].rstrip() + "..."
+    return description
+
+
+def _work_item_v2(work_item, status_index):
+    return {
+        "id": work_item.id,
+        "reference_id": work_item.reference_id or "",
+        "device_label": _device_label(work_item),
+        "stage_label": status_label(work_item.status, status_index),
+        "is_closed": is_closed_status(work_item.status, status_index),
+        "created_date": work_item.created_date.isoformat() if work_item.created_date else "",
+    }
+
+
+def _lookup_response_v2(tenant, customer, phone_e164):
+    """Contract used by the mobile app.
+
+    Always 200: the app has a fraction of a second to decide whether to show
+    anything at all, and a 404 is indistinguishable from a network failure or
+    a bad token.
+    """
+    empty = {
+        "match": "none",
+        "customer": None,
+        "lead": None,
+        "latest_work_item": None,
+        "open_work_item_count": 0,
+    }
+
+    if customer is None:
+        lead = (
+            Lead.objects.filter(tenant=tenant, phone_e164=phone_e164)
+            .order_by('-id')
+            .first()
+        )
+        if lead is None:
+            return Response(empty)
+        return Response({
+            **empty,
+            "match": "lead",
+            "lead": {"id": lead.id, "name": lead.full_name()},
+        })
+
+    status_index = workitem_status_index(tenant)
+
+    latest = (
+        WorkItem.objects.filter(tenant=tenant, customer=customer)
+        .select_related('customer_asset__device__category')
+        .order_by('-created_date')
+        .first()
+    )
+
+    # Closed statuses come from the tenant's picklist, not from a literal in the
+    # code. Statuses unknown to the picklist do not appear here, so they count
+    # as open - consistent with `is_closed_status`.
+    closed_values = [
+        value for value, pv in status_index.items()
+        if pv.status_role in CLOSED_ROLES
+    ]
+    open_count = (
+        WorkItem.objects.filter(tenant=tenant, customer=customer)
+        .exclude(status__in=closed_values)
+        .count()
+    )
+
+    return Response({
+        "match": "customer",
+        "customer": {"id": customer.id, "name": customer.full_name()},
+        "lead": None,
+        "latest_work_item": _work_item_v2(latest, status_index) if latest else None,
+        "open_work_item_count": open_count,
+    })
+
+
 @api_view(["GET"])
+@throttle_classes([CustomerLookupThrottle])
 def customer_lookup(request):
     """
     Lookup customer by phone number.
@@ -341,55 +464,39 @@ def customer_lookup(request):
             status=400
         )
 
-    prefix = None
-    phone_number = None
+    # A single query on an indexed field. The same normalisation runs in
+    # `incoming_call`, so the two endpoints cannot drift apart.
+    phone_e164 = to_e164(phone_param, region_for_tenant(tenant))
+    if not phone_e164:
+        return Response(
+            {"error": "Invalid phone number format"},
+            status=400
+        )
 
-    try:
-        parsed = phonenumbers.parse(phone_param, None)
-        prefix = f"+{parsed.country_code}"
-        phone_number = str(parsed.national_number)
-    except NumberParseException:
-        digits = ''.join(filter(str.isdigit, phone_param))
-        if not digits:
-            return Response(
-                {"error": "Invalid phone number format"},
-                status=400
-            )
+    customer = (
+        Customer.objects.filter(tenant=tenant, phone_e164=phone_e164)
+        .select_related('address')
+        .order_by('-id')
+        .first()
+    )
 
-        if phone_param.strip().startswith('+'):
-            for i in range(1, min(5, len(digits) + 1)):
-                prefix_candidate = f"+{digits[:i]}"
-                phone_candidate = digits[i:]
-                customer = Customer.objects.filter(
-                    tenant=tenant,
-                    prefix=prefix_candidate,
-                    phone_number=phone_candidate
-                ).first()
-                if customer:
-                    prefix = prefix_candidate
-                    phone_number = phone_candidate
-                    break
-            else:
-                prefix = None
-                phone_number = digits
-        else:
-            prefix = None
-            phone_number = digits
+    # Audit trail for every query: who, when, which number and whether it hit.
+    # Meant for spotting unusual volume - someone walking a range of numbers
+    # leaves a run of "found=False" entries under a single account.
+    lookup_audit_log.info(
+        "lookup tenant=%s user=%s phone=%s found=%s",
+        getattr(tenant, 'subdomain', '?'),
+        getattr(request.user, 'email', None) or request.user,
+        _mask_phone(phone_e164),
+        bool(customer),
+    )
 
-    customer = None
-
-    if prefix:
-        customer = Customer.objects.filter(
-            tenant=tenant,
-            prefix=prefix,
-            phone_number=phone_number
-        ).select_related('address').first()
-
-    if not customer:
-        customer = Customer.objects.filter(
-            tenant=tenant,
-            phone_number=phone_number
-        ).select_related('address').first()
+    # The mobile app asks for ?v=2: a different contract, because it has to tell
+    # "not a customer" apart from "the request failed". Without the parameter we
+    # keep the original behaviour, 404 included - the frontend and existing
+    # tests rely on it.
+    if request.GET.get('v') == '2':
+        return _lookup_response_v2(tenant, customer, phone_e164)
 
     if not customer:
         return Response(
