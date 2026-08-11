@@ -1,8 +1,8 @@
-"""Rejestr telefonow sluzbowych korzystajacych z aplikacji Caller ID.
+"""Register of company phones running the Caller ID app.
 
-Odpowiada na pytanie "kto i z jakiego urzadzenia", pozwala zdalnie wylogowac
-pojedynczy telefon bez ruszania pozostalych i stanowi slad audytowy dostepu
-do danych klientow.
+Answers the question "who, and from which device", allows a single phone to be
+signed out remotely without touching the others, and provides an audit trail of
+access to customer data.
 """
 
 from django.db import models
@@ -18,15 +18,15 @@ class MobileDevice(models.Model):
     )
     label = models.CharField(
         max_length=120,
-        help_text="Nazwa urzadzenia widoczna w panelu, np. 'Pixel 10 Pro - przyjecie'.",
+        help_text="Device name shown in the admin panel, e.g. 'Pixel 10 Pro - front desk'.",
     )
     created_at = models.DateTimeField(auto_now_add=True)
     last_seen_at = models.DateTimeField(null=True, blank=True, db_index=True)
     revoked_at = models.DateTimeField(
         null=True,
         blank=True,
-        help_text="Ustawione przy zdalnym wylogowaniu. Urzadzenie z ta data "
-                  "nie odswiezy juz tokenu.",
+        help_text="Set on remote sign-out. A device with this date can no longer "
+                  "refresh its token.",
     )
 
     class Meta:
@@ -36,7 +36,7 @@ class MobileDevice(models.Model):
         ]
 
     def __str__(self):
-        state = "odwolane" if self.revoked_at else "aktywne"
+        state = "revoked" if self.revoked_at else "active"
         return f"{self.label} ({self.employee}) - {state}"
 
     @property

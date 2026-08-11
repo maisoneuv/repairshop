@@ -69,7 +69,7 @@ INSTALLED_APPS = [
     'ckeditor',
     'calls',
     'mobile',
-    # Przechowuje zuzyte tokeny odswiezajace - warunek dzialania rotacji.
+    # Stores spent refresh tokens - required for rotation to work.
     'rest_framework_simplejwt.token_blacklist',
 ]
 
@@ -206,9 +206,8 @@ REST_FRAMEWORK = {
     'EXCEPTION_HANDLER': 'core.exceptions.json_exception_handler',
 }
 
-# Tokeny aplikacji mobilnej. Krotki token dostepu ogranicza szkody
-# z przechwycenia, dlugi i rotujacy token odswiezajacy pozwala zalogowac
-# telefon raz przy wdrozeniu.
+# Mobile app tokens. A short access token limits the damage from interception;
+# a long, rotating refresh token means a phone is signed in once, at setup.
 from datetime import timedelta  # noqa: E402
 
 SIMPLE_JWT = {

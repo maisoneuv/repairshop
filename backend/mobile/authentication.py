@@ -1,12 +1,12 @@
-"""Uwierzytelnianie JWT dla aplikacji mobilnej, wiazace tenanta z kontem.
+"""JWT authentication for the mobile app, binding the tenant to the account.
 
-`TenantMiddleware` dziala przed uwierzytelnieniem DRF, wiec przy tokenie JWT
-uzytkownik jest w tym momencie jeszcze anonimowy i serwis zostalby ustalony
-z naglowka `X-Tenant`. Telefon z tokenem jednego serwisu moglby wtedy czytac
-kartoteki drugiego.
+`TenantMiddleware` runs before DRF authentication, so with a JWT the user is
+still anonymous at that point and the tenant would be taken from the
+`X-Tenant` header. A phone holding one shop's token could then read another
+shop's records.
 
-Dlatego zaraz po uwierzytelnieniu nadpisujemy `request.tenant` wartoscia
-z konta pracownika - naglowek nie ma w tej sciezce znaczenia.
+We therefore overwrite `request.tenant` with the employee's own tenant right
+after authentication - the header carries no weight on this path.
 """
 
 from rest_framework_simplejwt.authentication import JWTAuthentication
@@ -21,8 +21,8 @@ class MobileJWTAuthentication(JWTAuthentication):
         user, validated_token = result
         tenant = getattr(user, "tenant", None)
         if tenant is not None:
-            # Piszemy do opakowanego HttpRequest, bo to jego czyta middleware
-            # i widoki (DRF proxuje dostep do atrybutow).
+            # Write to the wrapped HttpRequest, since that is what middleware
+            # and views read (DRF proxies attribute access to it).
             request._request.tenant = tenant
 
         return user, validated_token

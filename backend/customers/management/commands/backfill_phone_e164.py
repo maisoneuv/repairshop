@@ -1,13 +1,12 @@
-"""Wypelnia `phone_e164` dla istniejacych klientow i leadow.
+"""Populate `phone_e164` for existing customers and leads.
 
-Uruchamiac po migracji 0017, przed przelaczeniem endpointow na dopasowanie
-po E.164. Komenda jest idempotentna - kolejne uruchomienia nie zmieniaja nic
-poza wierszami, ktore realnie sie rozjechaly.
+Run after migration 0017 and before relying on E.164 matching. The command is
+idempotent - repeated runs only touch rows that have actually drifted.
 
-Raport na koncu jest wazniejszy niz sam zapis: pokazuje numery, ktorych nie
-da sie sparsowac, numery technicznie mozliwe ale niepoprawne oraz numery
-przypisane do wiecej niz jednego rekordu. Te ostatnie decyduja, czy da sie
-pozniej zalozyc na tym polu ograniczenie unikalnosci.
+The report at the end matters more than the write itself: it lists numbers that
+cannot be parsed, numbers that are technically possible but invalid, and numbers
+pointing at more than one record. The last group decides whether a uniqueness
+constraint can ever be added to this field.
 """
 
 import phonenumbers
@@ -17,28 +16,28 @@ from django.db.models import Count
 from core.phone import region_for_tenant, to_e164_from_parts
 from customers.models import Customer, Lead
 
-# Ile przykladow problematycznych numerow wypisac na kazda kategorie.
+# How many example problem numbers to print per category.
 SAMPLE_LIMIT = 15
 
 
 class Command(BaseCommand):
-    help = "Wypelnia phone_e164 dla Customer i Lead na podstawie prefix + phone_number."
+    help = "Populates phone_e164 on Customer and Lead from prefix + phone_number."
 
     def add_arguments(self, parser):
         parser.add_argument(
             "--dry-run",
             action="store_true",
-            help="Policz i pokaz raport, ale nie zapisuj niczego do bazy.",
+            help="Count and report, but write nothing to the database.",
         )
         parser.add_argument(
             "--batch-size",
             type=int,
             default=500,
-            help="Wielkosc partii przy zapisie (domyslnie 500).",
+            help="Write batch size (default 500).",
         )
         parser.add_argument(
             "--tenant",
-            help="Subdomena tenanta. Domyslnie przetwarza wszystkich.",
+            help="Tenant subdomain. Processes every tenant by default.",
         )
 
     def handle(self, *args, **options):
@@ -47,14 +46,14 @@ class Command(BaseCommand):
         tenant_subdomain = options.get("tenant")
 
         if self.dry_run:
-            self.stdout.write(self.style.WARNING("TRYB PROBNY - nic nie zostanie zapisane\n"))
+            self.stdout.write(self.style.WARNING("DRY RUN - nothing will be written\n"))
 
         for model in (Customer, Lead):
             self._process(model, tenant_subdomain)
 
         self._report_duplicates(tenant_subdomain)
 
-    # --- przetwarzanie ---
+    # --- processing ---
 
     def _process(self, model, tenant_subdomain):
         label = model.__name__
@@ -68,7 +67,9 @@ class Command(BaseCommand):
             qs = qs.filter(tenant__subdomain=tenant_subdomain)
 
         total = qs.count()
-        self.stdout.write(self.style.MIGRATE_HEADING(f"\n=== {label} ({total} z numerem) ==="))
+        self.stdout.write(
+            self.style.MIGRATE_HEADING(f"\n=== {label} ({total} with a number) ===")
+        )
 
         pending = []
         unchanged = 0
@@ -101,16 +102,16 @@ class Command(BaseCommand):
         if pending:
             updated += self._flush(model, pending)
 
-        self.stdout.write(f"  zaktualizowane:      {updated}")
-        self.stdout.write(f"  juz poprawne:        {unchanged}")
-        self._print_samples("nie da sie sparsowac", unparseable, self.style.ERROR)
-        self._print_samples("mozliwe, ale niepoprawne wg biblioteki", suspicious, self.style.WARNING)
+        self.stdout.write(f"  updated:          {updated}")
+        self.stdout.write(f"  already correct:  {unchanged}")
+        self._print_samples("cannot be parsed", unparseable, self.style.ERROR)
+        self._print_samples("possible but invalid per library", suspicious, self.style.WARNING)
 
     def _flush(self, model, batch):
         if self.dry_run:
             return len(batch)
-        # bulk_update swiadomie omija save(): przy 2 tys. rekordow chcemy
-        # jedno zapytanie na partie, a wartosc i tak liczymy tu samodzielnie.
+        # bulk_update deliberately bypasses save(): with a couple of thousand
+        # rows we want one query per batch, and the value is computed here anyway.
         model.objects.bulk_update(batch, ["phone_e164"], batch_size=self.batch_size)
         return len(batch)
 
@@ -121,7 +122,7 @@ class Command(BaseCommand):
         except phonenumbers.NumberParseException:
             return False
 
-    # --- raport ---
+    # --- reporting ---
 
     def _print_samples(self, title, rows, style):
         if not rows:
@@ -131,16 +132,18 @@ class Command(BaseCommand):
         for row in rows[:SAMPLE_LIMIT]:
             self.stdout.write(f"      id={row[0]}  {' | '.join(str(x) for x in row[1:])}")
         if len(rows) > SAMPLE_LIMIT:
-            self.stdout.write(f"      ... i {len(rows) - SAMPLE_LIMIT} wiecej")
+            self.stdout.write(f"      ... and {len(rows) - SAMPLE_LIMIT} more")
 
     def _report_duplicates(self, tenant_subdomain):
-        """Numery wskazujace na wiecej niz jeden rekord w obrebie tenanta.
+        """Numbers pointing at more than one record within a tenant.
 
-        Dopoki takie istnieja, lookup musi swiadomie wybierac jeden rekord
-        (bierzemy najnowszy), a na phone_e164 nie wolno zalozyc ograniczenia
-        unikalnosci - migracja by sie wywrocila.
+        While these exist, lookup has to pick one record deliberately (we take
+        the most recent) and no uniqueness constraint can be placed on
+        phone_e164 - the migration would fail.
         """
-        self.stdout.write(self.style.MIGRATE_HEADING("\n=== Numery wskazujace wielu klientow ==="))
+        self.stdout.write(
+            self.style.MIGRATE_HEADING("\n=== Numbers pointing at several records ===")
+        )
 
         for model in (Customer, Lead):
             qs = model.objects.filter(phone_e164__isnull=False).exclude(phone_e164="")
@@ -155,7 +158,7 @@ class Command(BaseCommand):
             )
             count = dupes.count()
             if not count:
-                self.stdout.write(f"  {model.__name__}: brak")
+                self.stdout.write(f"  {model.__name__}: none")
                 continue
 
             self.stdout.write(self.style.WARNING(f"  {model.__name__}: {count}"))
@@ -166,4 +169,4 @@ class Command(BaseCommand):
                         tenant_id=row["tenant_id"], phone_e164=row["phone_e164"]
                     ).values_list("id", flat=True)[:6]
                 )
-                self.stdout.write(f"      {masked} -> {row['n']} rekordow, id={ids}")
+                self.stdout.write(f"      {masked} -> {row['n']} records, id={ids}")

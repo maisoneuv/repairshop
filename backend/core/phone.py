@@ -1,12 +1,13 @@
-"""Normalizacja numerow telefonu do E.164.
+"""Phone number normalisation to E.164.
 
-Jedno miejsce prawdy dla calego backendu: kazdy kod dopasowujacy numer
-dzwoniacego ma uzywac tych funkcji, zeby dwa endpointy nie mogly udzielic
-roznych odpowiedzi na to samo pytanie.
+Single source of truth for the whole backend: any code matching a caller's
+number must go through these helpers, so that two endpoints cannot give
+different answers to the same question.
 
-Android przekazuje numer raz jako "+48601234567", a raz jako "601234567" -
-zaleznie od tego, jak poda go siec. Bez wspolnej normalizacji po obu stronach
-rozpoznanie klienta zalezaloby od operatora dzwoniacego.
+Android hands us a number sometimes as "+48601234567" and sometimes as
+"601234567", depending on how the network delivers it. Without shared
+normalisation on both sides, recognising a customer would depend on the
+caller's operator.
 """
 
 import re
@@ -14,22 +15,23 @@ import re
 import phonenumbers
 from phonenumbers import NumberParseException
 
-# Uzywany, gdy tenant nie ma ustawionego wlasnego regionu.
+# Used when a tenant has no region of its own configured.
 DEFAULT_REGION = "PL"
 
-# Fraza zlozona wylacznie ze znakow spotykanych w zapisie numeru. Filtr jest
-# konieczny, bo `phonenumbers` wyluskuje cyfry z czegokolwiek - "RMA-2026-1234"
-# stalby sie "+4820261234" i mogl trafic w czyjas kartoteke.
+# A string made up solely of characters found in written phone numbers. The
+# filter is required because `phonenumbers` will extract digits from anything:
+# "RMA-2026-1234" would become "+4820261234" and could land on someone's record.
 _PHONE_LIKE = re.compile(r"^[+\d\s()\-.]+$")
 
 
 def to_e164(raw, region=DEFAULT_REGION):
-    """Sprowadz numer do E.164 (np. "+48601234567") albo zwroc None.
+    """Reduce a number to E.164 (e.g. "+48601234567"), or return None.
 
-    Prog akceptacji to is_possible_number, a nie is_valid_number: baza zawiera
-    numery wpisywane recznie latami i lepiej znormalizowac je deterministycznie,
-    niz odrzucic i zostawic klienta nierozpoznanego. Numery mozliwe, ale
-    niepoprawne, raportuje osobno komenda `backfill_phone_e164`.
+    The acceptance threshold is is_possible_number rather than is_valid_number:
+    the database holds numbers typed in by hand over the years, and it is better
+    to normalise them deterministically than to reject them and leave the
+    customer unrecognised. Numbers that are possible but not valid are reported
+    separately by the `backfill_phone_e164` command.
 
     >>> to_e164("601234567")
     '+48601234567'
@@ -56,18 +58,17 @@ def to_e164(raw, region=DEFAULT_REGION):
 
 
 def to_e164_from_parts(prefix, national_number, region=DEFAULT_REGION):
-    """Zloz numer z pol `prefix` i `phone_number`, tak jak trzyma je CRM.
+    """Assemble a number from the `prefix` and `phone_number` fields.
 
-    Gdy prefiks jest ustawiony, ma pierwszenstwo nad regionem tenanta -
-    inaczej klient z numerem brytyjskim wpisanym jako prefix="+44"
-    zostalby potraktowany jako polski.
+    An explicit prefix takes precedence over the tenant's region, so that a
+    customer stored with prefix="+44" is not treated as Polish.
     """
     if not national_number:
         return None
 
     if prefix:
         combined = f"{prefix}{national_number}".replace(" ", "")
-        # Przy jawnym prefiksie region jest nieistotny, parser czyta "+".
+        # With an explicit prefix the region is irrelevant, the parser reads "+".
         result = to_e164(combined, None)
         if result:
             return result
@@ -76,5 +77,5 @@ def to_e164_from_parts(prefix, national_number, region=DEFAULT_REGION):
 
 
 def region_for_tenant(tenant):
-    """Region telefoniczny tenanta, z bezpiecznym domyslnym PL."""
+    """The tenant's phone region, falling back to PL."""
     return getattr(tenant, "default_phone_region", None) or DEFAULT_REGION

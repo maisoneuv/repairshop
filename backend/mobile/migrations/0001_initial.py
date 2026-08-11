@@ -18,10 +18,10 @@ class Migration(migrations.Migration):
             name='MobileDevice',
             fields=[
                 ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('label', models.CharField(help_text="Nazwa urzadzenia widoczna w panelu, np. 'Pixel 10 Pro - przyjecie'.", max_length=120)),
+                ('label', models.CharField(help_text="Device name shown in the admin panel, e.g. 'Pixel 10 Pro - front desk'.", max_length=120)),
                 ('created_at', models.DateTimeField(auto_now_add=True)),
                 ('last_seen_at', models.DateTimeField(blank=True, db_index=True, null=True)),
-                ('revoked_at', models.DateTimeField(blank=True, help_text='Ustawione przy zdalnym wylogowaniu. Urzadzenie z ta data nie odswiezy juz tokenu.', null=True)),
+                ('revoked_at', models.DateTimeField(blank=True, help_text='Set on remote sign-out. A device with this date can no longer refresh its token.', null=True)),
                 ('employee', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='mobile_devices', to='service.employee')),
                 ('tenant', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='mobile_devices', to='tenants.tenant')),
             ],

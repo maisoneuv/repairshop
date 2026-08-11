@@ -5,12 +5,11 @@ from django.utils import timezone
 
 
 def seed_updated_at(apps, schema_editor):
-    """Customer nie ma zadnego znacznika czasu, z ktorego dalo by sie odtworzyc
-    historie - ustawiamy czas migracji. To wystarcza, bo pierwsza synchronizacja
-    telefonu i tak pobiera calosc (par. 5.2 planu).
+    """Customer has no timestamp to reconstruct history from, so we use the
+    migration time. That is enough: a device's first sync pulls everything anyway.
 
-    phone_e164 celowo zostaje puste: wypelnia je osobna komenda
-    `backfill_phone_e164`, ktora raportuje bledy parsowania i duplikaty.
+    phone_e164 is deliberately left empty - it is filled by the separate
+    `backfill_phone_e164` command, which also reports parse failures and duplicates.
     """
     Customer = apps.get_model('customers', 'Customer')
     Customer.objects.filter(updated_at__isnull=True).update(updated_at=timezone.now())

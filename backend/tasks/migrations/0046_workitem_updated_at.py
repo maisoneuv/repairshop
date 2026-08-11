@@ -5,12 +5,12 @@ from django.db.models import F
 
 
 def seed_updated_at(apps, schema_editor):
-    """Nadaj istniejacym zleceniom sensowna wartosc kursora.
+    """Give existing work items a sensible cursor value.
 
-    Delta sync porownuje `updated_at > since`, wiec wiersze z NULL nigdy by
-    nie trafily na telefon. `created_date` jest lepszym przyblizeniem niz czas
-    migracji - zachowuje kolejnosc historyczna. Uzywamy queryset.update(),
-    ktory omija auto_now (save() nadpisalby wartosc biezacym czasem).
+    Delta sync compares `updated_at > since`, so rows left NULL would never
+    reach a device. `created_date` is a better approximation than the migration
+    time because it preserves historical order. We use queryset.update(), which
+    bypasses auto_now (save() would overwrite the value with the current time).
     """
     WorkItem = apps.get_model('tasks', 'WorkItem')
     WorkItem.objects.filter(updated_at__isnull=True).update(updated_at=F('created_date'))

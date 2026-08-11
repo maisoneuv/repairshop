@@ -1,4 +1,4 @@
-"""Walidacja danych logowania z aplikacji mobilnej."""
+"""Validation of sign-in payloads coming from the mobile app."""
 
 from rest_framework import serializers
 
@@ -7,11 +7,11 @@ class MobileLoginSerializer(serializers.Serializer):
     email = serializers.EmailField()
     password = serializers.CharField(write_only=True, trim_whitespace=False)
     tenant = serializers.CharField(
-        help_text="Subdomena serwisu, do ktorego loguje sie pracownik."
+        help_text="Subdomain of the shop the employee is signing in to."
     )
     device_label = serializers.CharField(
         max_length=120,
-        help_text="Nazwa telefonu widoczna pozniej w panelu, np. 'Pixel - przyjecie'.",
+        help_text="Phone name shown later in the admin panel, e.g. 'Pixel - front desk'.",
     )
 
 

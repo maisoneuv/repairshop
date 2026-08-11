@@ -13,6 +13,6 @@ class Migration(migrations.Migration):
         migrations.AddField(
             model_name='tenant',
             name='default_phone_region',
-            field=models.CharField(default='PL', help_text="Kod kraju (ISO 3166-1 alpha-2) do normalizacji numerow bez prefiksu, np. 'PL'.", max_length=2),
+            field=models.CharField(default='PL', help_text="Country code (ISO 3166-1 alpha-2) used to normalise numbers without a prefix, e.g. 'PL'.", max_length=2),
         ),
     ]

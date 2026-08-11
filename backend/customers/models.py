@@ -45,11 +45,11 @@ class Customer(models.Model):
     )
     tax_code = models.CharField(max_length=10, null=True, blank=True, validators=[tax_code_regex])
     full_phone_number = models.CharField(max_length=20, blank=True, null=True, db_index=True)
-    # Kanoniczna postac numeru (E.164). `full_phone_number` zostaje nietkniety
-    # dla zgodnosci wstecz, ale dopasowywanie dzwoniacych idzie wylacznie tedy.
+    # Canonical form of the number (E.164). `full_phone_number` is left untouched
+    # for backwards compatibility, but caller matching goes through this field only.
     phone_e164 = models.CharField(max_length=20, blank=True, null=True, db_index=True)
     custom_fields = models.JSONField(default=dict, blank=True)
-    # Kursor dla przyrostowej synchronizacji cache'u na telefonie.
+    # Cursor for incremental sync of the on-device cache.
     updated_at = models.DateTimeField(auto_now=True, db_index=True, null=True)
 
     def full_name(self):
@@ -120,7 +120,7 @@ class Lead(models.Model):
     prefix = models.CharField(max_length=5, blank=True, null=True)
     phone_number = models.CharField(max_length=15, blank=True, null=True)
     full_phone_number = models.CharField(max_length=20, blank=True, null=True, db_index=True)
-    # Jak w Customer - kanoniczna postac numeru, po niej idzie dopasowanie.
+    # As on Customer - the canonical number used for matching.
     phone_e164 = models.CharField(max_length=20, blank=True, null=True, db_index=True)
     device_description = models.TextField(blank=True, null=True)
     notes = models.TextField(blank=True, null=True)

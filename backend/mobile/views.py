@@ -1,11 +1,11 @@
-"""Logowanie aplikacji mobilnej.
+"""Mobile app sign-in.
 
-Pracownik loguje sie raz przy wdrozeniu telefonu i wiecej nie wraca do tego
-ekranu: token dostepu zyje kilkanascie minut, a token odswiezajacy pol roku
-i rotuje sie przy kazdym uzyciu. Zuzyty token trafia na blackliste.
+An employee signs in once when the phone is set up and never returns to this
+screen: the access token lives about fifteen minutes, the refresh token half a
+year and rotates on every use. A spent refresh token goes on the blacklist.
 
-Kazde zapytanie ma dzieki temu konkretnego autora - to warunek przypisania
-wpisow w CRM do pracownika i utworzenia zadania kontrolnego po rozmowie.
+Every request therefore has a concrete author, which is what allows CRM entries
+to be attributed to an employee and a follow-up task to be created after a call.
 """
 
 import logging
@@ -31,8 +31,8 @@ from .serializers import (
 
 logger = logging.getLogger(__name__)
 
-# Nazwa dodatkowego pola w tokenie. Dzieki niemu odswiezenie tokenu potrafi
-# sprawdzic, czy telefon nie zostal w miedzyczasie zdalnie wylogowany.
+# Name of the extra token claim. It lets a refresh check whether the phone has
+# been signed out remotely in the meantime.
 DEVICE_CLAIM = "device_id"
 
 
@@ -66,21 +66,22 @@ class MobileLoginView(APIView):
             request, username=data["email"], email=data["email"], password=data["password"]
         )
 
-        # Ta sama odpowiedz dla zlego hasla, nieznanego serwisu i konta z innego
-        # serwisu - inaczej endpoint pozwalalby sprawdzac, ktore adresy istnieja.
+        # The same response for a wrong password, an unknown shop and an account
+        # belonging to another shop - otherwise the endpoint would let someone
+        # probe which addresses exist.
         if tenant is None or user is None or not user.is_active:
-            return Response({"detail": "Nieprawidlowe dane logowania."}, status=401)
+            return Response({"detail": "Invalid credentials."}, status=401)
 
         if user.tenant_id != tenant.id and not user.is_superuser:
-            return Response({"detail": "Nieprawidlowe dane logowania."}, status=401)
+            return Response({"detail": "Invalid credentials."}, status=401)
 
-        # Bez powiazanego pracownika nie da sie przypisac autora wpisom w CRM
-        # ani utworzyc zadania kontrolnego po rozmowie. Lepiej zatrzymac sie
-        # tutaj, z czytelnym komunikatem, niz pozniej wywrocic sie na zapisie.
+        # Without a linked employee there is no way to attribute CRM entries or
+        # create a follow-up task. Better to stop here, with a clear message,
+        # than to fail later on write.
         employee = Employee.objects.filter(user=user, tenant=tenant).first()
         if employee is None:
             return Response(
-                {"detail": "To konto nie jest powiazane z pracownikiem tego serwisu."},
+                {"detail": "This account is not linked to an employee of this shop."},
                 status=403,
             )
 
@@ -89,7 +90,7 @@ class MobileLoginView(APIView):
             employee=employee,
             label=data["device_label"],
         )
-        # Ponowne zalogowanie na tym samym telefonie cofa wczesniejsze odwolanie.
+        # Signing in again on the same phone lifts an earlier revocation.
         device.revoked_at = None
         device.last_seen_at = timezone.now()
         device.save(update_fields=["revoked_at", "last_seen_at"])
@@ -111,7 +112,7 @@ class MobileLoginView(APIView):
 
 
 class MobileRefreshView(APIView):
-    """POST /api/mobile/auth/refresh - rotuje token odswiezajacy."""
+    """POST /api/mobile/auth/refresh - rotates the refresh token."""
 
     permission_classes = [AllowAny]
     authentication_classes = []
@@ -123,27 +124,25 @@ class MobileRefreshView(APIView):
         try:
             refresh = RefreshToken(serializer.validated_data["refresh"])
         except TokenError:
-            return Response({"detail": "Token odswiezajacy jest nieważny."}, status=401)
+            return Response({"detail": "Refresh token is not valid."}, status=401)
 
         device_id = refresh.get(DEVICE_CLAIM)
         device = MobileDevice.objects.filter(pk=device_id).first() if device_id else None
 
         if device is None or not device.is_active:
-            return Response(
-                {"detail": "To urzadzenie zostalo wylogowane."}, status=401
-            )
+            return Response({"detail": "This device has been signed out."}, status=401)
 
         new_tokens = {"access": str(refresh.access_token)}
 
-        # Rotacja: stary token laduje na blacklistcie, telefon dostaje nowy.
-        # Dzieki temu wykradziony refresh ma sens tylko do najblizszego uzycia
-        # przez prawowitego wlasciciela.
+        # Rotation: the old token goes on the blacklist and the phone receives a
+        # new one, so a stolen refresh token is only useful until its rightful
+        # owner next uses theirs.
         try:
             refresh.blacklist()
         except AttributeError:
-            # Blacklista wymaga aplikacji token_blacklist; bez niej rotacja
-            # nie ma jak dzialac i wolimy o tym wiedziec z logu.
-            logger.warning("Blacklista tokenow nie jest wlaczona - brak rotacji")
+            # Blacklisting requires the token_blacklist app; without it rotation
+            # cannot work and we would rather find out from the log.
+            logger.warning("Token blacklist is not enabled - refresh tokens are not rotated")
         else:
             rotated = RefreshToken.for_user(device.employee.user)
             rotated[DEVICE_CLAIM] = device.id
@@ -154,7 +153,7 @@ class MobileRefreshView(APIView):
 
 
 class MobileLogoutView(APIView):
-    """POST /api/mobile/auth/logout - wylogowuje to urzadzenie."""
+    """POST /api/mobile/auth/logout - signs this device out."""
 
     permission_classes = [IsAuthenticated]
 
@@ -165,7 +164,7 @@ class MobileLogoutView(APIView):
         try:
             refresh = RefreshToken(serializer.validated_data["refresh"])
         except TokenError:
-            return Response({"detail": "Token odswiezajacy jest nieważny."}, status=401)
+            return Response({"detail": "Refresh token is not valid."}, status=401)
 
         device_id = refresh.get(DEVICE_CLAIM)
         device = MobileDevice.objects.filter(pk=device_id).first() if device_id else None

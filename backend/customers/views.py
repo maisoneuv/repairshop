@@ -327,20 +327,20 @@ def customer_assets_api(request, pk):
     return Response(serializer.data)
 
 
-# Po tylu znakach ucinamy opis usterki uzyty jako ostatnia deska ratunku
-# dla nazwy sprzetu. Ekran polaczenia ma jedna linijke, nie akapit.
+# Where we cut the fault description when it is used as a last-resort device
+# name. The call screen has one line, not a paragraph.
 DEVICE_LABEL_MAX = 40
 
-# Osobny logger, zeby dalo sie kierowac audyt wyszukiwan do wlasnego pliku
-# lub systemu alertow, nie mieszajac go z reszta logow aplikacji.
+# A separate logger so the lookup audit trail can be routed to its own file or
+# to an alerting system without mixing it into the rest of the app's logs.
 lookup_audit_log = logging.getLogger("customers.lookup_audit")
 
 
 def _mask_phone(e164):
     """+48601234567 -> +48601***567
 
-    W logu zostaje tyle, ile potrzeba do skorelowania zapytan. Pelny numer to
-    dane osobowe lezace poza kontrola dostepu do bazy.
+    Enough stays in the log to correlate queries. A full number would be
+    personal data sitting outside the database's access controls.
     """
     if not e164 or len(e164) < 8:
         return "***"
@@ -348,12 +348,11 @@ def _mask_phone(e164):
 
 
 def _device_label(work_item):
-    """Nazwa sprzetu do pokazania obsludze, np. "Apple iPhone 13".
+    """Device name to show the person answering, e.g. "Apple iPhone 13".
 
-    Kolejnosc zrodel : producent i model, potem kategoria,
-    na koncu skrocony opis usterki. Na produkcji AL zaden z 395 rekordow nie
-    schodzi do ostatniego kroku, ale pole `model` bywa puste (3 przypadki),
-    wiec sam `device.model` to za malo.
+    Source order: manufacturer and model, then category, and finally a truncated
+    fault description. `device.model` alone is not enough, because it is
+    sometimes empty.
     """
     asset = work_item.customer_asset
     device = asset.device if asset else None
@@ -383,10 +382,11 @@ def _work_item_v2(work_item, status_index):
 
 
 def _lookup_response_v2(tenant, customer, phone_e164):
-    """Kontrakt dla aplikacji mobilnej.
+    """Contract used by the mobile app.
 
-    Zawsze 200 - aplikacja musi w ulamku sekundy rozstrzygnac, czy pokazac
-    cokolwiek, a 404 nie da sie odroznic od awarii sieci czy zlego tokenu.
+    Always 200: the app has a fraction of a second to decide whether to show
+    anything at all, and a 404 is indistinguishable from a network failure or
+    a bad token.
     """
     empty = {
         "match": "none",
@@ -419,9 +419,9 @@ def _lookup_response_v2(tenant, customer, phone_e164):
         .first()
     )
 
-    # Zamkniete statusy bierzemy z picklisty tenanta, nie z literalu w kodzie.
-    # Statusy nieznane picklistcie nie trafiaja tutaj, wiec licza sie jako
-    # otwarte - spojnie z `is_closed_status`.
+    # Closed statuses come from the tenant's picklist, not from a literal in the
+    # code. Statuses unknown to the picklist do not appear here, so they count
+    # as open - consistent with `is_closed_status`.
     closed_values = [
         value for value, pv in status_index.items()
         if pv.status_role in CLOSED_ROLES
@@ -464,10 +464,8 @@ def customer_lookup(request):
             status=400
         )
 
-    # Jedno zapytanie po indeksowanym polu zastepuje petle, ktora zgadywala
-    # podzial numeru na prefiks i czesc krajowa, robiac do czterech zapytan
-    # i konczac na dopasowaniu golych cyfr. Ta sama normalizacja dziala
-    # w `incoming_call`, wiec oba endpointy nie moga sie juz rozjechac.
+    # A single query on an indexed field. The same normalisation runs in
+    # `incoming_call`, so the two endpoints cannot drift apart.
     phone_e164 = to_e164(phone_param, region_for_tenant(tenant))
     if not phone_e164:
         return Response(
@@ -482,9 +480,9 @@ def customer_lookup(request):
         .first()
     )
 
-    # Slad audytowy kazdego zapytania: kto, kiedy, o jaki numer i czy trafil.
-    # Sluzy do wykrycia nietypowego wolumenu - ktos, kto przelatuje zakres
-    # numerow, zostawia tu serie trafien "found=False" pod jednym kontem.
+    # Audit trail for every query: who, when, which number and whether it hit.
+    # Meant for spotting unusual volume - someone walking a range of numbers
+    # leaves a run of "found=False" entries under a single account.
     lookup_audit_log.info(
         "lookup tenant=%s user=%s phone=%s found=%s",
         getattr(tenant, 'subdomain', '?'),
@@ -493,10 +491,10 @@ def customer_lookup(request):
         bool(customer),
     )
 
-    # Aplikacja mobilna prosi o ?v=2: inny kontrakt, bo musi odroznic
-    # "to nie jest klient" od "zapytanie sie nie udalo".
-    # Bez tego parametru zachowujemy stare zachowanie wraz z 404 - korzysta
-    # z niego frontend i istniejace testy.
+    # The mobile app asks for ?v=2: a different contract, because it has to tell
+    # "not a customer" apart from "the request failed". Without the parameter we
+    # keep the original behaviour, 404 included - the frontend and existing
+    # tests rely on it.
     if request.GET.get('v') == '2':
         return _lookup_response_v2(tenant, customer, phone_e164)
 

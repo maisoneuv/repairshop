@@ -1,8 +1,7 @@
-"""Testy normalizacji numerow do E.164 i zgodnosci obu sciezek dopasowania.
+"""Tests for E.164 normalisation and for agreement between both match paths.
 
-Numer zapisany w bazie bez prefiksu i numer podany przez telefon z prefiksem
-musza wskazac tego samego klienta - niezaleznie od tego, ktorym endpointem
-sie pyta.
+A number stored without a prefix and a number delivered by the phone with one
+must resolve to the same customer, whichever endpoint is asked.
 """
 
 from unittest.mock import patch
@@ -20,14 +19,14 @@ from service.models import Employee, Location, RepairShop
 from tasks.models import WorkItem
 from tenants.models import Tenant
 
-# Klient zapisany tak, jak wyglada zdecydowana wiekszosc rekordow w bazie:
-# gole 9 cyfr, pole `prefix` puste.
+# A customer stored the way the vast majority of records look: bare nine
+# digits, with `prefix` left empty.
 NATIONAL = "601234567"
 E164 = "+48601234567"
 
 
 class PhoneNormalizationUnitTest(TestCase):
-    """Sama funkcja normalizujaca, bez bazy."""
+    """The normalisation helper on its own, without the database."""
 
     def test_national_number_gets_country_code(self):
         self.assertEqual(to_e164(NATIONAL), E164)
@@ -45,7 +44,7 @@ class PhoneNormalizationUnitTest(TestCase):
         self.assertIsNone(to_e164(None))
 
     def test_explicit_prefix_wins_over_region(self):
-        """Numer brytyjski nie moze zostac uznany za polski."""
+        """A UK number must not be treated as Polish."""
         self.assertEqual(to_e164_from_parts("+44", "7911123456", "PL"), "+447911123456")
 
 
@@ -60,9 +59,9 @@ class CustomerPhoneE164Test(TestCase):
         self.assertEqual(customer.phone_e164, E164)
 
     def test_save_respects_explicit_prefix(self):
-        """Numer zagraniczny testujemy na Leadzie, bo `Customer.phone_number`
-        ma max_length=9 i dluzszy numer po prostu sie tam nie miesci - to
-        istniejace ograniczenie schematu, nie skutek tej zmiany."""
+        """Foreign numbers are tested on Lead, because `Customer.phone_number` is
+        max_length=9 and a longer number simply does not fit - an existing schema
+        limitation, not a consequence of this change."""
         lead = Lead.objects.create(
             tenant=self.tenant, first_name="Nigel", prefix="+44", phone_number="7911123456"
         )
@@ -82,10 +81,10 @@ class CustomerPhoneE164Test(TestCase):
 
 
 class EndpointAgreementTest(TestCase):
-    """Oba endpointy musza wskazac tego samego klienta dla tego samego numeru.
+    """Both endpoints must resolve the same customer for the same number.
 
-    Rozjazd miedzy nimi objawia sie tak, ze polaczenie zapisuje sie bez
-    klienta, a rownolegly lookup tego samego klienta znajduje.
+    Drift between them shows up as a call recorded with no customer while a
+    parallel lookup finds that very customer.
     """
 
     def setUp(self):
@@ -112,7 +111,7 @@ class EndpointAgreementTest(TestCase):
         return self.client.get("/api/customers/api/customers/lookup/", params)
 
     def test_both_endpoints_agree_for_e164_input(self):
-        """Numer z prefiksem wobec kartoteki zapisanej bez prefiksu."""
+        """A prefixed number against a record stored without a prefix."""
         call_resp = self._register_call(E164)
         self.assertEqual(call_resp.status_code, 201)
         call = Call.objects.get(pk=call_resp.json()["id"])
@@ -123,7 +122,7 @@ class EndpointAgreementTest(TestCase):
         self.assertEqual(lookup_resp.json()["customer"]["id"], self.customer.id)
 
     def test_both_endpoints_agree_for_national_input(self):
-        """Ten sam klient, numer bez prefiksu - Android podaje oba warianty."""
+        """Same customer, number without a prefix - Android delivers both forms."""
         call_resp = self._register_call(NATIONAL)
         call = Call.objects.get(pk=call_resp.json()["id"])
         self.assertEqual(call.customer_id, self.customer.id)
@@ -135,7 +134,7 @@ class EndpointAgreementTest(TestCase):
         for variant in (E164, NATIONAL, "601 234 567", "+48 601 234 567"):
             with self.subTest(variant=variant):
                 resp = self._lookup(variant)
-                self.assertEqual(resp.status_code, 200, msg=f"nie rozpoznano: {variant}")
+                self.assertEqual(resp.status_code, 200, msg=f"not recognised: {variant}")
                 self.assertEqual(resp.json()["customer"]["id"], self.customer.id)
 
     def test_unknown_number_links_no_customer(self):
@@ -155,7 +154,7 @@ class EndpointAgreementTest(TestCase):
 
 
 class LookupV2ContractTest(TestCase):
-    """Kontrakt ?v=2 uzywany przez aplikacje mobilna."""
+    """The ?v=2 contract used by the mobile app."""
 
     def setUp(self):
         self.tenant = Tenant.objects.create(name="V2 Tenant", subdomain="v2test")
@@ -175,8 +174,8 @@ class LookupV2ContractTest(TestCase):
         )
 
     def _picklist(self, value, role, name):
-        # Tenant dostaje domyslny zestaw statusow przy zalozeniu, wiec czesc
-        # wartosci ("New", "Resolved") juz istnieje - nadpisujemy role i nazwe.
+        # A tenant gets a default set of statuses on creation, so some values
+        # ("New", "Resolved") already exist - we overwrite role and name.
         pv, _ = PicklistValue.objects.update_or_create(
             tenant=self.tenant,
             category="workitem_status",
@@ -208,7 +207,7 @@ class LookupV2ContractTest(TestCase):
         )
 
     def test_unknown_number_returns_200_not_404(self):
-        """Aplikacja musi odroznic 'to nie klient' od 'zapytanie padlo'."""
+        """The app must tell 'not a customer' apart from 'the request failed'."""
         resp = self._lookup("+48999888777")
         self.assertEqual(resp.status_code, 200)
         self.assertEqual(resp.json()["match"], "none")
@@ -235,8 +234,8 @@ class LookupV2ContractTest(TestCase):
         self.assertFalse(item["is_closed"])
 
     def test_resolved_role_marks_item_closed(self):
-        """Status o roli `resolved` zamyka zlecenie, nawet jesli nie nazywa
-        sie 'Resolved' - liczy sie rola z picklisty, nie nazwa."""
+        """A status whose role is `resolved` closes the item even if it is not
+        called 'Resolved' - the picklist role decides, not the name."""
         self._picklist("wydane_bez_naprawy", "resolved", "Wydane bez naprawy")
         self._work_item(status="wydane_bez_naprawy")
 
@@ -255,8 +254,8 @@ class LookupV2ContractTest(TestCase):
         self.assertEqual(self._lookup(E164).json()["open_work_item_count"], 1)
 
     def test_unknown_status_counts_as_open(self):
-        """Status spoza picklisty traktujemy jako otwarty - cisza o trwajacej
-        naprawie jest grozniejsza niz nadmiarowa informacja."""
+        """A status outside the picklist counts as open: staying silent about an
+        ongoing repair is worse than showing one time too many."""
         self._work_item(status="Status Ktorego Nie Ma")
         data = self._lookup(E164).json()
         self.assertFalse(data["latest_work_item"]["is_closed"])
@@ -264,11 +263,11 @@ class LookupV2ContractTest(TestCase):
 
 
 class LookupThrottleTest(TestCase):
-    """endpoint pozwala pytac "czyj jest ten numer", wiec bez
-    limitu da sie z niego wyciagnac liste klientow z nazwiskami."""
+    """The endpoint answers "whose number is this", so without a limit it can
+    be used to harvest a list of customers with their names."""
 
     def setUp(self):
-        cache.clear()  # licznik throttlingu zyje w cache i przecieka miedzy testami
+        cache.clear()  # the throttle counter lives in the cache and leaks between tests
         self.tenant = Tenant.objects.create(name="Throttle", subdomain="throttletest")
         self.user = User.objects.create_user(
             username="t", email="t@test.test", password="pw", tenant=self.tenant
@@ -294,7 +293,7 @@ class LookupThrottleTest(TestCase):
 
 
 class LookupTenantIsolationTest(TestCase):
-    """telefon podpiety do tenanta A nie moze rozpoznac numeru z tenanta B."""
+    """A phone bound to tenant A must not resolve a number from tenant B."""
 
     def setUp(self):
         self.tenant_a = Tenant.objects.create(name="A", subdomain="tenanta")
@@ -302,7 +301,7 @@ class LookupTenantIsolationTest(TestCase):
         self.user_a = User.objects.create_user(
             username="a", email="a@test.test", password="pw", tenant=self.tenant_a
         )
-        # Ten sam numer u obu najemcow - realny przypadek przy wspolnych klientach.
+        # The same number under both tenants - a real case with shared customers.
         self.customer_b = Customer.objects.create(
             tenant=self.tenant_b, first_name="Obcy", phone_number=NATIONAL
         )

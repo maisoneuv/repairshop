@@ -1,4 +1,4 @@
-"""Testy logowania aplikacji mobilnej."""
+"""Tests for mobile app sign-in."""
 
 from django.test import TestCase
 from rest_framework.test import APIClient
@@ -9,7 +9,7 @@ from mobile.models import MobileDevice
 from service.models import Employee, Location, RepairShop
 from tenants.models import Tenant
 
-PASSWORD = "tajne-haslo-123"
+PASSWORD = "test-password-123"
 
 
 def _make_employee(tenant, user, suffix=""):
@@ -70,8 +70,8 @@ class MobileLoginTest(TestCase):
         self.assertEqual(self._login(tenant="obcy").status_code, 401)
 
     def test_user_without_employee_record_is_rejected(self):
-        """Bez powiazanego pracownika nie da sie przypisac autora wpisom
-        w CRM ani utworzyc zadania kontrolnego po rozmowie."""
+        """Without a linked employee there is no way to attribute CRM entries or
+        create a follow-up task after the call."""
         User.objects.create_user(
             username="ktos", email="ktos@fixed.test", password=PASSWORD, tenant=self.tenant
         )
@@ -116,7 +116,7 @@ class MobileTokenLifecycleTest(TestCase):
         self.device_id = tokens["device_id"]
 
     def test_access_token_authorises_lookup(self):
-        """Token musi realnie otwierac endpoint, z ktorego korzysta telefon."""
+        """The token must actually open the endpoint the phone relies on."""
         self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {self.access}")
         resp = self.client.get(
             "/api/customers/api/customers/lookup/", {"phone": "+48601234567", "v": "2"}
@@ -125,8 +125,8 @@ class MobileTokenLifecycleTest(TestCase):
         self.assertEqual(resp.json()["match"], "customer")
 
     def test_token_ignores_spoofed_tenant_header(self):
-        """Telefon z tokenem serwisu A nie moze czytac danych serwisu B,
-        nawet podajac jego naglowek."""
+        """A phone holding shop A's token must not read shop B's data, even when
+        supplying B's header."""
         other = Tenant.objects.create(name="Obcy", subdomain="obcy")
         Customer.objects.create(
             tenant=other, first_name="Cudzy", phone_number="601234567"
@@ -139,7 +139,7 @@ class MobileTokenLifecycleTest(TestCase):
             "/api/customers/api/customers/lookup/", {"phone": "+48601234567", "v": "2"}
         )
         self.assertEqual(resp.status_code, 200)
-        # Widzimy wlasnego klienta z serwisu "fixed", nie klienta z "obcy".
+        # We see our own customer from "fixed", not the one from "obcy".
         self.assertEqual(resp.json()["customer"]["name"], "Jan")
 
     def test_refresh_rotates_the_token(self):
@@ -159,7 +159,7 @@ class MobileTokenLifecycleTest(TestCase):
         self.assertEqual(second.status_code, 401)
 
     def test_revoked_device_cannot_refresh(self):
-        """Zdalne wylogowanie telefonu musi dzialac natychmiast."""
+        """Remote sign-out of a phone must take effect immediately."""
         device = MobileDevice.objects.get(pk=self.device_id)
         device.revoked_at = "2026-08-11T10:00:00Z"
         device.save(update_fields=["revoked_at"])

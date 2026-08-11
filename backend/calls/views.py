@@ -63,15 +63,15 @@ def incoming_call(request):
         return Response({'detail': 'phone_number required.'}, status=400)
     tenant = request.tenant
 
-    # Dopasowanie po E.164 - ta sama normalizacja co w `customer_lookup`,
-    # zeby oba endpointy wskazywaly tego samego klienta.
+    # Match on E.164 - the same normalisation as in `customer_lookup`, so both
+    # endpoints resolve to the same customer.
     phone_e164 = to_e164(phone, region_for_tenant(tenant))
 
     customer = None
     lead = None
     if phone_e164:
-        # Ten sam numer potrafi wskazywac kilka rekordow. Bierzemy najnowszy -
-        # ostatnio zalozona kartoteka jest ta, ktora obsluga aktualizowala.
+        # One number can point at several records. We take the most recent one:
+        # the newest record is the one staff have been updating.
         customer = (
             Customer.objects.filter(tenant=tenant, phone_e164=phone_e164)
             .order_by('-id')
@@ -174,9 +174,9 @@ def update_call(request, pk):
 
     with transaction.atomic():
         try:
-            # of=('self',) blokuje wylacznie wiersz Call. `customer` i `lead`
-            # sa nullowalne, wiec select_related robi LEFT JOIN, a PostgreSQL
-            # nie potrafi zalozyc FOR UPDATE na nullowalnej stronie zlaczenia.
+            # of=('self',) locks the Call row only. `customer` and `lead` are
+            # nullable, so select_related produces a LEFT JOIN, and PostgreSQL
+            # cannot apply FOR UPDATE to the nullable side of a join.
             call = Call.objects.select_related('customer', 'lead').select_for_update(of=('self',)).get(
                 pk=pk, tenant=request.tenant
             )
@@ -209,9 +209,9 @@ def complete_after_call(request, pk):
 
     with transaction.atomic():
         try:
-            # of=('self',) blokuje wylacznie wiersz Call. `customer` i `lead`
-            # sa nullowalne, wiec select_related robi LEFT JOIN, a PostgreSQL
-            # nie potrafi zalozyc FOR UPDATE na nullowalnej stronie zlaczenia.
+            # of=('self',) locks the Call row only. `customer` and `lead` are
+            # nullable, so select_related produces a LEFT JOIN, and PostgreSQL
+            # cannot apply FOR UPDATE to the nullable side of a join.
             call = Call.objects.select_related('customer', 'lead').select_for_update(of=('self',)).get(
                 pk=pk, tenant=request.tenant
             )
