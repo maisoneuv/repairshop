@@ -2,6 +2,7 @@
 Work Item search service using hybrid search approach
 """
 from django.db.models import Q
+from core.phone_search import normalize_phone_query
 from .models import WorkItem
 
 
@@ -22,6 +23,9 @@ def search_work_items(query_string, tenant, user, limit=5):
         return WorkItem.objects.none()
 
     query_string = query_string.strip()
+    # A number pasted from a phone ("+48 123 123 123") becomes its last 9
+    # digits, because phone_number is stored without the country code.
+    query_string = normalize_phone_query(query_string)
 
     # Base queryset with relationships
     queryset = WorkItem.objects.filter(
