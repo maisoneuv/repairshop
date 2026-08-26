@@ -12,6 +12,7 @@ from drf_spectacular.utils import extend_schema, inline_serializer
 from rest_framework import serializers as drf_serializers
 
 from core.authentication import APIKeyAuthentication
+from mobile.authentication import MobileJWTAuthentication
 from core.phone import region_for_tenant, to_e164
 from .models import Call
 from .serializers import CallSerializer, CallUpdateSerializer, CompleteAfterCallSerializer
@@ -21,7 +22,7 @@ from service.models import Employee
 
 
 @api_view(['POST'])
-@authentication_classes([SessionAuthentication, APIKeyAuthentication])
+@authentication_classes([SessionAuthentication, APIKeyAuthentication, MobileJWTAuthentication])
 @permission_classes([IsAuthenticated])
 def debug_incoming_call(request):
     """Debug endpoint - returns detailed info about incoming request.
@@ -51,7 +52,7 @@ def debug_incoming_call(request):
     responses={201: CallSerializer},
 )
 @api_view(['POST'])
-@authentication_classes([SessionAuthentication, APIKeyAuthentication])
+@authentication_classes([SessionAuthentication, APIKeyAuthentication, MobileJWTAuthentication])
 @permission_classes([IsAuthenticated])
 def incoming_call(request):
     """Used by Android app to register incoming/outgoing calls."""
@@ -95,7 +96,7 @@ def incoming_call(request):
 
 
 @api_view(['GET'])
-@authentication_classes([SessionAuthentication, APIKeyAuthentication])
+@authentication_classes([SessionAuthentication, APIKeyAuthentication, MobileJWTAuthentication])
 @permission_classes([IsAuthenticated])
 def pending_calls(request):
     """Car Mode polling - returns unhandled calls from the last 5 minutes."""
@@ -110,7 +111,7 @@ def pending_calls(request):
 
 
 @api_view(['POST'])
-@authentication_classes([SessionAuthentication, APIKeyAuthentication])
+@authentication_classes([SessionAuthentication, APIKeyAuthentication, MobileJWTAuthentication])
 @permission_classes([IsAuthenticated])
 def mark_handled(request, pk):
     """Car Mode - marks a call as handled and propagates notes to linked lead."""
@@ -159,7 +160,7 @@ def _append_note_text(existing_text, note):
 
 
 @api_view(['PATCH'])
-@authentication_classes([SessionAuthentication, APIKeyAuthentication])
+@authentication_classes([SessionAuthentication, APIKeyAuthentication, MobileJWTAuthentication])
 @permission_classes([IsAuthenticated])
 def update_call(request, pk):
     """Android app: update call duration and/or post-call status."""
@@ -200,7 +201,7 @@ def update_call(request, pk):
 
 
 @api_view(['POST'])
-@authentication_classes([SessionAuthentication, APIKeyAuthentication])
+@authentication_classes([SessionAuthentication, APIKeyAuthentication, MobileJWTAuthentication])
 @permission_classes([IsAuthenticated])
 def complete_after_call(request, pk):
     serializer = CompleteAfterCallSerializer(data=request.data)

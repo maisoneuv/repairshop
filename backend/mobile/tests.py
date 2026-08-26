@@ -142,6 +142,23 @@ class MobileTokenLifecycleTest(TestCase):
         # We see our own customer from "fixed", not the one from "obcy".
         self.assertEqual(resp.json()["customer"]["name"], "Jan")
 
+    def test_access_token_authorises_call_registration(self):
+        """The app records every call in the CRM, so the mobile token has to open
+        the calls endpoints too - they list their auth classes explicitly."""
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {self.access}")
+        resp = self.client.post(
+            "/api/calls/incoming/",
+            {"phone_number": "+48601234567", "type": "incoming"},
+            format="json",
+        )
+        self.assertEqual(resp.status_code, 201)
+
+        from calls.models import Call
+        call = Call.objects.get(pk=resp.json()["id"])
+        self.assertEqual(call.tenant_id, self.tenant.id)
+        # The number belongs to a customer created in setUp, so it must resolve.
+        self.assertIsNotNone(call.customer_id)
+
     def test_refresh_rotates_the_token(self):
         resp = self.client.post(
             "/api/mobile/auth/refresh", {"refresh": self.refresh}, format="json"
