@@ -200,6 +200,7 @@ REST_FRAMEWORK = {
         'pin_login': '10/min',
         'pinned_users': '30/min',
         'customer_lookup': '30/min',
+        'mobile_sync': '20/min',
     },
     'DEFAULT_SCHEMA_CLASS': 'drf_spectacular.openapi.AutoSchema',
     'DEFAULT_FILTER_BACKENDS': ['django_filters.rest_framework.DjangoFilterBackend'],
