@@ -4,7 +4,11 @@ from django.contrib import messages
 from core.admin_mixins import TenantAwareImportExportAdmin
 from core.models import PicklistValue
 
-from .models import Task, TaskType, TaskTypeValidationRule, WorkItem
+from .models import (
+    Task, TaskType, TaskTypeValidationRule, WorkItem,
+    ProcessTemplate, StageDefinition, StageOutcome, CheckpointField,
+    WorkItemPause, StageTransition, Notification,
+)
 
 
 class TaskTypeValidationRuleInline(admin.TabularInline):
@@ -185,3 +189,79 @@ class PicklistValueAdmin(TenantAwareImportExportAdmin):
 
         if queryset.exists():
             super().delete_queryset(request, queryset)
+
+
+# ---------------------------------------------------------------------------
+# Guided work-item process (behind the `workitem.guided_process` flag)
+# ---------------------------------------------------------------------------
+
+class StageDefinitionInline(admin.TabularInline):
+    model = StageDefinition
+    extra = 0
+    ordering = ['order']
+    fields = ['order', 'key', 'name', 'owner_role', 'status_value']
+
+
+@admin.register(ProcessTemplate)
+class ProcessTemplateAdmin(admin.ModelAdmin):
+    list_display = ['name', 'tenant', 'is_default', 'created_at']
+    list_filter = ['tenant', 'is_default']
+    search_fields = ['name']
+    inlines = [StageDefinitionInline]
+
+
+class StageOutcomeInline(admin.TabularInline):
+    model = StageOutcome
+    fk_name = 'stage'
+    extra = 0
+    ordering = ['order']
+    fields = ['order', 'kind', 'label', 'target_stage', 'waiting_on',
+              'reassign_to_owner', 'resume_returns_to', 'resolve_label']
+
+
+class CheckpointFieldInline(admin.TabularInline):
+    model = CheckpointField
+    extra = 0
+    ordering = ['order']
+    fields = ['order', 'custom_field', 'standard_key', 'required']
+
+
+@admin.register(StageDefinition)
+class StageDefinitionAdmin(admin.ModelAdmin):
+    list_display = ['name', 'process', 'owner_role', 'order', 'status_value']
+    list_filter = ['process__tenant', 'owner_role']
+    search_fields = ['name', 'key']
+    inlines = [StageOutcomeInline, CheckpointFieldInline]
+    fields = ['process', 'order', 'key', 'name', 'owner_role', 'status_value',
+              'guidance', 'recap_sources']
+
+
+@admin.register(WorkItemPause)
+class WorkItemPauseAdmin(admin.ModelAdmin):
+    list_display = ['work_item', 'waiting_on', 'held_by', 'reassigned', 'since']
+    list_filter = ['waiting_on', 'held_by']
+    search_fields = ['work_item__reference_id']
+
+
+@admin.register(StageTransition)
+class StageTransitionAdmin(admin.ModelAdmin):
+    """Append-only audit — read-only in admin."""
+    list_display = ['work_item', 'kind', 'from_stage', 'to_stage', 'by_user', 'at']
+    list_filter = ['kind']
+    search_fields = ['work_item__reference_id']
+    date_hierarchy = 'at'
+    readonly_fields = ['work_item', 'kind', 'from_stage', 'to_stage', 'by_user',
+                       'at', 'note', 'captured_values', 'assigned_at', 'started_at']
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return False
+
+
+@admin.register(Notification)
+class NotificationAdmin(admin.ModelAdmin):
+    list_display = ['type', 'recipient', 'work_item', 'read', 'created_at']
+    list_filter = ['type', 'read', 'tenant']
+    search_fields = ['work_item__reference_id']

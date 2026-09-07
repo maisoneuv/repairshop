@@ -114,8 +114,19 @@ class TimeStampedModel(models.Model):
         abstract = True
 
 class Note(models.Model):
+    # What kind of contact this entry records. Additive and defaulted: existing
+    # rows and any code that doesn't know about it keep behaving as plain notes.
+    KIND_CHOICES = [
+        ('note', 'Internal note'),
+        ('call', 'Call'),
+    ]
+
     author = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True)
     content = models.TextField()
+    kind = models.CharField(max_length=20, choices=KIND_CHOICES, default='note')
+    # Short headline — the call's outcome, so the timeline can show what came of
+    # it without the reader opening the body.
+    subject = models.CharField(max_length=200, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
     # Generic relation

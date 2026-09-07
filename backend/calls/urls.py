@@ -5,6 +5,7 @@ urlpatterns = [
     path('incoming/', views.incoming_call),
     path('debug/', views.debug_incoming_call),
     path('pending/', views.pending_calls),
+    path('customer/<int:customer_id>/', views.calls_for_customer),
     path('<int:pk>/complete/', views.complete_after_call),
     path('<int:pk>/handled/', views.mark_handled),
     path('<int:pk>/', views.update_call),

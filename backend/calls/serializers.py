@@ -60,6 +60,16 @@ class CallSerializer(serializers.ModelSerializer):
         return WorkItemSummarySerializer(qs, many=True).data
 
 
+class CallTimelineSerializer(serializers.ModelSerializer):
+    """Lean shape for the work item activity timeline — no per-call work-item
+    subquery, since the timeline already lives on a work item."""
+
+    class Meta:
+        model = Call
+        fields = ['id', 'type', 'phone_number', 'created_at', 'handled_at',
+                  'duration', 'status', 'notes']
+
+
 class CallUpdateSerializer(serializers.Serializer):
     duration = serializers.IntegerField(required=False, min_value=0, allow_null=True)
     status = serializers.CharField(required=False, allow_blank=True, max_length=30)

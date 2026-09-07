@@ -27,6 +27,7 @@ import { useUser } from "./context/UserContext";
 import LeadBoard from "./pages/LeadBoard";
 import CarMode from "./pages/CarMode";
 import MobilePhotoUpload from "./pages/MobilePhotoUpload";
+import MyWork from "./pages/MyWork";
 
 function App() {
     const { user, loading, isLocked } = useUser();
@@ -61,6 +62,8 @@ function App() {
                 <Route path="/" element={<Home />} />
                 <Route path="/work-items" element={<WorkItemList />} />
                 <Route path="/work-items/new" element={<WorkItemPage />} />
+                {/* Guided-process queue; the page itself handles the flag being off */}
+                <Route path="/work-items/queue" element={<MyWork />} />
                 <Route path="/work-items/:id" element={<WorkItemDetail />} />
                 <Route path="/customers/:id" element={<CustomerDetail />} />
                 <Route path="/tasks/new" element={<TaskForm />} />

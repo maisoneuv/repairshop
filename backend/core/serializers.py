@@ -13,7 +13,8 @@ class NoteSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Note
-        fields = ["id", "content", "created_at", "author_name", "source_model", "source_id"]
+        fields = ["id", "content", "kind", "subject", "created_at", "author_name",
+                  "source_model", "source_id"]
 
     def get_author_name(self, obj):
         """Return the author's full name (first + last), falling back to email if empty, or None for system notes"""
