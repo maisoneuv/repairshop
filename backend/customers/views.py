@@ -10,6 +10,7 @@ from django.db import transaction
 
 from core.mixins import TenantScopedMixin
 from core.phone import region_for_tenant, to_e164
+from core.phone_search import normalize_phone_query
 from core.security import CustomerLookupThrottle
 from core.picklists import (
     CLOSED_ROLES,
@@ -242,7 +243,9 @@ class CustomerAPISearchView(TenantScopedMixin, generics.ListAPIView):
             Q(workitem__reference_id__icontains=query)
         )
 
-        phone_query = ''.join(filter(str.isdigit, query))
+        # A number pasted from a phone ("+48 123 123 123") becomes its last 9
+        # digits, because phone_number is stored without the country code.
+        phone_query = ''.join(filter(str.isdigit, normalize_phone_query(query)))
         if phone_query:
             filters |= Q(phone_number__startswith=phone_query)
 

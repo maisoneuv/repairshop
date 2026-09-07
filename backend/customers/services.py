@@ -2,6 +2,7 @@
 Customer search service using hybrid search approach
 """
 from django.db.models import Q, Count, Prefetch, Case, When, IntegerField, Value
+from core.phone_search import normalize_phone_query
 from .models import Customer
 from tasks.models import WorkItem
 
@@ -24,6 +25,9 @@ def search_customers(query_string, tenant, limit=5):
         return Customer.objects.none()
 
     query_string = query_string.strip()
+    # A number pasted from a phone ("+48 123 123 123") becomes its last 9
+    # digits, because phone_number is stored without the country code.
+    query_string = normalize_phone_query(query_string)
 
     # Prefetch active work items for each customer (max 3 most recent)
     active_work_items = WorkItem.objects.filter(
