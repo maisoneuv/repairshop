@@ -26,6 +26,9 @@ from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework.exceptions import PermissionDenied
 from core.mixins import TenantScopedMixin
 from core.models import Note, PicklistValue
+# Guided work-item process (flag-gated); the actions no-op with a 404 when the
+# tenant hasn't enabled `workitem.guided_process`.
+from .process_views import GuidedProcessActionsMixin
 
 from core.utils import get_model_schema
 from drf_spectacular.utils import extend_schema, extend_schema_view, OpenApiParameter
@@ -270,7 +273,7 @@ _WORK_ITEM_LOOKUP_PARAM = OpenApiParameter(
     list=extend_schema(tags=["Work Items"]),
     create=extend_schema(tags=["Work Items"]),
 )
-class WorkItemViewSet(TenantScopedMixin, viewsets.ModelViewSet):
+class WorkItemViewSet(GuidedProcessActionsMixin, TenantScopedMixin, viewsets.ModelViewSet):
     queryset = WorkItem.objects.select_related(
         'customer_asset__device__category',
         'customer_asset__device',

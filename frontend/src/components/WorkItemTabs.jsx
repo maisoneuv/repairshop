@@ -1,9 +1,20 @@
 import { useState } from 'react';
 
-export default function WorkItemTabs({ children, defaultTab = 'details' }) {
-    const [activeTab, setActiveTab] = useState(defaultTab);
+export default function WorkItemTabs({
+    children,
+    defaultTab = 'details',
+    tabs: tabsProp,
+    activeTab: activeTabProp,
+    onTabChange,
+    flush = false,
+}) {
+    const [internalTab, setInternalTab] = useState(defaultTab);
+    // Controlled when the page needs to drive the tab itself (e.g. Overview's
+    // "Add photos" jumping to the Photos tab); uncontrolled otherwise.
+    const activeTab = activeTabProp ?? internalTab;
+    const setActiveTab = onTabChange ?? setInternalTab;
 
-    const tabs = [
+    const tabs = tabsProp ?? [
         { id: 'details', label: 'Details' },
         { id: 'inventory', label: 'Inventory' },
         { id: 'photos', label: 'Photos' },
@@ -13,10 +24,14 @@ export default function WorkItemTabs({ children, defaultTab = 'details' }) {
     ];
 
     return (
-        <div className="bg-white rounded-xl shadow-lg border border-gray-200 overflow-hidden">
+        <div className={flush
+            // On a white page a shadowed card reads as a floating panel; the
+            // prototype separates the tab strip with a rule instead.
+            ? ''
+            : 'bg-white rounded-xl shadow-lg border border-gray-200 overflow-hidden'}>
             {/* Tab Headers */}
             <div className="border-b border-gray-200">
-                <nav className="flex space-x-8 px-6" aria-label="Tabs">
+                <nav className={`flex space-x-8 ${flush ? 'px-1' : 'px-6'}`} aria-label="Tabs">
                     {tabs.map((tab) => (
                         <button
                             key={tab.id}
@@ -34,7 +49,7 @@ export default function WorkItemTabs({ children, defaultTab = 'details' }) {
             </div>
 
             {/* Tab Content */}
-            <div className="p-3">
+            <div className={flush ? 'py-3' : 'p-3'}>
                 {children({ activeTab })}
             </div>
         </div>

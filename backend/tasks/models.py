@@ -1,5 +1,7 @@
 from _decimal import Decimal
 
+from django.conf import settings
+from django.core.exceptions import FieldDoesNotExist, ValidationError
 from django.db import models, transaction, IntegrityError
 from customers.models import Customer, Asset
 from service.models import Employee, Location
@@ -122,6 +124,9 @@ class WorkItem(models.Model):
         null=True, blank=True, related_name="work_item_payments",
     )
     summary = models.TextField(blank=True, null=True)
+    issue_diagnosis = models.TextField(blank=True, null=True)
+    required_parts = models.TextField(blank=True, null=True)
+    estimated_effort = models.CharField(max_length=50, blank=True, null=True)
     summary_status = models.CharField(
         max_length=20,
         choices=[
@@ -140,6 +145,17 @@ class WorkItem(models.Model):
     notes = GenericRelation(Note)
     photos = GenericRelation(Photo)
     custom_fields = models.JSONField(default=dict, blank=True)
+
+    # Guided process (additive; behind `workitem.guided_process` flag).
+    # Null current_stage = this work item is not on the guided flow — old code
+    # and the legacy `status` field keep working untouched.
+    current_stage = models.ForeignKey(
+        'StageDefinition', on_delete=models.SET_NULL, null=True, blank=True, related_name='+',
+    )
+    progress = models.CharField(
+        max_length=20, null=True, blank=True,
+        choices=[('pending', 'Pending'), ('in_progress', 'In progress')],
+    )
 
     def __str__(self):
         return self.reference_id
@@ -285,3 +301,265 @@ class Task(models.Model):
             ("view_all_tasks", "Can view all tasks in tenant"),
             ("view_own_tasks", "Can view own assigned tasks"),
         ]
+
+
+# ---------------------------------------------------------------------------
+# Guided work-item process (additive; behind the `workitem.guided_process`
+# feature flag). See design/work-item-detail-redesign/WORK_ITEM_DETAIL_MODEL.md
+# and ROLLOUT_AND_ROLLBACK.md. Nothing here mutates the legacy `status` flow —
+# StageDefinition runs in parallel and links to it via `status_value`.
+# ---------------------------------------------------------------------------
+
+OWNER_ROLE_CHOICES = [
+    ('owner', 'Customer service'),
+    ('technician', 'Technician'),
+    ('any', 'Anyone'),
+]
+WAITING_ON_CHOICES = [
+    ('customer', 'Customer'),
+    ('supplier', 'Supplier'),
+]
+# Reserved suffix in `StageDefinition.recap_sources`: "repair.note" means the
+# note left on the way out of Repair, not a captured field called "note".
+RECAP_NOTE_KEY = 'note'
+# Reserved *prefix*: "item.description" is a column on the work item itself, not
+# a stage key. Intake data (the reported issue, the device's condition) is
+# recorded on the work item at creation, so no stage's checkpoint captures it —
+# yet it is exactly what the first technician has to base a diagnosis on.
+RECAP_ITEM_KEY = 'item'
+
+
+class ProcessTemplate(models.Model):
+    """A tenant's repair process — the ordered set of stages. One default per shop."""
+    tenant = models.ForeignKey(Tenant, on_delete=models.CASCADE, related_name='process_templates')
+    name = models.CharField(max_length=100)
+    is_default = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(fields=['tenant', 'name'], name='unique_process_template_per_tenant'),
+        ]
+
+    def __str__(self):
+        return f"{self.name} ({self.tenant})"
+
+
+class StageDefinition(models.Model):
+    """One stage in a process (New, Diagnosis, Quote…). Parallel to the legacy
+    `WorkItem.status`; `status_value` links to the PicklistValue/status string
+    so advancing a stage can dual-write the legacy status."""
+    process = models.ForeignKey(ProcessTemplate, on_delete=models.CASCADE, related_name='stages')
+    key = models.SlugField(max_length=50)
+    name = models.CharField(max_length=100)
+    status_value = models.CharField(
+        max_length=100, blank=True,
+        help_text="Legacy WorkItem.status value this stage maps to (for dual-write during rollout).",
+    )
+    owner_role = models.CharField(max_length=20, choices=OWNER_ROLE_CHOICES, default='any', blank=True)
+    guidance = models.TextField(blank=True)
+    recap_sources = models.JSONField(
+        default=list, blank=True,
+        help_text=(
+            'Earlier output to show read-only at the top of this checkpoint, as a '
+            'list of strings. "diagnosis" = everything that stage captured; '
+            '"diagnosis.issue_diagnosis" = one of its checkpoint fields; '
+            '"repair.note" = the note left on the way out of that stage; '
+            '"item.description" = a field on the work item itself, for intake '
+            'data no stage captures. E.g. ["diagnosis"] on Quote.'
+        ),
+    )
+    order = models.IntegerField(default=0)
+
+    class Meta:
+        ordering = ['order']
+        constraints = [
+            models.UniqueConstraint(fields=['process', 'key'], name='unique_stage_key_per_process'),
+        ]
+
+    def __str__(self):
+        return f"{self.name} ({self.process.name})"
+
+    def clean(self):
+        """Catch a mistyped recap source at edit time.
+
+        Without this a bad reference just renders nothing, and an admin has no
+        way to tell a typo from "this repair hasn't got there yet".
+        """
+        super().clean()
+        if not self.recap_sources:
+            return
+        if not isinstance(self.recap_sources, list):
+            raise ValidationError({'recap_sources': 'Must be a list of strings.'})
+
+        siblings = {
+            s.key: s for s in
+            StageDefinition.objects.filter(process_id=self.process_id).exclude(pk=self.pk)
+        }
+        errors = []
+        for entry in self.recap_sources:
+            if not isinstance(entry, str) or not entry.strip():
+                errors.append(f'{entry!r} is not a stage key.')
+                continue
+            stage_key, _, field_key = entry.partition('.')
+            if stage_key == RECAP_ITEM_KEY:
+                if not field_key:
+                    errors.append(
+                        f'"{entry}": name a work item field, e.g. "item.description".')
+                    continue
+                try:
+                    field = WorkItem._meta.get_field(field_key)
+                except FieldDoesNotExist:
+                    field = None
+                if field is None or not field.concrete:
+                    errors.append(f'"{entry}": WorkItem has no field "{field_key}".')
+                continue
+            source = siblings.get(stage_key)
+            if source is None:
+                errors.append(
+                    f'"{entry}": no earlier stage "{stage_key}" in this process.')
+                continue
+            # A recap is of work already done; a later stage has nothing to show.
+            if source.order >= self.order:
+                errors.append(
+                    f'"{entry}": "{stage_key}" does not come before this stage.')
+                continue
+            if not field_key or field_key == RECAP_NOTE_KEY:
+                continue
+            captured = {
+                f.custom_field.field_key if f.custom_field_id else f.standard_key
+                for f in source.checkpoint_fields.select_related('custom_field')
+            }
+            if field_key not in captured:
+                available = ', '.join(sorted(captured)) or 'nothing'
+                errors.append(
+                    f'"{entry}": "{stage_key}" does not capture "{field_key}" '
+                    f'(it captures: {available}).')
+        if errors:
+            raise ValidationError({'recap_sources': errors})
+
+
+class StageOutcome(models.Model):
+    """A way to leave a stage: Advance / Pause / Exit."""
+    KIND_CHOICES = [
+        ('advance', 'Advance'),
+        ('pause', 'Pause'),
+        ('exit', 'Exit'),
+    ]
+    stage = models.ForeignKey(StageDefinition, on_delete=models.CASCADE, related_name='outcomes')
+    kind = models.CharField(max_length=10, choices=KIND_CHOICES)
+    label = models.CharField(max_length=120)
+    # advance / exit → where it goes; null for pause
+    target_stage = models.ForeignKey(
+        StageDefinition, on_delete=models.SET_NULL, null=True, blank=True, related_name='+',
+    )
+    # pause → who we wait on
+    waiting_on = models.CharField(max_length=20, choices=WAITING_ON_CHOICES, blank=True)
+    reassign_to_owner = models.BooleanField(default=False)
+    resume_returns_to = models.CharField(max_length=20, choices=OWNER_ROLE_CHOICES, blank=True)
+    resolve_label = models.CharField(max_length=120, blank=True)
+    order = models.IntegerField(default=0)
+
+    class Meta:
+        ordering = ['order']
+
+    def __str__(self):
+        return f"{self.get_kind_display()}: {self.label}"
+
+
+class CheckpointField(models.Model):
+    """Puts a field on a stage's checkpoint. The field is either a tenant
+    `core.CustomField` or a standard WorkItem column referenced by key."""
+    stage = models.ForeignKey(StageDefinition, on_delete=models.CASCADE, related_name='checkpoint_fields')
+    custom_field = models.ForeignKey(
+        'core.CustomField', on_delete=models.SET_NULL, null=True, blank=True, related_name='+',
+    )
+    standard_key = models.CharField(
+        max_length=100, blank=True,
+        help_text="WorkItem column key when this is a standard (non-custom) field, e.g. 'technician'.",
+    )
+    required = models.BooleanField(default=False)
+    order = models.IntegerField(default=0)
+
+    class Meta:
+        ordering = ['order']
+
+    def __str__(self):
+        return self.custom_field.label if self.custom_field else self.standard_key
+
+
+class WorkItemPause(models.Model):
+    """A work item's active pause overlay. At most one per work item."""
+    HELD_BY_CHOICES = OWNER_ROLE_CHOICES
+    work_item = models.OneToOneField(WorkItem, on_delete=models.CASCADE, related_name='pause')
+    waiting_on = models.CharField(max_length=20, choices=WAITING_ON_CHOICES)
+    reason = models.CharField(max_length=255, blank=True)
+    since = models.DateTimeField(auto_now_add=True)
+    held_by = models.CharField(max_length=20, choices=HELD_BY_CHOICES, blank=True)
+    reassigned = models.BooleanField(default=False)
+    resolve_label = models.CharField(max_length=120, blank=True)
+
+    def __str__(self):
+        return f"{self.work_item.reference_id} paused on {self.waiting_on}"
+
+
+class StageTransition(models.Model):
+    """Append-only audit of every advance / pause / resolve / exit / start / back.
+    Preserves each repair's real history so the template can be edited live."""
+    KIND_CHOICES = [
+        ('start', 'Start'),
+        ('advance', 'Advance'),
+        ('pause', 'Pause'),
+        ('resolve', 'Resolve'),
+        ('exit', 'Exit'),
+        # A correction: something was missed, so the repair returns to an
+        # earlier stage. Recorded distinctly so the trail doesn't read as if
+        # the work legitimately flowed backwards.
+        ('back', 'Moved back'),
+    ]
+    work_item = models.ForeignKey(WorkItem, on_delete=models.CASCADE, related_name='stage_transitions')
+    from_stage = models.ForeignKey(StageDefinition, on_delete=models.SET_NULL, null=True, blank=True, related_name='+')
+    to_stage = models.ForeignKey(StageDefinition, on_delete=models.SET_NULL, null=True, blank=True, related_name='+')
+    kind = models.CharField(max_length=10, choices=KIND_CHOICES)
+    by_user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True)
+    at = models.DateTimeField(auto_now_add=True)
+    note = models.TextField(blank=True)
+    captured_values = models.JSONField(default=dict, blank=True)
+    assigned_at = models.DateTimeField(null=True, blank=True)
+    started_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ['-at']
+        indexes = [
+            models.Index(fields=['work_item', 'at'], name='stagetransition_wi_at_idx'),
+        ]
+
+    def __str__(self):
+        return f"{self.work_item.reference_id}: {self.kind} → {self.to_stage_id}"
+
+
+class Notification(models.Model):
+    """A queue nudge for one person. Restrained: only handoff / bounce /
+    resolved-for-you / due (see §7E)."""
+    TYPE_CHOICES = [
+        ('handoff', 'Handed to you'),
+        ('bounce', 'Needs your call'),
+        ('resolved', 'Wait resolved'),
+        ('due', 'Due soon'),
+    ]
+    tenant = models.ForeignKey(Tenant, on_delete=models.CASCADE, related_name='workitem_notifications')
+    recipient = models.ForeignKey(Employee, on_delete=models.CASCADE, related_name='workitem_notifications')
+    work_item = models.ForeignKey(WorkItem, on_delete=models.CASCADE, null=True, blank=True, related_name='notifications')
+    type = models.CharField(max_length=12, choices=TYPE_CHOICES)
+    text = models.CharField(max_length=255)
+    read = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['recipient', 'read', 'created_at'], name='notification_recipient_idx'),
+        ]
+
+    def __str__(self):
+        return f"{self.get_type_display()} → {self.recipient} ({self.work_item_id})"

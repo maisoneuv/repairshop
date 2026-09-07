@@ -6,6 +6,7 @@ import { useEffect, useState } from "react";
 import GlobalSearch from "../components/GlobalSearch/GlobalSearch";
 import SideNav from "../components/SideNav";
 import QuickLeadModal from "../components/QuickLeadModal";
+import NotificationBell from "../components/NotificationBell";
 import { Toaster } from "sonner";
 
 export default function AppLayout() {
@@ -109,6 +110,8 @@ export default function AppLayout() {
                                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
                                     </svg>
                                 </button>
+                                {/* Renders only when the tenant is on the guided process */}
+                                <NotificationBell />
                                 <UserProfileDropdown />
                             </div>
                         </div>
@@ -140,7 +143,10 @@ export default function AppLayout() {
                 </div>
             )}
 
-            <main className="w-full max-w-7xl mx-auto md:ml-0 md:mr-0 px-0 md:px-6 pb-6">
+            {/* No global width cap: `md:ml-0 md:mr-0` already left-aligns the
+                content, so a max-width here just dumped the slack on the right.
+                Pages that want to stay narrow set their own max-width. */}
+            <main className="w-full px-0 md:px-6 pb-6">
                 <Outlet />
             </main>
             </div>

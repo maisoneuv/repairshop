@@ -142,6 +142,10 @@ def workitem_status_note(sender, instance, created, **kwargs):
         return
 
     old_status = _workitem_old_status.pop(instance.pk, None)
+    # A guided stage advance already records the move as a StageTransition, so it
+    # asks us to skip the note that would double it up on the timeline.
+    if getattr(instance, '_skip_status_note', False):
+        return
     if old_status and old_status != instance.status:
         author = getattr(instance, '_changed_by', None)
         Note.objects.create(

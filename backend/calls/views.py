@@ -15,7 +15,10 @@ from core.authentication import APIKeyAuthentication
 from mobile.authentication import MobileJWTAuthentication
 from core.phone import region_for_tenant, to_e164
 from .models import Call
-from .serializers import CallSerializer, CallUpdateSerializer, CompleteAfterCallSerializer
+from .serializers import (
+    CallSerializer, CallTimelineSerializer, CallUpdateSerializer,
+    CompleteAfterCallSerializer,
+)
 from customers.models import Customer, Lead
 from tasks.models import Task
 from service.models import Employee
@@ -97,6 +100,22 @@ def incoming_call(request):
 
 @api_view(['GET'])
 @authentication_classes([SessionAuthentication, APIKeyAuthentication, MobileJWTAuthentication])
+@permission_classes([IsAuthenticated])
+def calls_for_customer(request, customer_id):
+    """Calls logged against a customer — surfaced on their work item timelines.
+
+    A Call links to a Customer (via phone match), not a work item, so a work
+    item shows its customer's calls. Tenant-scoped: a customer id from another
+    tenant matches no calls here.
+    """
+    calls = Call.objects.filter(
+        tenant=request.tenant, customer_id=customer_id
+    ).order_by('-created_at')
+    return Response(CallTimelineSerializer(calls, many=True).data)
+
+
+@api_view(['GET'])
+@authentication_classes([SessionAuthentication, APIKeyAuthentication])
 @permission_classes([IsAuthenticated])
 def pending_calls(request):
     """Car Mode polling - returns unhandled calls from the last 5 minutes."""

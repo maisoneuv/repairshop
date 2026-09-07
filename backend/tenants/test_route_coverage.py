@@ -51,6 +51,7 @@ AUDITED_VIEWS = {
     "calls.views.incoming_call",        # Call created with tenant=request.tenant
     "calls.views.debug_incoming_call",  # no ORM access (echo endpoint)
     "calls.views.pending_calls",        # filter(tenant=request.tenant)
+    "calls.views.calls_for_customer",   # filter(tenant=request.tenant, customer_id=...)
     "calls.views.mark_handled",         # get(pk=..., tenant=request.tenant)
     "calls.views.update_call",          # get(pk=..., tenant=request.tenant)
     "calls.views.complete_after_call",  # get(pk=..., tenant=request.tenant)

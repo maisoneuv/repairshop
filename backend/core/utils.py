@@ -71,6 +71,11 @@ def get_model_schema(model_class, tenant=None):
     PICKLIST_FIELDS = {
         'WorkItem': {
             'status': 'workitem_status',
+            'type': 'workitem_type',
+            'priority': 'workitem_priority',
+            'intake_method': 'intake_method',
+            'dropoff_method': 'dropoff_method',
+            'payment_method': 'payment_method',
             'currency': 'currency',
         },
         'Task': {
@@ -205,3 +210,21 @@ def validate_custom_field_values(tenant, model_name, values: dict):
 
     if errors:
         raise serializers.ValidationError({'custom_fields': errors})
+
+
+# Feature flag for the guided work-item process.
+# See design/work-item-detail-redesign/ROLLOUT_AND_ROLLBACK.md
+GUIDED_PROCESS_FLAG = 'workitem.guided_process'
+
+
+def guided_process_enabled(tenant) -> bool:
+    """Whether the guided work-item process is enabled for this tenant.
+
+    Backed by the per-tenant ``Setting`` (global default + tenant override), so it
+    can be flipped on/off per tenant with no deploy. Defaults to ``False`` — the
+    legacy status flow is unchanged until a tenant is explicitly opted in.
+    """
+    from core.models import Setting
+    if tenant is None:
+        return False
+    return bool(Setting.get_value(GUIDED_PROCESS_FLAG, tenant=tenant, default=False))

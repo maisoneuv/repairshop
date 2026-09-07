@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import {
@@ -17,8 +17,10 @@ import {
     ChevronsRight,
     UserPlus,
     Settings,
+    Inbox,
 } from "lucide-react";
 import GlobalActionsSection from "../features/CustomActions/GlobalActionsSection";
+import { useGuidedProcessEnabled } from "../hooks/useGuidedProcess";
 
 const NAV_GROUPS = [
     {
@@ -229,7 +231,25 @@ export default function SideNav({ mobileOpen, onMobileClose, collapsed = false, 
         onMobileClose();
     }
 
-    const desktopGroups = NAV_GROUPS.filter((g) => !g.mobileOnly);
+    // The guided-process queue lives inside Work Items (§7E), not a new nav
+    // group — and only for tenants that have the flag on.
+    const guidedEnabled = useGuidedProcessEnabled();
+    const navGroups = useMemo(() => {
+        if (!guidedEnabled) return NAV_GROUPS;
+        return NAV_GROUPS.map((group) =>
+            group.key === "work-items"
+                ? {
+                      ...group,
+                      children: [
+                          { label: "My Work Queue", path: "/work-items/queue", icon: Inbox },
+                          ...group.children,
+                      ],
+                  }
+                : group
+        );
+    }, [guidedEnabled]);
+
+    const desktopGroups = navGroups.filter((g) => !g.mobileOnly);
 
     return (
         <>
@@ -492,7 +512,7 @@ export default function SideNav({ mobileOpen, onMobileClose, collapsed = false, 
                                         );
                                     })}
                                 </div>
-                                {NAV_GROUPS.map((group) => (
+                                {navGroups.map((group) => (
                                     <MobileNavGroup
                                         key={group.key}
                                         group={group}

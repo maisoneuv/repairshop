@@ -1,0 +1,26 @@
+{
+  "detector": {
+    "ignoreRules": [],
+    "ignoreFiles": [],
+    "ignoreValues": [
+      {
+        "rule": "border-accent-on-rounded",
+        "value": "*",
+        "files": [
+          "src/pages/WorkItemDetail.jsx"
+        ],
+        "createdAt": "2026-08-21T20:03:49.925Z",
+        "reason": "Claude: CSS loading spinner (animate-spin rounded-full border-b-2) — partial border on a round element is the spinner arc, not a card accent; pre-existing, unrelated to this change. Re-scoped to the path the scanner reports (src/... not frontend/src/...)."
+      },
+      {
+        "rule": "border-accent-on-rounded",
+        "value": "*",
+        "files": [
+          "frontend/src/features/WorkItems/detail/ActivityFeed.jsx"
+        ],
+        "createdAt": "2026-08-23T13:16:52.001Z",
+        "reason": "Claude: L113 is the composer's active-tab underline — rounded-t-lg tab with a border-b-2 indicator (standard tabs idiom); the bottom border is the selected-tab marker, not a card accent clashing with corners. Pre-existing component."
+      }
+    ]
+  }
+}

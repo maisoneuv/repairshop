@@ -10,10 +10,15 @@ export async function fetchNotes(model, id) {
     }
 }
 
-export async function createNote(model, id, content) {
+/**
+ * `kind` distinguishes an internal note from a logged call, so the activity
+ * feed can filter by contact type instead of parsing the body. Defaults to
+ * "note" server-side, so existing callers are unaffected.
+ */
+export async function createNote(model, id, content, { kind = "note", subject = "" } = {}) {
     try {
         const response = await apiClient.post(`/api/core/notes/${model}/${id}/`, {
-            content
+            content, kind, subject,
         });
         return response.data;
     } catch (error) {
