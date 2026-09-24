@@ -233,5 +233,24 @@ function displayOf(value, type) {
     if (value === null || value === undefined || value === "") return "";
     if (type === "boolean") return value ? "Yes" : "No";
     if (typeof value === "object") return value.name ?? value.label ?? String(value.id ?? "");
+    if (type === "date") return displayDate(value);
     return String(value);
+}
+
+function displayDate(value) {
+    const raw = String(value);
+    const parsed = new Date(raw);
+    if (Number.isNaN(parsed.getTime())) return raw;
+
+    // A bare "2026-07-30" parses as UTC midnight, which displays as the 29th
+    // anywhere west of Greenwich — re-parse it as a local date instead.
+    if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) {
+        return new Date(`${raw}T00:00:00`).toLocaleDateString(undefined, {
+            day: "numeric", month: "short", year: "numeric",
+        });
+    }
+    return parsed.toLocaleString(undefined, {
+        day: "numeric", month: "short", year: "numeric",
+        hour: "2-digit", minute: "2-digit",
+    });
 }

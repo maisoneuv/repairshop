@@ -89,6 +89,8 @@ class WorkItem(models.Model):
     status = models.CharField(max_length=100, default='New')
     customer = models.ForeignKey(Customer, blank=False, null=False, on_delete=models.PROTECT)
     created_date = models.DateTimeField(auto_now_add=True)
+    # Does not move when a note, email or photo is attached — only on save().
+    updated_date = models.DateTimeField(auto_now=True)
     closed_date = models.DateTimeField(blank=True, null=True)
     owner = models.ForeignKey(Employee, on_delete=models.PROTECT, related_name="owner") #todo
     due_date = models.DateField(null=True, blank=True)

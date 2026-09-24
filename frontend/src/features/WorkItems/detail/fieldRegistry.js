@@ -49,6 +49,7 @@ const WORK_ITEM_SECTIONS = [
             { key: "technician", label: "Technician" },
             { key: "due_date", label: "Due date", type: "date" },
             { key: "created_date", label: "Created", type: "date", ro: true, roHint: "Assigned by the system" },
+            { key: "updated_date", label: "Last updated", type: "date", ro: true, roHint: "Stamped whenever this record is saved" },
             { key: "closed_date", label: "Closed", type: "date", ro: true, roHint: "Set when the repair closes" },
         ],
     },

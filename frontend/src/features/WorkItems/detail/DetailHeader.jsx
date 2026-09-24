@@ -37,6 +37,7 @@ export default function DetailHeader({ workItem }) {
                 <span className="text-[12.5px] font-bold text-gray-900">
                     {workItem.reference_id}
                 </span>
+                <Timestamps workItem={workItem} />
             </div>
 
             <div className="px-5 pt-4 pb-1 flex justify-between items-start gap-6 flex-wrap">
@@ -85,6 +86,67 @@ export default function DetailHeader({ workItem }) {
             </div>
         </>
     );
+}
+
+const SAME_MOMENT_MS = 60_000;
+
+function Timestamps({ workItem }) {
+    const created = toDate(workItem.created_date);
+    const updated = toDate(workItem.updated_date);
+    if (!created && !updated) return null;
+
+    const edited = created && updated && updated - created > SAME_MOMENT_MS;
+
+    return (
+        <div className="ml-auto flex items-center gap-2 text-[11.5px] text-gray-600 shrink-0">
+            {created && (
+                <span title={`Created ${created.toLocaleString()}`}>
+                    Created {formatDate(created)}
+                </span>
+            )}
+            {edited && (
+                <span className="hidden sm:flex items-center gap-2">
+                    <span className="text-gray-400" aria-hidden="true">·</span>
+                    <span title={`Last updated ${updated.toLocaleString()}`}>
+                        Updated {formatAgo(updated)}
+                    </span>
+                </span>
+            )}
+        </div>
+    );
+}
+
+function toDate(value) {
+    if (!value) return null;
+    const d = new Date(value);
+    return Number.isNaN(d.getTime()) ? null : d;
+}
+
+function formatDate(date) {
+    return date.toLocaleDateString(undefined, {
+        day: "numeric", month: "short", year: "numeric",
+    });
+}
+
+const AGO_UNITS = [
+    ["year", 31536000],
+    ["month", 2592000],
+    ["week", 604800],
+    ["day", 86400],
+    ["hour", 3600],
+    ["minute", 60],
+];
+
+function formatAgo(date) {
+    const secondsFromNow = (date - new Date()) / 1000;
+    const abs = Math.abs(secondsFromNow);
+    if (abs < 60) return "just now";
+
+    const rtf = new Intl.RelativeTimeFormat(undefined, { numeric: "auto" });
+    for (const [unit, size] of AGO_UNITS) {
+        if (abs >= size) return rtf.format(Math.round(secondsFromNow / size), unit);
+    }
+    return "just now";
 }
 
 const PILL = "inline-flex items-center gap-1.5 text-xs font-extrabold px-2.5 py-1 rounded-full";
