@@ -330,6 +330,9 @@ class WorkItemViewSet(GuidedProcessActionsMixin, TenantScopedMixin, viewsets.Mod
         if not self.request.user.has_permission('tasks.add_workitem', tenant):
             raise PermissionDenied("You do not have permission to create a work item")
         super().perform_create(serializer)
+        # An intake taken with a prepaid amount already has money in the till.
+        self._sync_cash_transactions(
+            serializer.instance, None, self._acting_employee())
 
     def perform_update(self, serializer):
         user = self.request.user
@@ -344,175 +347,87 @@ class WorkItemViewSet(GuidedProcessActionsMixin, TenantScopedMixin, viewsets.Mod
 
         # Capture old values before saving
         old_register_id = instance.payment_register_id
-        old_prepaid = instance.prepaid_amount or Decimal('0.00')
-        old_final = instance.final_price or Decimal('0.00')
 
         serializer.save()
 
-        # Reload to get new values
         instance.refresh_from_db()
-        new_register_id = instance.payment_register_id
-        new_prepaid = instance.prepaid_amount or Decimal('0.00')
-        new_final = instance.final_price or Decimal('0.00')
 
-        # Resolve the employee performing the action
-        performed_by = None
-        try:
-            performed_by = Employee.objects.get(user=user, tenant=self.request.tenant)
-        except Employee.DoesNotExist:
-            pass
+        self._sync_cash_transactions(
+            instance, old_register_id, self._acting_employee())
 
-        self._handle_auto_transactions(
-            instance=instance,
-            old_register_id=old_register_id,
-            new_register_id=new_register_id,
-            old_prepaid=old_prepaid,
-            new_prepaid=new_prepaid,
-            old_final=old_final,
-            new_final=new_final,
+    def _acting_employee(self):
+        return Employee.objects.filter(
+            user=self.request.user, tenant=self.request.tenant).first()
+
+    @staticmethod
+    def _collected_amount(instance):
+        """What the customer has handed over.
+
+        `final_price` is captured at Handover, when the balance is collected, so
+        once it is set it is the whole amount taken — not an extra charge on top
+        of the prepaid, which is a part payment against the same total.
+        """
+        if instance.final_price is not None:
+            return instance.final_price
+        return instance.prepaid_amount or Decimal('0.00')
+
+    @staticmethod
+    def _booked_total(register_id, work_item):
+        """What this work item has already put through a register.
+
+        `CashTransaction.save()` stores withdrawals negative, so the amounts are
+        already signed and a plain sum nets them off.
+        """
+        total = CashTransaction.objects.filter(
+            register_id=register_id, work_item=work_item,
+        ).aggregate(total=Sum('amount'))['total']
+        return total or Decimal('0.00')
+
+    def _book(self, instance, register_id, amount, description, performed_by):
+        CashTransaction.objects.create(
+            tenant=instance.tenant,
+            register_id=register_id,
+            transaction_type=(
+                CashTransactionType.DEPOSIT if amount > 0
+                else CashTransactionType.WITHDRAWAL
+            ),
+            amount=abs(amount),
+            currency=instance.currency or 'PLN',
+            work_item=instance,
+            description=description,
             performed_by=performed_by,
         )
 
-    def _handle_auto_transactions(
-        self, instance, old_register_id, new_register_id,
-        old_prepaid, new_prepaid, old_final, new_final, performed_by
-    ):
-        """Auto-create CashTransaction records when payment_register and amounts change."""
-        if not new_register_id:
-            return
+    def _sync_cash_transactions(self, instance, old_register_id, performed_by):
+        """Reconcile the register against what the customer has actually paid.
 
-        register_changed = old_register_id != new_register_id
-        prepaid_changed = old_prepaid != new_prepaid
-        final_changed = old_final != new_final
-
-        if not register_changed and not prepaid_changed and not final_changed:
-            return
+        Booking the difference rather than each change in isolation keeps the
+        till self-correcting: whatever the previous state, the transactions for
+        this work item end up totalling the collected amount. Editing a price
+        twice, or setting a prepaid and then a final price, cannot double-count.
+        """
+        new_register_id = instance.payment_register_id
 
         with transaction.atomic():
-            # Case 1: Register was just assigned (wasn't set before)
-            if register_changed and not old_register_id:
-                # Create deposits for any existing amounts
-                if new_prepaid > 0:
-                    CashTransaction.objects.create(
-                        tenant=instance.tenant,
-                        register_id=new_register_id,
-                        transaction_type=CashTransactionType.DEPOSIT,
-                        amount=new_prepaid,
-                        currency=instance.currency or 'PLN',
-                        work_item=instance,
-                        description=f"Prepaid amount for {instance.reference_id}",
-                        performed_by=performed_by,
+            if old_register_id and old_register_id != new_register_id:
+                booked = self._booked_total(old_register_id, instance)
+                if booked:
+                    self._book(
+                        instance, old_register_id, -booked,
+                        f"Register reassignment - reversed for {instance.reference_id}",
+                        performed_by,
                     )
-                if new_final > 0:
-                    CashTransaction.objects.create(
-                        tenant=instance.tenant,
-                        register_id=new_register_id,
-                        transaction_type=CashTransactionType.DEPOSIT,
-                        amount=new_final,
-                        currency=instance.currency or 'PLN',
-                        work_item=instance,
-                        description=f"Final price payment for {instance.reference_id}",
-                        performed_by=performed_by,
-                    )
+
+            if not new_register_id:
                 return
 
-            # Case 2: Register changed from one to another
-            if register_changed and old_register_id:
-                # Reverse all previous auto-transactions on the old register for this work item
-                old_total = CashTransaction.objects.filter(
-                    register_id=old_register_id,
-                    work_item=instance,
-                ).aggregate(total=Sum('amount'))['total'] or Decimal('0.00')
-
-                if old_total != Decimal('0.00'):
-                    CashTransaction.objects.create(
-                        tenant=instance.tenant,
-                        register_id=old_register_id,
-                        transaction_type=CashTransactionType.WITHDRAWAL,
-                        amount=abs(old_total),
-                        currency=instance.currency or 'PLN',
-                        work_item=instance,
-                        description=f"Register reassignment - reversed for {instance.reference_id}",
-                        performed_by=performed_by,
-                    )
-
-                # Create deposits on the new register
-                if new_prepaid > 0:
-                    CashTransaction.objects.create(
-                        tenant=instance.tenant,
-                        register_id=new_register_id,
-                        transaction_type=CashTransactionType.DEPOSIT,
-                        amount=new_prepaid,
-                        currency=instance.currency or 'PLN',
-                        work_item=instance,
-                        description=f"Prepaid amount for {instance.reference_id}",
-                        performed_by=performed_by,
-                    )
-                if new_final > 0:
-                    CashTransaction.objects.create(
-                        tenant=instance.tenant,
-                        register_id=new_register_id,
-                        transaction_type=CashTransactionType.DEPOSIT,
-                        amount=new_final,
-                        currency=instance.currency or 'PLN',
-                        work_item=instance,
-                        description=f"Final price payment for {instance.reference_id}",
-                        performed_by=performed_by,
-                    )
-                return
-
-            # Case 3: Same register, but amounts changed
-            if prepaid_changed:
-                diff = new_prepaid - old_prepaid
-                if diff != Decimal('0.00'):
-                    if diff > 0:
-                        CashTransaction.objects.create(
-                            tenant=instance.tenant,
-                            register_id=new_register_id,
-                            transaction_type=CashTransactionType.DEPOSIT,
-                            amount=diff,
-                            currency=instance.currency or 'PLN',
-                            work_item=instance,
-                            description=f"Prepaid amount updated for {instance.reference_id}",
-                            performed_by=performed_by,
-                        )
-                    else:
-                        CashTransaction.objects.create(
-                            tenant=instance.tenant,
-                            register_id=new_register_id,
-                            transaction_type=CashTransactionType.WITHDRAWAL,
-                            amount=abs(diff),
-                            currency=instance.currency or 'PLN',
-                            work_item=instance,
-                            description=f"Prepaid amount reduced for {instance.reference_id}",
-                            performed_by=performed_by,
-                        )
-
-            if final_changed:
-                diff = new_final - old_final
-                if diff != Decimal('0.00'):
-                    if diff > 0:
-                        CashTransaction.objects.create(
-                            tenant=instance.tenant,
-                            register_id=new_register_id,
-                            transaction_type=CashTransactionType.DEPOSIT,
-                            amount=diff,
-                            currency=instance.currency or 'PLN',
-                            work_item=instance,
-                            description=f"Final price updated for {instance.reference_id}",
-                            performed_by=performed_by,
-                        )
-                    else:
-                        CashTransaction.objects.create(
-                            tenant=instance.tenant,
-                            register_id=new_register_id,
-                            transaction_type=CashTransactionType.WITHDRAWAL,
-                            amount=abs(diff),
-                            currency=instance.currency or 'PLN',
-                            work_item=instance,
-                            description=f"Final price reduced for {instance.reference_id}",
-                            performed_by=performed_by,
-                        )
+            difference = self._collected_amount(instance) - self._booked_total(
+                new_register_id, instance)
+            if difference:
+                self._book(
+                    instance, new_register_id, difference,
+                    f"Payment for {instance.reference_id}", performed_by,
+                )
 
     def perform_destroy(self, instance):
         user = self.request.user

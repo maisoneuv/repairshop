@@ -3,6 +3,7 @@ import { toast } from "sonner";
 import { ArrowRight, Check, ChevronDown, ChevronUp, LogOut, Pause } from "lucide-react";
 import CheckpointFieldInput, { isWideField } from "./CheckpointFieldInput";
 import RecapCard from "./RecapCard";
+import RouteBanner from "./RouteBanner";
 
 /**
  * The checkpoint (§5 "outcomes"): what earlier stages produced, the handful of
@@ -23,6 +24,8 @@ export default function CheckpointPanel({ state, stage, busy, actions, attached 
     const [fieldErrors, setFieldErrors] = useState({});
     const [collapsed, setCollapsed] = useState(false);
     const [saving, setSaving] = useState(false);
+    const [confirmingExit, setConfirmingExit] = useState(null);
+    const [exitNote, setExitNote] = useState("");
 
     const checkpointFields = useMemo(() => stage?.checkpoint_fields ?? [], [stage]);
 
@@ -46,6 +49,8 @@ export default function CheckpointPanel({ state, stage, busy, actions, attached 
         }
         setValues(initial);
         setFieldErrors({});
+        setConfirmingExit(null);
+        setExitNote("");
         claimed.current = false;
     }, [stage?.id]);
 
@@ -62,6 +67,10 @@ export default function CheckpointPanel({ state, stage, busy, actions, attached 
         : "bg-white rounded-xl border border-gray-200";
 
     const outcomes = stage.outcomes ?? [];
+    // `effective_target_*` is the declared target resolved through the skip
+    // rules; fall back for a payload from a backend that predates it.
+    const destinationOf = (outcome) =>
+        outcome.effective_target_stage_name ?? outcome.target_stage_name ?? null;
     const advanceOutcomes = outcomes.filter((o) => o.kind === "advance");
     const otherOutcomes = outcomes.filter((o) => o.kind !== "advance");
     const primary = advanceOutcomes[0];
@@ -91,23 +100,41 @@ export default function CheckpointPanel({ state, stage, busy, actions, attached 
         toast.error(message);
     };
 
-    const runOutcome = async (outcome) => {
+    const runOutcome = async (outcome, note = "") => {
         setFieldErrors({});
         const body = {
             outcome_id: outcome.id,
             captured_values: capturedPayload(),
         };
+        if (note.trim()) body.note = note.trim();
         try {
             if (outcome.kind === "pause") {
                 await actions.pause(body);
                 toast.success(`Paused — waiting on ${outcome.waiting_on}`);
             } else {
                 await actions.advance(body);
-                toast.success(outcome.target_stage_name ? `Moved to ${outcome.target_stage_name}` : outcome.label);
+                const landed = destinationOf(outcome);
+                toast.success(landed ? `Moved to ${landed}` : outcome.label);
             }
         } catch (err) {
             handleError(err, "Couldn't complete this step.");
         }
+    };
+
+    /** An Exit skips the stages between here and its target, and nothing
+     *  downstream can explain itself from a button label alone — so it asks
+     *  once, in place. The confirm doubles as a guard on a move that takes a
+     *  correction to undo. Advance and Pause still go on one click. */
+    const pickOutcome = (outcome) => {
+        if (outcome.kind !== "exit") return runOutcome(outcome);
+        setConfirmingExit(outcome);
+        setExitNote("");
+    };
+
+    const confirmExit = async () => {
+        const outcome = confirmingExit;
+        setConfirmingExit(null);
+        await runOutcome(outcome, exitNote);
     };
 
     const handleResolve = async () => {
@@ -196,6 +223,11 @@ export default function CheckpointPanel({ state, stage, busy, actions, attached 
                 </div>
                 {/* Below the hold, not inside it: the amber is the state, this
                     is the reference material for getting out of it. */}
+                {state.route && (
+                    <div className="mt-3">
+                        <RouteBanner route={state.route} />
+                    </div>
+                )}
                 {state.recap?.length > 0 && (
                     <div className="mt-3">
                         <RecapCard items={state.recap} />
@@ -205,19 +237,39 @@ export default function CheckpointPanel({ state, stage, busy, actions, attached 
         );
     }
 
-    // Terminal stage — nothing left to capture, nowhere left to go.
+    // Terminal stage — nothing left to capture, nowhere left to go. A repair
+    // that got here by an Exit was not completed, so it doesn't get the green
+    // tick: an unfixable or disposed device reading as a success is the whole
+    // problem this route carries forward to solve.
     if (outcomes.length === 0) {
+        const route = state.route;
         return (
             <section className={`${shell} p-4`}>
                 {header}
-                <div className="mt-3 rounded-lg border border-emerald-200 bg-emerald-50 p-4 flex items-center gap-3">
-                    <span className="w-9 h-9 rounded-lg bg-emerald-500 text-white flex items-center justify-center shrink-0">
-                        <Check className="w-5 h-5" strokeWidth={3} />
+                <div
+                    className={`mt-3 rounded-lg border p-4 flex items-center gap-3 ${
+                        route ? "border-rose-200 bg-rose-50" : "border-emerald-200 bg-emerald-50"
+                    }`}
+                >
+                    <span
+                        className={`w-9 h-9 rounded-lg text-white flex items-center justify-center shrink-0 ${
+                            route ? "bg-rose-700" : "bg-emerald-500"
+                        }`}
+                    >
+                        {route ? (
+                            <LogOut className="w-5 h-5" strokeWidth={2.5} />
+                        ) : (
+                            <Check className="w-5 h-5" strokeWidth={3} />
+                        )}
                     </span>
-                    <div>
-                        <p className="font-bold text-emerald-900 text-sm">{stage.name}</p>
-                        <p className="text-xs text-emerald-800/90">
-                            This work item has reached the end of the process.
+                    <div className="min-w-0">
+                        <p className={`font-bold text-sm ${route ? "text-rose-900" : "text-emerald-900"}`}>
+                            {route ? `${stage.name} — ${route.label}` : stage.name}
+                        </p>
+                        <p className={`text-xs ${route ? "text-rose-800/90" : "text-emerald-800/90"}`}>
+                            {route
+                                ? `Ended at ${route.from_stage_name}${route.note ? ` · ${route.note}` : ""}`
+                                : "This work item has reached the end of the process."}
                         </p>
                     </div>
                 </div>
@@ -229,15 +281,28 @@ export default function CheckpointPanel({ state, stage, busy, actions, attached 
         return (
             <section className={`${shell} px-4 py-3 flex items-center gap-3 flex-wrap`}>
                 {header}
+                {/* Collapsing hides the recap, and with it the only sign this
+                    repair was declined — so the route keeps a seat up here. */}
+                {state.route && (
+                    <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded-full bg-rose-50 text-rose-800 text-xs font-bold ring-1 ring-rose-200">
+                        <LogOut className="w-3 h-3" />
+                        {state.route.label}
+                    </span>
+                )}
                 <div className="flex-1" />
                 {primary && (
                     <button
                         type="button"
-                        onClick={() => runOutcome(primary)}
+                        onClick={() => pickOutcome(primary)}
                         disabled={busy}
                         className="px-3.5 py-2 rounded-lg bg-blue-600 text-white text-sm font-bold hover:bg-blue-700 disabled:opacity-60 inline-flex items-center gap-1.5"
                     >
                         {primary.label}
+                        {destinationOf(primary) && (
+                            <span className="font-semibold text-blue-50">
+                                → {destinationOf(primary)}
+                            </span>
+                        )}
                         <ArrowRight className="w-4 h-4" />
                     </button>
                 )}
@@ -267,6 +332,7 @@ export default function CheckpointPanel({ state, stage, busy, actions, attached 
 
             <div className="mt-3 flex gap-6 flex-wrap items-start">
                 <div className="flex-1 min-w-[320px] space-y-3">
+                    <RouteBanner route={state.route} />
                     <RecapCard items={state.recap} />
 
                     {checkpointFields.length > 0 && (
@@ -313,38 +379,112 @@ export default function CheckpointPanel({ state, stage, busy, actions, attached 
                         <button
                             key={outcome.id}
                             type="button"
-                            onClick={() => runOutcome(outcome)}
-                            disabled={busy}
-                            className="w-full px-4 py-2.5 rounded-lg bg-blue-600 text-white text-sm font-bold hover:bg-blue-700 disabled:opacity-60 inline-flex items-center justify-center gap-1.5"
+                            onClick={() => pickOutcome(outcome)}
+                            disabled={busy || Boolean(confirmingExit)}
+                            className="w-full px-4 py-2.5 rounded-lg bg-blue-600 text-white text-sm font-bold hover:bg-blue-700 disabled:opacity-40 flex flex-col items-center gap-0.5"
                         >
-                            {outcome.label}
-                            <ArrowRight className="w-4 h-4" />
-                        </button>
-                    ))}
-                    {otherOutcomes.map((outcome) => (
-                        <button
-                            key={outcome.id}
-                            type="button"
-                            onClick={() => runOutcome(outcome)}
-                            disabled={busy}
-                            className="w-full px-3 py-2 rounded-lg bg-white border border-gray-300 text-sm font-semibold text-gray-800 hover:bg-gray-50 disabled:opacity-60 flex items-center gap-2 text-left"
-                        >
-                            <span
-                                className={`text-[9px] font-black tracking-wide px-1.5 py-0.5 rounded shrink-0 ${
-                                    outcome.kind === "pause"
-                                        ? "bg-amber-100 text-amber-800"
-                                        : "bg-rose-100 text-rose-800"
-                                }`}
-                            >
-                                {outcome.kind === "pause" ? "PAUSE" : "EXIT"}
+                            <span className="inline-flex items-center gap-1.5">
+                                {outcome.label}
+                                {!destinationOf(outcome) && <ArrowRight className="w-4 h-4" />}
                             </span>
-                            <span className="flex-1">{outcome.label}</span>
-                            {outcome.kind === "exit" && <LogOut className="w-3.5 h-3.5 text-gray-400 shrink-0" />}
+                            {/* The label says what you're doing; where it lands
+                                is the app's to know — on a warranty repair the
+                                declared target is skipped. */}
+                            {destinationOf(outcome) && (
+                                <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-blue-50">
+                                    <ArrowRight className="w-3 h-3" />
+                                    {destinationOf(outcome)}
+                                </span>
+                            )}
                         </button>
                     ))}
+                    {otherOutcomes.map((outcome) =>
+                        confirmingExit?.id === outcome.id ? (
+                            <ExitConfirm
+                                key={outcome.id}
+                                outcome={outcome}
+                                note={exitNote}
+                                onNoteChange={setExitNote}
+                                onConfirm={confirmExit}
+                                onCancel={() => setConfirmingExit(null)}
+                                busy={busy}
+                            />
+                        ) : (
+                            <button
+                                key={outcome.id}
+                                type="button"
+                                onClick={() => pickOutcome(outcome)}
+                                disabled={busy || Boolean(confirmingExit)}
+                                className="w-full px-3 py-2 rounded-lg bg-white border border-gray-300 text-sm font-semibold text-gray-800 hover:bg-gray-50 disabled:opacity-40 flex items-center gap-2 text-left"
+                            >
+                                <span
+                                    className={`text-[9px] font-black tracking-wide px-1.5 py-0.5 rounded shrink-0 ${
+                                        outcome.kind === "pause"
+                                            ? "bg-amber-100 text-amber-800"
+                                            : "bg-rose-100 text-rose-800"
+                                    }`}
+                                >
+                                    {outcome.kind === "pause" ? "PAUSE" : "EXIT"}
+                                </span>
+                                <span className="flex-1">{outcome.label}</span>
+                                {outcome.kind === "exit" && <LogOut className="w-3.5 h-3.5 text-gray-400 shrink-0" />}
+                            </button>
+                        )
+                    )}
                 </div>
             </div>
         </section>
+    );
+}
+
+/** The Exit outcome, opened in place of its button: what it will do, and one
+ *  optional line for the people it lands on. */
+function ExitConfirm({ outcome, note, onNoteChange, onConfirm, onCancel, busy }) {
+    const target = outcome.effective_target_stage_name ?? outcome.target_stage_name;
+    const noteId = `exit-note-${outcome.id}`;
+    return (
+        <div className="rounded-lg border-[1.5px] border-rose-300 bg-rose-50 p-3 shadow-[0_2px_8px_-4px_rgba(190,18,60,0.35)]">
+            <div className="flex items-center gap-2">
+                <span className="text-[9px] font-black tracking-wide px-1.5 py-0.5 rounded bg-rose-100 text-rose-800 shrink-0">
+                    EXIT
+                </span>
+                <span className="text-[13px] font-extrabold text-rose-900">{outcome.label}</span>
+            </div>
+            {target && (
+                <p className="mt-1.5 text-[11px] leading-snug text-rose-800">
+                    Sends this straight to {target}.
+                </p>
+            )}
+            <label htmlFor={noteId} className="block mt-2.5 text-[11px] font-bold text-rose-800">
+                Anything {target || "the next person"} should know?
+            </label>
+            <textarea
+                id={noteId}
+                rows={2}
+                value={note}
+                autoFocus
+                onChange={(e) => onNoteChange(e.target.value)}
+                className="mt-1 w-full px-2.5 py-1.5 rounded-md border border-rose-300 bg-white text-xs text-gray-900 resize-none focus:outline-none focus:ring-2 focus:ring-rose-300"
+            />
+            <p className="mt-1 text-[10px] text-rose-700">Optional · shown at every later stage</p>
+            <div className="mt-2.5 flex items-center gap-2">
+                <button
+                    type="button"
+                    onClick={onConfirm}
+                    disabled={busy}
+                    className="flex-1 px-3 py-2 rounded-lg bg-rose-700 text-white text-xs font-bold hover:bg-rose-800 disabled:opacity-60"
+                >
+                    Confirm exit
+                </button>
+                <button
+                    type="button"
+                    onClick={onCancel}
+                    className="px-2.5 py-2 text-xs font-bold text-rose-800 hover:text-rose-900"
+                >
+                    Cancel
+                </button>
+            </div>
+        </div>
     );
 }
 

@@ -10,6 +10,7 @@ import {
 import { getEmailTemplates, createEmailTemplate, updateEmailTemplate, deleteEmailTemplate } from "../api/emails";
 import RichTextEditor from "../components/RichTextEditor";
 import UserManagementPage from "./UserManagementPage";
+import ProcessSettingsPanel from "../features/Settings/ProcessSettings/ProcessSettingsPanel";
 
 // ─── Data ────────────────────────────────────────────────────────────────────
 
@@ -865,6 +866,7 @@ function EmailTemplatesPanel() {
 
 const TABS = [
     { label: "Object & Field Settings", matchPath: ["/system-settings/fields", "/system-settings/global"], path: "fields" },
+    { label: "Work Item Process",       matchPath: ["/system-settings/process"],                            path: "process" },
     { label: "User Management",         matchPath: ["/system-settings/users"],                              path: "users" },
     { label: "Email",                   matchPath: ["/system-settings/email"],                              path: "email" },
     { label: "Email Templates",         matchPath: ["/system-settings/email-templates"],                    path: "email-templates" },
@@ -911,6 +913,7 @@ export default function SystemSettingsPage() {
                     <Route path="fields" element={<FieldsOverview />} />
                     <Route path="fields/:model/*" element={<ObjectDetail />} />
                     <Route path="global/*" element={<GlobalPicklistsView />} />
+                    <Route path="process" element={<ProcessSettingsPanel />} />
                     <Route path="users" element={<UserManagementPage />} />
                     <Route path="email" element={<EmailSettingsPanel />} />
                     <Route path="email-templates" element={<EmailTemplatesPanel />} />

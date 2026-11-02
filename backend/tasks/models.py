@@ -9,6 +9,7 @@ from core.models import Address
 from django.core.validators import MinValueValidator
 from django.contrib.contenttypes.fields import GenericRelation
 from core.models import Note, Photo
+from core.utils import as_bool
 from django.db.models import Max
 
 from tenants.models import Tenant
@@ -89,6 +90,8 @@ class WorkItem(models.Model):
     status = models.CharField(max_length=100, default='New')
     customer = models.ForeignKey(Customer, blank=False, null=False, on_delete=models.PROTECT)
     created_date = models.DateTimeField(auto_now_add=True)
+    # Does not move when a note, email or photo is attached — only on save().
+    updated_date = models.DateTimeField(auto_now=True)
     closed_date = models.DateTimeField(blank=True, null=True)
     # Cursor for incremental sync of the on-device cache. The migration seeds
     # existing rows with created_date.
@@ -328,6 +331,25 @@ RECAP_NOTE_KEY = 'note'
 # yet it is exactly what the first technician has to base a diagnosis on.
 RECAP_ITEM_KEY = 'item'
 
+def _values_match(actual, expected):
+    """Compare a work item's value against one a skip condition expects.
+
+    Custom field values are free-form JSON, so a checkbox reaches us as True,
+    "true" or 1 depending on which client wrote it. Routing turns on these
+    values, so compare booleans as booleans and fall back to string equality
+    for everything else (picklist values are stored as strings).
+    """
+    expected_bool = as_bool(expected)
+    if expected_bool is not None:
+        actual_bool = as_bool(actual)
+        # An unset checkbox is absent from custom_fields entirely.
+        if actual is None:
+            actual_bool = False
+        return actual_bool == expected_bool
+    if actual is None:
+        return expected is None
+    return str(actual) == str(expected)
+
 
 class ProcessTemplate(models.Model):
     """A tenant's repair process — the ordered set of stages. One default per shop."""
@@ -339,6 +361,9 @@ class ProcessTemplate(models.Model):
     class Meta:
         constraints = [
             models.UniqueConstraint(fields=['tenant', 'name'], name='unique_process_template_per_tenant'),
+        ]
+        permissions = [
+            ('manage_process', 'Can configure the guided work item process'),
         ]
 
     def __str__(self):
@@ -369,6 +394,18 @@ class StageDefinition(models.Model):
             'data no stage captures. E.g. ["diagnosis"] on Quote.'
         ),
     )
+    skip_when = models.JSONField(
+        default=list, blank=True,
+        help_text=(
+            'Conditions under which this stage does not apply, as a list of '
+            'objects — any one matching passes straight over the stage. Each '
+            'names a `field` (a work item column or a custom field key) and '
+            'either `equals` (one value) or `in` (a list), plus an optional '
+            '`label` shown on the stepper. E.g. on Quote: '
+            '[{"field": "type", "in": ["Warranty Repair"], "label": "Warranty '
+            'job"}] — there is nothing to quote on a warranty job.'
+        ),
+    )
     order = models.IntegerField(default=0)
 
     class Meta:
@@ -380,6 +417,119 @@ class StageDefinition(models.Model):
     def __str__(self):
         return f"{self.name} ({self.process.name})"
 
+    def applies_to(self, work_item):
+        """False when this stage is declared not to apply to this repair."""
+        return self.skip_reason(work_item) is None
+
+    def skip_reason(self, work_item):
+        """Why this stage is passed over for this repair, or None if it applies.
+
+        Returns the matching condition's `label` so the stepper can say what
+        happened ("Repaired during diagnosis") rather than only that something
+        did. Falls back to a generic string when a condition carries no label.
+
+        Conditions are OR'd: the first one that matches wins.
+        """
+        for condition in self.skip_when or []:
+            if not isinstance(condition, dict):
+                continue
+            actual = self._field_value(work_item, condition.get('field'))
+            if 'in' in condition:
+                expected = condition['in']
+                matched = isinstance(expected, list) and any(
+                    _values_match(actual, e) for e in expected)
+            elif 'equals' in condition:
+                matched = _values_match(actual, condition['equals'])
+            else:
+                continue
+            if matched:
+                return condition.get('label') or 'Does not apply to this repair'
+        return None
+
+    @staticmethod
+    def _field_value(work_item, field_key):
+        """A condition's field is either a work item column or a custom field
+        key; custom fields live in the `custom_fields` JSON, not as attributes."""
+        if not field_key:
+            return None
+        try:
+            WorkItem._meta.get_field(field_key)
+        except FieldDoesNotExist:
+            return (work_item.custom_fields or {}).get(field_key)
+        return getattr(work_item, field_key, None)
+
+    def _clean_skip_when(self):
+        """A rule that silently never fires is indistinguishable from "this
+        repair doesn't match it", so everything a condition names is checked at
+        edit time: the field must exist, and a picklist-backed field's values
+        must be ones the tenant actually uses (as recap_sources does).
+        """
+        from core.models import CustomField, PicklistValue
+        from core.utils import PICKLIST_FIELDS
+
+        if not self.skip_when:
+            return
+        if not isinstance(self.skip_when, list):
+            raise ValidationError({'skip_when': 'Must be a list of conditions.'})
+        if not self.process_id:
+            return
+
+        tenant = self.process.tenant
+        custom_keys = set(
+            CustomField.objects
+            .filter(tenant=tenant, model_name='workitem', is_active=True)
+            .values_list('field_key', flat=True)
+        )
+        errors = []
+        for condition in self.skip_when:
+            if not isinstance(condition, dict):
+                errors.append(f'{condition!r} is not a condition object.')
+                continue
+            field_key = condition.get('field')
+            if not isinstance(field_key, str) or not field_key.strip():
+                errors.append(f'{condition!r}: name a "field".')
+                continue
+
+            try:
+                WorkItem._meta.get_field(field_key)
+                is_column = True
+            except FieldDoesNotExist:
+                is_column = False
+            if not is_column and field_key not in custom_keys:
+                available = ', '.join(sorted(custom_keys)) or 'none'
+                errors.append(
+                    f'"{field_key}" is not a work item field, nor a custom '
+                    f'field for this tenant (custom fields: {available}).')
+                continue
+
+            operators = [op for op in ('equals', 'in') if op in condition]
+            if len(operators) != 1:
+                errors.append(
+                    f'"{field_key}": give exactly one of "equals" or "in" '
+                    f'(got {", ".join(operators) or "neither"}).')
+                continue
+            if 'in' in condition and not isinstance(condition['in'], list):
+                errors.append(f'"{field_key}": "in" must be a list.')
+                continue
+
+            category = PICKLIST_FIELDS['WorkItem'].get(field_key) if is_column else None
+            if category is None:
+                continue
+            known = set(
+                PicklistValue.objects
+                .filter(tenant=tenant, category=category)
+                .values_list('value', flat=True)
+            )
+            expected = condition['in'] if 'in' in condition else [condition['equals']]
+            errors += [
+                f'"{field_key}": "{value}" is not a value this tenant uses'
+                f'{" (known: " + ", ".join(sorted(known)) + ")" if known else ""}.'
+                for value in expected
+                if not isinstance(value, str) or value not in known
+            ]
+        if errors:
+            raise ValidationError({'skip_when': errors})
+
     def clean(self):
         """Catch a mistyped recap source at edit time.
 
@@ -387,6 +537,7 @@ class StageDefinition(models.Model):
         way to tell a typo from "this repair hasn't got there yet".
         """
         super().clean()
+        self._clean_skip_when()
         if not self.recap_sources:
             return
         if not isinstance(self.recap_sources, list):
@@ -521,6 +672,13 @@ class StageTransition(models.Model):
     from_stage = models.ForeignKey(StageDefinition, on_delete=models.SET_NULL, null=True, blank=True, related_name='+')
     to_stage = models.ForeignKey(StageDefinition, on_delete=models.SET_NULL, null=True, blank=True, related_name='+')
     kind = models.CharField(max_length=10, choices=KIND_CHOICES)
+    outcome = models.ForeignKey(
+        StageOutcome, on_delete=models.SET_NULL, null=True, blank=True, related_name='+',
+    )
+    # Snapshot of the outcome's wording at the time. Outcomes are editable and
+    # deletable live, and `note` holds whatever the person typed instead — so
+    # without this there is nothing left to say which button was pressed.
+    outcome_label = models.CharField(max_length=120, blank=True)
     by_user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True)
     at = models.DateTimeField(auto_now_add=True)
     note = models.TextField(blank=True)

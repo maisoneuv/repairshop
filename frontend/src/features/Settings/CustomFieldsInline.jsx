@@ -196,8 +196,11 @@ function FieldFormModal({ modelName, editingField, onClose, onSaved }) {
     );
 }
 
-export default function CustomFieldsInline() {
-    const { model } = useParams();
+export default function CustomFieldsInline({ model: modelProp }) {
+    // Usually rendered under /system-settings/fields/:model, but the process
+    // settings panel shows the same registry without a route of its own.
+    const { model: modelParam } = useParams();
+    const model = modelProp ?? modelParam;
     const [fields, setFields] = useState([]);
     const [loading, setLoading] = useState(true);
     const [showModal, setShowModal] = useState(false);

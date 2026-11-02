@@ -37,6 +37,25 @@ def responsible_employee(work_item, stage):
     return None
 
 
+def landing_stage(work_item, to_stage):
+    """Where an advance actually lands, once stages that don't apply to this
+    repair are passed over (§8's warranty variant: nothing to quote on a
+    warranty job, so Diagnosis hands straight to Repair).
+
+    Never skips off the end: if everything ahead is skippable the repair stops
+    on the stage it was sent to rather than falling out of the process.
+    """
+    stage = to_stage
+    while stage is not None and not stage.applies_to(work_item):
+        nxt = (StageDefinition.objects
+               .filter(process_id=stage.process_id, order__gt=stage.order)
+               .order_by('order').first())
+        if nxt is None:
+            return stage
+        stage = nxt
+    return stage
+
+
 def _label(work_item):
     """Short human label for notifications."""
     return work_item.reference_id or f"Work item #{work_item.pk}"
@@ -93,6 +112,7 @@ def begin_process(work_item, process=None, by_user=None):
     first = process.stages.order_by('order').first()
     if first is None:
         return work_item
+    first = landing_stage(work_item, first)
     _apply_stage(work_item, first, 'in_progress')
     StageTransition.objects.create(
         work_item=work_item, from_stage=None, to_stage=first, kind='start',
@@ -137,6 +157,10 @@ def advance_stage(work_item, outcome=None, target_stage=None, by_user=None,
         raise ValueError("advance_stage needs an outcome with a target_stage or a target_stage")
 
     kind = kind or ('exit' if (outcome and outcome.kind == 'exit') else 'advance')
+    # A correction names its target explicitly — going back to a stage is a
+    # deliberate act, so it isn't second-guessed by the skip rules.
+    if kind != 'back':
+        to_stage = landing_stage(work_item, to_stage)
     now = timezone.now()
 
     # advancing always clears any pause
@@ -152,6 +176,7 @@ def advance_stage(work_item, outcome=None, target_stage=None, by_user=None,
     StageTransition.objects.create(
         work_item=work_item, from_stage=from_stage, to_stage=to_stage, kind=kind,
         by_user=by_user, note=note or (outcome.label if outcome else ''),
+        outcome=outcome, outcome_label=(outcome.label if outcome else ''),
         captured_values=captured_values or {},
         assigned_at=now if is_handoff else None,
         started_at=None if is_handoff else now,
@@ -194,6 +219,7 @@ def pause(work_item, outcome=None, waiting_on=None, reason='', reassign_to_owner
     StageTransition.objects.create(
         work_item=work_item, from_stage=stage, to_stage=stage, kind='pause',
         by_user=by_user, note=reason,
+        outcome=outcome, outcome_label=(outcome.label if outcome else ''),
     )
     if reassigned:
         _notify(work_item, owner_person, 'bounce',

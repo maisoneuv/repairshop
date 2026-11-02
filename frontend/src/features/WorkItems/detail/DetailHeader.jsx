@@ -1,6 +1,6 @@
 import { Link } from "react-router-dom";
-import { AlertTriangle, Phone, User, Zap } from "lucide-react";
-import { customerName, deviceName } from "./fieldRegistry";
+import { AlertTriangle, Phone, ShieldCheck, User, Zap } from "lucide-react";
+import { customerName, deviceName, isWarranty } from "./fieldRegistry";
 
 /**
  * The record header (§7B), for the redesigned page only —
@@ -37,6 +37,7 @@ export default function DetailHeader({ workItem }) {
                 <span className="text-[12.5px] font-bold text-gray-900">
                     {workItem.reference_id}
                 </span>
+                <Timestamps workItem={workItem} />
             </div>
 
             <div className="px-5 pt-4 pb-1 flex justify-between items-start gap-6 flex-wrap">
@@ -48,10 +49,21 @@ export default function DetailHeader({ workItem }) {
                         {device ?? workItem.reference_id}
                     </h1>
                     {/* The reference id is in the breadcrumb; the subline is the
-                        category, which the title doesn't carry. */}
-                    {category && (
-                        <p className="text-xs text-gray-500 mt-1.5 truncate">{category}</p>
-                    )}
+                        category, which the title doesn't carry — plus warranty,
+                        which changes what the whole page means (no money to
+                        collect, Quote skipped) and so can't live only in the
+                        money column further down the page. */}
+                    <div className="flex items-center gap-2 mt-1.5 min-w-0">
+                        {category && (
+                            <p className="text-xs text-gray-500 truncate">{category}</p>
+                        )}
+                        {isWarranty(workItem) && (
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-50 text-amber-800 ring-1 ring-amber-200 text-[11px] font-bold shrink-0">
+                                <ShieldCheck className="w-3 h-3" />
+                                Warranty — no charge
+                            </span>
+                        )}
+                    </div>
                 </div>
 
                 <div className="flex flex-col items-end gap-2.5 shrink-0">
@@ -85,6 +97,67 @@ export default function DetailHeader({ workItem }) {
             </div>
         </>
     );
+}
+
+const SAME_MOMENT_MS = 60_000;
+
+function Timestamps({ workItem }) {
+    const created = toDate(workItem.created_date);
+    const updated = toDate(workItem.updated_date);
+    if (!created && !updated) return null;
+
+    const edited = created && updated && updated - created > SAME_MOMENT_MS;
+
+    return (
+        <div className="ml-auto flex items-center gap-2 text-[11.5px] text-gray-600 shrink-0">
+            {created && (
+                <span title={`Created ${created.toLocaleString()}`}>
+                    Created {formatDate(created)}
+                </span>
+            )}
+            {edited && (
+                <span className="hidden sm:flex items-center gap-2">
+                    <span className="text-gray-400" aria-hidden="true">·</span>
+                    <span title={`Last updated ${updated.toLocaleString()}`}>
+                        Updated {formatAgo(updated)}
+                    </span>
+                </span>
+            )}
+        </div>
+    );
+}
+
+function toDate(value) {
+    if (!value) return null;
+    const d = new Date(value);
+    return Number.isNaN(d.getTime()) ? null : d;
+}
+
+function formatDate(date) {
+    return date.toLocaleDateString(undefined, {
+        day: "numeric", month: "short", year: "numeric",
+    });
+}
+
+const AGO_UNITS = [
+    ["year", 31536000],
+    ["month", 2592000],
+    ["week", 604800],
+    ["day", 86400],
+    ["hour", 3600],
+    ["minute", 60],
+];
+
+function formatAgo(date) {
+    const secondsFromNow = (date - new Date()) / 1000;
+    const abs = Math.abs(secondsFromNow);
+    if (abs < 60) return "just now";
+
+    const rtf = new Intl.RelativeTimeFormat(undefined, { numeric: "auto" });
+    for (const [unit, size] of AGO_UNITS) {
+        if (abs >= size) return rtf.format(Math.round(secondsFromNow / size), unit);
+    }
+    return "just now";
 }
 
 const PILL = "inline-flex items-center gap-1.5 text-xs font-extrabold px-2.5 py-1 rounded-full";

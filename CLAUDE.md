@@ -98,6 +98,23 @@ All integration and deployment documentation is in the [`docs/`](docs/) director
 
 **Database**: PostgreSQL with connection details in `backend/app/settings.py`
 
+### Code Style
+
+**Comments**: comment only where the code cannot explain itself. Default to none.
+
+Worth a comment:
+- A non-obvious gotcha or footgun (`new Date("2026-07-30")` parses as UTC, so it renders as the 29th in negative offsets)
+- A workaround whose removal would reintroduce a bug
+- Genuinely tricky logic — a race, a retry, a subtle ordering requirement
+
+Not worth a comment:
+- Restating what the line does (`// bump the counter`)
+- A rationale for a routine design decision — which colour, which tier, why this file
+- Dated changelog notes (`// changed 2026-09-24 because...`) — that's what git history is for
+- Docstrings on self-describing functions and tests with descriptive names
+
+Prefer a clear name or a small extracted function over a comment explaining an unclear one.
+
 ### Frontend Structure
 - React 18 with React Router v7
 - Chakra UI component library with Tailwind CSS

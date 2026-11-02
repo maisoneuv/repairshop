@@ -12,7 +12,7 @@ from django.db import models as django_models
 from rest_framework import serializers
 
 from core.models import PicklistValue
-from core.utils import get_field_type
+from core.utils import PICKLIST_FIELDS, get_field_type
 
 from .models import (
     RECAP_ITEM_KEY, RECAP_NOTE_KEY, CheckpointField, Notification, ProcessTemplate,
@@ -116,7 +116,7 @@ class CheckpointFieldSerializer(serializers.ModelSerializer):
             }
         # Tenant picklists win over hardcoded choices (same rule as get_model_schema).
         tenant = self.context.get('tenant')
-        category = {'status': 'workitem_status', 'currency': 'currency'}.get(field.name)
+        category = PICKLIST_FIELDS['WorkItem'].get(field.name)
         if category and tenant:
             return {'choices': list(
                 PicklistValue.objects
@@ -149,15 +149,53 @@ class CheckpointFieldSerializer(serializers.ModelSerializer):
         return getattr(work_item, obj.standard_key, None)
 
 
+def landing_map(stage_defs, work_item):
+    """Where an advance to each stage really lands for this repair, once stages
+    that don't apply to it are passed over.
+
+    Mirrors `process_service.landing_stage` against an already-fetched stage
+    list, so the outcome buttons can name their true destination without a
+    query each. Must stay in step with it, including "never skip off the end".
+    """
+    landing = {}
+    for i, stage in enumerate(stage_defs):
+        tail = stage_defs[i:]
+        landing[stage.id] = next(
+            (s for s in tail if s.applies_to(work_item)), tail[-1])
+    return landing
+
+
 class StageOutcomeSerializer(serializers.ModelSerializer):
     target_stage_key = serializers.CharField(source='target_stage.key', default=None, read_only=True)
     target_stage_name = serializers.CharField(source='target_stage.name', default=None, read_only=True)
+    # Where it goes for THIS repair. Labels say what the action is ("Finish
+    # diagnosis"); the destination is the app's to render, because a label
+    # naming a stage goes stale the moment that stage is skipped, renamed or
+    # reordered — and the process is editable live.
+    effective_target_stage_key = serializers.SerializerMethodField()
+    effective_target_stage_name = serializers.SerializerMethodField()
 
     class Meta:
         model = StageOutcome
         fields = ['id', 'kind', 'label', 'target_stage', 'target_stage_key',
-                  'target_stage_name', 'waiting_on', 'reassign_to_owner',
-                  'resume_returns_to', 'resolve_label', 'order']
+                  'target_stage_name', 'effective_target_stage_key',
+                  'effective_target_stage_name', 'waiting_on',
+                  'reassign_to_owner', 'resume_returns_to', 'resolve_label',
+                  'order']
+
+    def _effective(self, obj):
+        if obj.target_stage_id is None:
+            return None
+        mapping = self.context.get('landing_by_stage_id') or {}
+        return mapping.get(obj.target_stage_id) or obj.target_stage
+
+    def get_effective_target_stage_key(self, obj):
+        stage = self._effective(obj)
+        return stage.key if stage else None
+
+    def get_effective_target_stage_name(self, obj):
+        stage = self._effective(obj)
+        return stage.name if stage else None
 
 
 def _is_terminal(stage):
@@ -320,6 +358,142 @@ def build_recap(work_item, stage, transitions, context):
     return rows
 
 
+# --- route ------------------------------------------------------------------
+
+def _user_name(user):
+    if user is None:
+        return None
+    return f"{user.first_name} {user.last_name}".strip() or user.username
+
+
+def skipped_stage_defs(stage, transitions):
+    """The stages this repair jumped clean over, as StageDefinitions.
+
+    Two things produce a jump, and they look identical afterwards: a stage that
+    doesn't apply to this repair (a warranty job has nothing to quote) and an
+    Exit that bails forward past the work. Both leave stages nobody did.
+
+    Only stages inside a real forward jump count. A repair backfilled onto the
+    process at a late stage never visited the earlier ones either, but it
+    didn't skip them — it predates the guided flow, and striking those through
+    would be its own kind of lie.
+
+    A jump that was later rewound stops counting, for the same reason
+    `build_route` drops a rewound exit: the repair is doing that stretch over
+    again, so those stages are ahead of it now, not behind it unmade.
+    """
+    if stage is None:
+        return []
+
+    # `transitions` is newest-first, so everything before index i happened after
+    # transition i.
+    spans = []
+    for i, t in enumerate(transitions):
+        if not (t.from_stage_id and t.to_stage_id):
+            continue
+        if t.to_stage.order <= t.from_stage.order + 1:
+            continue
+        later = transitions[:i]
+        if any(x.kind == 'back' and x.to_stage is not None
+               and x.to_stage.order <= t.from_stage.order
+               for x in later):
+            continue
+        # A visit only cancels this jump if it came AFTER it. A repair that was
+        # sent back and re-run passes over the stage again, and its entry on
+        # the earlier pass doesn't make that second pass any less of a skip.
+        spans.append((
+            t.from_stage.order, t.to_stage.order,
+            {x.to_stage_id for x in later if x.to_stage_id is not None},
+        ))
+    if not spans:
+        return []
+
+    candidates = StageDefinition.objects.filter(
+        process_id=stage.process_id,
+        order__gt=min(a for a, _, _ in spans),
+        # Nothing ahead of where the repair is now was skipped — it simply
+        # hasn't been reached yet.
+        order__lt=min(stage.order, max(b for _, b, _ in spans)),
+    ).order_by('order')
+    return [
+        s for s in candidates
+        if any(a < s.order < b and s.id not in seen for a, b, seen in spans)
+    ]
+
+
+def _brief_stages(defs, work_item=None):
+    """`reason` separates the two kinds of skip: a stage that never applied to
+    this repair reads differently from one an Exit bailed past, and the peek
+    should say which. `reason_label` says *why* it didn't apply, in the words
+    the admin wrote on the rule ("Repaired during diagnosis")."""
+    rows = []
+    for s in defs:
+        row = {'key': s.key, 'name': s.name}
+        reason_label = s.skip_reason(work_item) if work_item is not None else None
+        if reason_label is not None:
+            row['reason'] = 'not_applicable'
+            row['reason_label'] = reason_label
+        rows.append(row)
+    return rows
+
+
+def build_route(stage, transitions, skipped_defs=()):
+    """How this repair got where it is, when it got there by an Exit (§5).
+
+    An Exit means the repair jumped forward over stages that never happened —
+    declined at Quote, or unfixable at Repair. Every other surface treats that
+    as ordinary progress (the stepper marks the jumped stages done, the recap
+    carries a price with no work behind it), so the exit has to travel with the
+    item or the next person reads a repair that went fine.
+
+    Nothing to configure: `kind == 'exit'` already carries the meaning.
+    Returns None when the repair took the normal road.
+
+    `transitions` is newest-first and capped by the caller (50), so a repair
+    with more moves than that loses the oldest of them — which only matters
+    for an exit that far back, by which point the skip list is guesswork anyway.
+    """
+    if stage is None:
+        return None
+
+    exit_at = next((i for i, t in enumerate(transitions) if t.kind == 'exit'), None)
+    if exit_at is None:
+        return None
+    exit_t = transitions[exit_at]
+    if exit_t.from_stage is None or exit_t.to_stage is None:
+        return None
+
+    # A correction back to the stage the exit left from (or earlier) rewinds the
+    # route: the decline is being redone, so it no longer describes where we are.
+    for t in transitions[:exit_at]:
+        if (t.kind == 'back' and t.to_stage is not None
+                and t.to_stage.order <= exit_t.from_stage.order):
+            return None
+
+    # Only what THIS exit jumped — a warranty skip earlier in the repair is on
+    # the stepper, but it isn't something the decline caused.
+    skipped = _brief_stages([
+        s for s in skipped_defs
+        if exit_t.from_stage.order < s.order < exit_t.to_stage.order
+    ])
+
+    label = exit_t.outcome_label or exit_t.note or 'Exited'
+    note = (exit_t.note or '').strip()
+    return {
+        'kind': exit_t.kind,
+        'label': label,
+        # Only when it says something the label doesn't: with no note typed,
+        # `note` is a copy of the label and repeating it reads as a stutter.
+        'note': note if note and note != label else None,
+        'from_stage_key': exit_t.from_stage.key,
+        'from_stage_name': exit_t.from_stage.name,
+        'to_stage_name': exit_t.to_stage.name,
+        'at': exit_t.at,
+        'by': _user_name(exit_t.by_user),
+        'skipped': skipped,
+    }
+
+
 # --- work item state --------------------------------------------------------
 
 class WorkItemPauseSerializer(serializers.ModelSerializer):
@@ -337,14 +511,11 @@ class StageTransitionSerializer(serializers.ModelSerializer):
     class Meta:
         model = StageTransition
         fields = ['id', 'kind', 'from_stage', 'from_stage_name', 'to_stage',
-                  'to_stage_name', 'by_user_name', 'at', 'note',
+                  'to_stage_name', 'by_user_name', 'at', 'note', 'outcome_label',
                   'captured_values', 'assigned_at', 'started_at']
 
     def get_by_user_name(self, obj):
-        if obj.by_user_id is None:
-            return None
-        full = f"{obj.by_user.first_name} {obj.by_user.last_name}".strip()
-        return full or obj.by_user.username
+        return _user_name(obj.by_user) if obj.by_user_id else None
 
 
 class WorkItemProcessSerializer(serializers.Serializer):
@@ -368,11 +539,14 @@ class WorkItemProcessSerializer(serializers.Serializer):
 
         stages = []
         if process is not None:
+            # Materialised before serializing: the outcome buttons resolve their
+            # real destination against this same list, so no stage is re-fetched.
+            stage_defs = list(process.stages.prefetch_related(
+                'outcomes__target_stage', 'checkpoint_fields__custom_field',
+            ).order_by('order'))
+            ctx['landing_by_stage_id'] = landing_map(stage_defs, work_item)
             stages = StageDefinitionSerializer(
-                process.stages.prefetch_related(
-                    'outcomes__target_stage', 'checkpoint_fields__custom_field',
-                ).order_by('order'),
-                many=True, context=ctx,
+                stage_defs, many=True, context=ctx,
             ).data
 
         # Materialised once: the recap reads stage notes out of the same rows
@@ -382,6 +556,7 @@ class WorkItemProcessSerializer(serializers.Serializer):
             .select_related('from_stage', 'to_stage', 'by_user')
             .order_by('-at')[:50]
         )
+        skipped_defs = skipped_stage_defs(stage, transitions)
 
         return {
             'process': {'id': process.id, 'name': process.name} if process else None,
@@ -397,6 +572,8 @@ class WorkItemProcessSerializer(serializers.Serializer):
                 role='owner' if (pause and pause.reassigned) else (stage.owner_role if stage else ''),
             ),
             'recap': build_recap(work_item, stage, transitions, ctx),
+            'skipped': _brief_stages(skipped_defs, work_item),
+            'route': build_route(stage, transitions, skipped_defs),
             'transitions': StageTransitionSerializer(
                 transitions, many=True, context=ctx,
             ).data,

@@ -27,11 +27,12 @@ class TenantUserMatchesRequestTenant(BasePermission):
         return True
 
 
-class ManageUsersPermission(BasePermission):
+class TenantPermissionRequired(BasePermission):
     """
-    Requires the manage_users permission within the current tenant.
+    Requires `codename` within the current tenant.
     Superusers always pass. Non-authenticated requests always fail.
     """
+    codename = None
 
     def has_permission(self, request, _view):
         if not request.user or not request.user.is_authenticated:
@@ -43,7 +44,18 @@ class ManageUsersPermission(BasePermission):
         if not request.tenant:
             raise PermissionDenied("Tenant must be specified.")
 
-        if not request.user.has_permission('manage_users', request.tenant):
-            raise PermissionDenied("You need the manage_users permission.")
+        if not request.user.has_permission(self.codename, request.tenant):
+            raise PermissionDenied(f"You need the {self.codename} permission.")
 
         return True
+
+
+class ManageUsersPermission(TenantPermissionRequired):
+    codename = 'manage_users'
+
+
+class ManageProcessPermission(TenantPermissionRequired):
+    """Editing the process template rewires how every repair moves through the
+    shop, so it is an admin-level right of its own rather than part of
+    manage_custom_fields."""
+    codename = 'manage_process'
