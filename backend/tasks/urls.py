@@ -9,6 +9,12 @@ from .views import (
     DashboardView,
 )
 from .process_views import AllWorkItemsView, MyWorkView, NotificationViewSet
+from .process_config_views import (
+    CheckpointFieldConfigViewSet,
+    ProcessTemplateViewSet,
+    StageDefinitionConfigViewSet,
+    StageOutcomeConfigViewSet,
+)
 
 app_name = "tasks"
 
@@ -18,6 +24,12 @@ router.register(r'tasks', TaskViewSet, basename='task')
 router.register(r'task-types', TaskTypeViewSet, basename='tasktype')
 # Guided process (flag-gated — 404s unless workitem.guided_process is on).
 router.register(r'notifications', NotificationViewSet, basename='notification')
+# Process configuration (§7D) — NOT flag-gated: the process has to be
+# configurable before the flag that runs it is switched on.
+router.register(r'process-templates', ProcessTemplateViewSet, basename='processtemplate')
+router.register(r'stages', StageDefinitionConfigViewSet, basename='stagedefinition')
+router.register(r'stage-outcomes', StageOutcomeConfigViewSet, basename='stageoutcome')
+router.register(r'checkpoint-fields', CheckpointFieldConfigViewSet, basename='checkpointfield')
 
 # Legacy Django template routes (item_list, task_list, …) were removed:
 # unscoped by tenant and unused by the React frontend.

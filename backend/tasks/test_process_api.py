@@ -23,9 +23,10 @@ from customers.models import Customer
 from service.models import Employee, Location, RepairShop
 from tenants.models import Tenant
 
+from . import process_service
 from .models import (
     CheckpointField, Notification, ProcessTemplate, StageDefinition,
-    StageOutcome, WorkItem, WorkItemPause,
+    StageOutcome, StageTransition, WorkItem, WorkItemPause,
 )
 
 PERMISSIONS = ['view_all_workitems', 'change_workitem', 'add_workitem']
@@ -79,6 +80,12 @@ class GuidedProcessAPITestCase(TestCase):
             PicklistValue.objects.get_or_create(
                 tenant=cls.tenant, category="workitem_status", value=value,
                 defaults={"name": value, "is_active": True})
+        # `skip_when` is validated against these, so a stage can't be
+        # configured to skip on a repair type the tenant doesn't have.
+        for value in ("Chargeable Repair", "Warranty Repair"):
+            PicklistValue.objects.get_or_create(
+                tenant=cls.tenant, category="workitem_type", value=value,
+                defaults={"name": value, "is_active": True})
 
         # A cut-down reference process: New (owner) → Diagnosis (tech) → Closed.
         cls.process = ProcessTemplate.objects.create(
@@ -103,6 +110,11 @@ class GuidedProcessAPITestCase(TestCase):
             stage=cls.stage_diag, kind="pause", label="Missing accessory",
             waiting_on="customer", reassign_to_owner=True,
             resolve_label="Customer brought it", order=1)
+        # Jumps New straight to Closed, skipping Diagnosis — the shape the
+        # route tests below are about.
+        cls.new_exit = StageOutcome.objects.create(
+            stage=cls.stage_new, kind="exit", label="Declined — dispose",
+            target_stage=cls.stage_closed, order=1)
 
         # New's checkpoint: assigning a technician is what makes the handoff.
         CheckpointField.objects.create(
@@ -178,6 +190,21 @@ class GuidedProcessAPITestCase(TestCase):
             ("standard", "technician", "foreignkey", True))
         self.work_item.refresh_from_db()
         self.assertEqual(self.work_item.status, "New")  # dual-write
+
+    def test_a_picklist_backed_checkpoint_field_carries_its_options(self):
+        """Every picklist-backed column, not just status — without options the
+        panel falls back to a free-text box."""
+        self.enable_flag()
+        PicklistValue.objects.get_or_create(
+            tenant=self.tenant, category="payment_method", value="Blik",
+            defaults={"name": "BLIK", "is_active": True})
+        CheckpointField.objects.create(
+            stage=self.stage_new, standard_key="payment_method", order=1)
+
+        resp = self.client_for(self.owner_user).get(self.url("process"))
+        field = next(f for f in resp.json()["stages"][0]["checkpoint_fields"]
+                     if f["key"] == "payment_method")
+        self.assertIn(["Blik", "BLIK"], field["config"]["choices"])
 
     def test_advance_requires_the_required_checkpoint_field(self):
         self.enable_flag()
@@ -460,6 +487,370 @@ class GuidedProcessAPITestCase(TestCase):
         self.assertEqual(resp.status_code, 400)
         self.assertIn("different process", str(resp.json()))
 
+    # ── the route an exit leaves behind ──────────────────────────────
+
+    def take_the_exit(self, note=None):
+        """Leave New by the Exit, jumping over Diagnosis to Closed."""
+        self.enable_flag()
+        client = self.client_for(self.owner_user)
+        client.post(self.url("start"), {}, format="json")
+        body = {"outcome_id": self.new_exit.id,
+                "captured_values": {"technician": self.tech.id}}
+        if note is not None:
+            body["note"] = note
+        return client.post(self.url("advance"), body, format="json")
+
+    def test_an_exit_records_which_outcome_was_taken(self):
+        """`kind` alone can't tell declined-return from declined-dispose, and
+        `note` is gone the moment someone types a reason instead."""
+        latest = self.take_the_exit(note="Not worth repairing").json()["transitions"][0]
+        self.assertEqual(latest["kind"], "exit")
+        self.assertEqual(latest["outcome_label"], "Declined — dispose")
+        self.assertEqual(latest["note"], "Not worth repairing")
+        self.assertEqual(
+            StageTransition.objects.filter(kind="exit").first().outcome_id,
+            self.new_exit.id)
+
+    def test_the_route_names_the_exit_and_what_it_skipped(self):
+        """The point of the whole thing: Closed has to say the repair never
+        happened, and Diagnosis was jumped over rather than completed."""
+        data = self.take_the_exit(note="Not worth repairing").json()
+        route = data["route"]
+        self.assertEqual(route["label"], "Declined — dispose")
+        self.assertEqual(route["note"], "Not worth repairing")
+        self.assertEqual(route["from_stage_name"], "New")
+        self.assertEqual(route["to_stage_name"], "Closed")
+        self.assertEqual([s["key"] for s in route["skipped"]], ["diagnosis"])
+        self.assertEqual(route["by"], "Ola Owner")
+
+    def test_a_note_free_exit_still_names_the_outcome(self):
+        """Nothing typed: the label carries it, and `note` isn't echoed back as
+        a duplicate of the label it fell back to."""
+        route = self.take_the_exit().json()["route"]
+        self.assertEqual(route["label"], "Declined — dispose")
+        self.assertIsNone(route["note"])
+
+    def test_a_normal_advance_leaves_no_route(self):
+        self.enable_flag()
+        self._hand_to_technician()
+        data = self.client_for(self.tech_user).post(
+            self.url("advance"), {"outcome_id": self.diag_done.id}, format="json").json()
+        self.assertEqual(data["current_stage_key"], "closed")
+        self.assertIsNone(data["route"])
+
+    def test_the_route_survives_later_stages(self):
+        """A decline still describes the repair two stages later — otherwise
+        the next person sees a clean history again."""
+        self.take_the_exit()
+        # Reopen to Diagnosis, then run it forward the normal way. The exit is
+        # still the reason this repair is where it is.
+        client = self.client_for(self.owner_user)
+        client.post(self.url("advance"),
+                    {"target_stage_id": self.stage_diag.id}, format="json")
+        data = self.client_for(self.tech_user).post(
+            self.url("advance"), {"outcome_id": self.diag_done.id}, format="json").json()
+        self.assertEqual(data["current_stage_key"], "closed")
+        self.assertEqual(data["route"]["label"], "Declined — dispose")
+
+    def test_going_back_past_a_jump_also_clears_the_skip_marks(self):
+        """Regression: the route cleared but the stepper kept Diagnosis struck
+        through, on a repair that was back before the jump and would go
+        through it again."""
+        self.take_the_exit()
+        self.assertEqual(
+            [s["key"] for s in
+             self.client_for(self.owner_user).get(self.url("process")).json()["skipped"]],
+            ["diagnosis"])
+
+        data = self.client_for(self.owner_user).post(
+            self.url("advance"), {"target_stage_id": self.stage_new.id},
+            format="json").json()
+        self.assertEqual(data["current_stage_key"], "new")
+        self.assertEqual(data["skipped"], [])
+
+    def test_going_back_past_the_exit_clears_the_route(self):
+        """Rewinding to the stage the exit left from means it's being redone —
+        it no longer describes where the repair is."""
+        self.take_the_exit()
+        data = self.client_for(self.owner_user).post(
+            self.url("advance"), {"target_stage_id": self.stage_new.id},
+            format="json").json()
+        self.assertEqual(data["current_stage_key"], "new")
+        self.assertIsNone(data["route"])
+
+    def test_a_stage_visited_after_the_exit_is_not_reported_as_skipped(self):
+        self.take_the_exit()
+        client = self.client_for(self.owner_user)
+        client.post(self.url("advance"),
+                    {"target_stage_id": self.stage_diag.id}, format="json")
+        data = self.client_for(self.tech_user).post(
+            self.url("advance"), {"outcome_id": self.diag_done.id}, format="json").json()
+        self.assertEqual(data["route"]["skipped"], [])
+
+    # ── stages that don't apply to a repair ──────────────────────────
+
+    def make_diagnosis_skippable(self, *types):
+        self.stage_diag.skip_when = [{"field": "type", "in": list(types)}]
+        self.stage_diag.save(update_fields=["skip_when"])
+
+    def test_a_stage_that_does_not_apply_is_passed_over(self):
+        """§8's warranty variant: nothing to quote on a warranty job, so the
+        advance lands on the stage after it."""
+        self.make_diagnosis_skippable("Warranty Repair")
+        self.work_item.type = "Warranty Repair"
+        self.work_item.save(update_fields=["type"])
+        self.enable_flag()
+
+        client = self.client_for(self.owner_user)
+        client.post(self.url("start"), {}, format="json")
+        data = client.post(self.url("advance"), {
+            "outcome_id": self.to_diag.id,
+            "captured_values": {"technician": self.tech.id},
+        }, format="json").json()
+
+        self.assertEqual(data["current_stage_key"], "closed")
+        self.assertEqual([s["key"] for s in data["skipped"]], ["diagnosis"])
+        self.assertEqual(data["skipped"][0]["reason"], "not_applicable")
+
+    def test_the_same_stage_is_not_skipped_for_other_repair_types(self):
+        self.make_diagnosis_skippable("Warranty Repair")
+        self.enable_flag()
+        client = self.client_for(self.owner_user)
+        client.post(self.url("start"), {}, format="json")
+        data = client.post(self.url("advance"), {
+            "outcome_id": self.to_diag.id,
+            "captured_values": {"technician": self.tech.id},
+        }, format="json").json()
+
+        self.assertEqual(data["current_stage_key"], "diagnosis")
+        self.assertEqual(data["skipped"], [])
+
+    def test_a_skip_never_falls_off_the_end_of_the_process(self):
+        """Everything ahead skippable must still leave the repair somewhere."""
+        self.make_diagnosis_skippable("Warranty Repair")
+        self.stage_closed.skip_when = [{"field": "type", "in": ["Warranty Repair"]}]
+        self.stage_closed.save(update_fields=["skip_when"])
+        self.work_item.type = "Warranty Repair"
+        self.work_item.save(update_fields=["type"])
+        self.enable_flag()
+
+        client = self.client_for(self.owner_user)
+        client.post(self.url("start"), {}, format="json")
+        data = client.post(self.url("advance"), {
+            "outcome_id": self.to_diag.id,
+            "captured_values": {"technician": self.tech.id},
+        }, format="json").json()
+        self.assertEqual(data["current_stage_key"], "closed")
+
+    def test_moving_back_ignores_the_skip_rules(self):
+        """An explicit target is a deliberate correction — being bounced
+        forward again would make a skipped stage impossible to return to."""
+        self.make_diagnosis_skippable("Warranty Repair")
+        self.work_item.type = "Warranty Repair"
+        self.work_item.save(update_fields=["type"])
+        self.enable_flag()
+        client = self.client_for(self.owner_user)
+        client.post(self.url("start"), {}, format="json")
+        client.post(self.url("advance"), {
+            "outcome_id": self.to_diag.id,
+            "captured_values": {"technician": self.tech.id},
+        }, format="json")
+
+        data = client.post(self.url("advance"), {
+            "target_stage_id": self.stage_diag.id}, format="json").json()
+        self.assertEqual(data["current_stage_key"], "diagnosis")
+        self.assertEqual(data["skipped"], [], "visiting it clears the skip")
+
+    def test_a_backfilled_repair_does_not_report_earlier_stages_as_skipped(self):
+        """It never visited them, but it didn't skip them either — it predates
+        the guided flow, and striking them through would be a fresh lie."""
+        self.enable_flag()
+        self.work_item.current_stage = self.stage_closed
+        self.work_item.progress = "in_progress"
+        self.work_item.save(update_fields=["current_stage", "progress"])
+        StageTransition.objects.create(
+            work_item=self.work_item, from_stage=None, to_stage=self.stage_closed,
+            kind="start")
+
+        data = self.client_for(self.owner_user).get(self.url("process")).json()
+        self.assertEqual(data["skipped"], [])
+
+    def outcome_on(self, data, stage_key, label):
+        stage = [s for s in data["stages"] if s["key"] == stage_key][0]
+        return [o for o in stage["outcomes"] if o["label"] == label][0]
+
+    def test_an_outcome_names_the_stage_it_really_lands_on(self):
+        """The button says what you're doing; the app says where it goes. With
+        Diagnosis skipped, "Send to diagnosis" must not still promise it."""
+        self.make_diagnosis_skippable("Warranty Repair")
+        self.work_item.type = "Warranty Repair"
+        self.work_item.save(update_fields=["type"])
+        self.enable_flag()
+
+        data = self.client_for(self.owner_user).get(self.url("process")).json()
+        outcome = self.outcome_on(data, "new", "Send to diagnosis")
+        self.assertEqual(outcome["target_stage_key"], "diagnosis")
+        self.assertEqual(outcome["effective_target_stage_key"], "closed")
+        self.assertEqual(outcome["effective_target_stage_name"], "Closed")
+
+    def test_an_outcome_keeps_its_own_target_when_nothing_is_skipped(self):
+        self.make_diagnosis_skippable("Warranty Repair")
+        self.enable_flag()
+        data = self.client_for(self.owner_user).get(self.url("process")).json()
+        outcome = self.outcome_on(data, "new", "Send to diagnosis")
+        self.assertEqual(outcome["effective_target_stage_key"], "diagnosis")
+
+    def test_a_stage_visited_on_an_earlier_pass_is_still_skipped_on_a_later_one(self):
+        """Regression: a repair that was sent back and re-run passed over the
+        stage the second time, but the stepper still gave it a green check
+        because it had been entered once, before the correction."""
+        self.enable_flag()
+        client = self.client_for(self.owner_user)
+        client.post(self.url("start"), {}, format="json")
+        client.post(self.url("advance"), {
+            "outcome_id": self.to_diag.id,
+            "captured_values": {"technician": self.tech.id},
+        }, format="json")
+        client.post(self.url("advance"),
+                    {"target_stage_id": self.stage_new.id}, format="json")
+
+        # Now it's a warranty job, so the re-run passes over Diagnosis.
+        self.make_diagnosis_skippable("Warranty Repair")
+        self.work_item.type = "Warranty Repair"
+        self.work_item.save(update_fields=["type"])
+
+        data = client.post(self.url("advance"), {
+            "outcome_id": self.to_diag.id}, format="json").json()
+        self.assertEqual(data["current_stage_key"], "closed")
+        self.assertEqual([s["key"] for s in data["skipped"]], ["diagnosis"])
+
+    def test_a_mistyped_repair_type_is_rejected_at_edit_time(self):
+        self.stage_diag.skip_when = [{"field": "type", "in": ["Warrantee Repair"]}]
+        with self.assertRaises(ValidationError) as ctx:
+            self.stage_diag.full_clean()
+        self.assertIn("skip_when", ctx.exception.message_dict)
+
+    # ── stages skipped by what an earlier checkpoint captured ────────
+
+    def skip_diagnosis_on_checkbox(self, **condition):
+        """A checkbox captured at New, and Diagnosis set to skip on it — the
+        shape of "repaired during diagnosis skips Repair": the value is
+        captured at one stage and decides whether the *next* one runs."""
+        field = CustomField.objects.create(
+            tenant=self.tenant, model_name="workitem", label="Already sorted",
+            field_key="already_sorted", field_type="checkbox")
+        CheckpointField.objects.create(
+            stage=self.stage_new, custom_field=field, required=False, order=1)
+        self.stage_diag.skip_when = [dict(
+            field="already_sorted", label="Already sorted on the bench", **condition)]
+        self.stage_diag.save(update_fields=["skip_when"])
+        return field
+
+    def advance_out_of_new(self, captured):
+        self.enable_flag()
+        client = self.client_for(self.owner_user)
+        client.post(self.url("start"), {}, format="json")
+        return client.post(self.url("advance"), {
+            "outcome_id": self.to_diag.id, "captured_values": captured,
+        }, format="json").json()
+
+    def test_a_checkbox_ticked_at_the_previous_checkpoint_skips_the_stage(self):
+        """The whole point: captured values are persisted before the advance
+        resolves its target, so ticking the box routes this same move."""
+        self.skip_diagnosis_on_checkbox(equals=True)
+        data = self.advance_out_of_new(
+            {"technician": self.tech.id, "already_sorted": True})
+
+        self.assertEqual(data["current_stage_key"], "closed")
+        self.assertEqual([s["key"] for s in data["skipped"]], ["diagnosis"])
+
+    def test_the_skip_reason_names_the_rule_that_fired(self):
+        self.skip_diagnosis_on_checkbox(equals=True)
+        data = self.advance_out_of_new(
+            {"technician": self.tech.id, "already_sorted": True})
+
+        self.assertEqual(data["skipped"][0]["reason"], "not_applicable")
+        self.assertEqual(data["skipped"][0]["reason_label"],
+                         "Already sorted on the bench")
+
+    def test_an_unticked_checkbox_leaves_the_stage_in_the_path(self):
+        self.skip_diagnosis_on_checkbox(equals=True)
+        data = self.advance_out_of_new({"technician": self.tech.id})
+
+        self.assertEqual(data["current_stage_key"], "diagnosis")
+        self.assertEqual(data["skipped"], [])
+
+    def test_a_checkbox_sent_as_a_string_still_routes(self):
+        """Custom field values are free-form JSON, so the same tick arrives as
+        True, "true" or 1 depending on the client."""
+        self.skip_diagnosis_on_checkbox(equals=True)
+        data = self.advance_out_of_new(
+            {"technician": self.tech.id, "already_sorted": "true"})
+
+        self.assertEqual(data["current_stage_key"], "closed")
+
+    def test_a_checkbox_sent_as_the_string_false_does_not_route(self):
+        self.skip_diagnosis_on_checkbox(equals=True)
+        data = self.advance_out_of_new(
+            {"technician": self.tech.id, "already_sorted": "false"})
+
+        self.assertEqual(data["current_stage_key"], "diagnosis")
+
+    def test_the_outcome_button_names_where_it_really_lands(self):
+        """The label says the action; the app has to say the destination, and
+        a value-driven skip moves it just as a type-driven one does."""
+        self.skip_diagnosis_on_checkbox(equals=True)
+        self.work_item.custom_fields = {"already_sorted": True}
+        self.work_item.save(update_fields=["custom_fields"])
+        self.enable_flag()
+
+        client = self.client_for(self.owner_user)
+        client.post(self.url("start"), {}, format="json")
+        stages = {s["key"]: s for s in client.get(self.url("process")).json()["stages"]}
+        outcome = stages["new"]["outcomes"][0]
+
+        self.assertEqual(outcome["target_stage_key"], "diagnosis")
+        self.assertEqual(outcome["effective_target_stage_key"], "closed")
+
+    def test_a_skipped_stage_can_still_be_done_after_all(self):
+        """The correction path bypasses skip rules by design — a stage passed
+        over is still reachable when it turns out it was needed."""
+        self.skip_diagnosis_on_checkbox(equals=True)
+        self.advance_out_of_new({"technician": self.tech.id, "already_sorted": True})
+
+        data = self.client_for(self.owner_user).post(self.url("advance"), {
+            "target_stage_id": self.stage_diag.id}, format="json").json()
+
+        self.assertEqual(data["current_stage_key"], "diagnosis")
+
+    def test_a_skip_can_match_a_standard_column_with_equals(self):
+        self.stage_diag.skip_when = [{"field": "type", "equals": "Warranty Repair"}]
+        self.stage_diag.save(update_fields=["skip_when"])
+        self.work_item.type = "Warranty Repair"
+        self.work_item.save(update_fields=["type"])
+
+        data = self.advance_out_of_new({"technician": self.tech.id})
+        self.assertEqual(data["current_stage_key"], "closed")
+
+    def test_a_rule_naming_a_field_that_does_not_exist_is_rejected(self):
+        self.stage_diag.skip_when = [{"field": "repaired_on_the_moon", "equals": True}]
+        with self.assertRaises(ValidationError) as ctx:
+            self.stage_diag.full_clean()
+        self.assertIn("skip_when", ctx.exception.message_dict)
+
+    def test_a_rule_without_exactly_one_operator_is_rejected(self):
+        for condition in ({"field": "type"},
+                          {"field": "type", "equals": "Warranty Repair",
+                           "in": ["Warranty Repair"]}):
+            self.stage_diag.skip_when = [condition]
+            with self.assertRaises(ValidationError) as ctx:
+                self.stage_diag.full_clean()
+            self.assertIn("skip_when", ctx.exception.message_dict)
+
+    def test_a_custom_field_the_tenant_has_is_accepted_at_edit_time(self):
+        self.stage_diag.skip_when = [{"field": "fault_found", "equals": "none"}]
+        self.stage_diag.full_clean()
+
     # ── queues ───────────────────────────────────────────────────────
 
     def test_my_work_follows_the_responsible_person(self):
@@ -630,7 +1021,8 @@ class SeedDefaultProcessTests(TestCase):
 
     def test_diagnosis_captures_the_findings_quote_needs(self):
         stages = {s.key: s for s in self.seed().stages.all()}
-        fields = {f.standard_key: f for f in stages["diagnosis"].checkpoint_fields.all()}
+        fields = {f.standard_key: f for f in stages["diagnosis"].checkpoint_fields.all()
+                  if f.standard_key}
         self.assertEqual(set(fields), {"issue_diagnosis", "required_parts", "estimated_effort"})
         # You cannot leave Diagnosis without writing down what you found.
         self.assertTrue(fields["issue_diagnosis"].required)
@@ -659,8 +1051,47 @@ class SeedDefaultProcessTests(TestCase):
         self.assertEqual(stages["handover"].recap_sources,
                          ["repair.note", "quote.estimated_price"])
 
+    def test_a_repair_done_on_the_bench_skips_repair_but_still_gets_quoted(self):
+        """§5's second skip trigger on the real reference process: the device
+        was fixed during diagnosis, so there is no repair left to do — but the
+        customer still has to approve and pay for it, so Quote stands."""
+        stages = {s.key: s for s in self.seed().stages.all()}
+        fixed_on_the_bench = WorkItem(
+            tenant=self.tenant, type="Chargeable Repair",
+            custom_fields={"repaired_during_diagnosis": True})
+
+        self.assertFalse(stages["repair"].applies_to(fixed_on_the_bench))
+        self.assertEqual(stages["repair"].skip_reason(fixed_on_the_bench),
+                         "Repaired during diagnosis")
+        self.assertTrue(stages["quote"].applies_to(fixed_on_the_bench))
+
+        # Approving the quote lands past Repair, on Handover.
+        approved = stages["quote"].outcomes.get(kind="advance")
+        self.assertEqual(approved.target_stage.key, "repair")
+        self.assertEqual(
+            process_service.landing_stage(fixed_on_the_bench, approved.target_stage).key,
+            "handover")
+
+    def test_an_ordinary_repair_still_goes_through_the_repair_stage(self):
+        stages = {s.key: s for s in self.seed().stages.all()}
+        ordinary = WorkItem(tenant=self.tenant, type="Chargeable Repair")
+
+        self.assertTrue(stages["repair"].applies_to(ordinary))
+        approved = stages["quote"].outcomes.get(kind="advance")
+        self.assertEqual(
+            process_service.landing_stage(ordinary, approved.target_stage).key, "repair")
+
+    def test_a_warranty_job_skips_the_quote(self):
+        stages = {s.key: s for s in self.seed().stages.all()}
+        warranty = WorkItem(tenant=self.tenant, type="Warranty Repair")
+
+        self.assertFalse(stages["quote"].applies_to(warranty))
+        self.assertTrue(stages["repair"].applies_to(warranty))
+
     def test_seeding_twice_does_not_duplicate_fields(self):
         self.seed()
         stages = {s.key: s for s in self.seed().stages.all()}
-        self.assertEqual(stages["diagnosis"].checkpoint_fields.count(), 3)
+        self.assertEqual(stages["diagnosis"].checkpoint_fields.count(), 4)
         self.assertEqual(ProcessTemplate.objects.filter(tenant=self.tenant).count(), 1)
+        self.assertEqual(CustomField.objects.filter(
+            tenant=self.tenant, field_key="repaired_during_diagnosis").count(), 1)

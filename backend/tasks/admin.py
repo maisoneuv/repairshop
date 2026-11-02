@@ -233,7 +233,7 @@ class StageDefinitionAdmin(admin.ModelAdmin):
     search_fields = ['name', 'key']
     inlines = [StageOutcomeInline, CheckpointFieldInline]
     fields = ['process', 'order', 'key', 'name', 'owner_role', 'status_value',
-              'guidance', 'recap_sources']
+              'guidance', 'recap_sources', 'skip_when']
 
 
 @admin.register(WorkItemPause)

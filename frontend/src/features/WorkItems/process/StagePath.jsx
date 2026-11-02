@@ -7,15 +7,26 @@ import { stageDotClass } from "../../../utils/stageColors";
  * Reads as a stepper — done stages behind, the current one marked, what's left
  * ahead. Clicking any other stage "peeks" at it: whatever it captured (or will
  * capture), without leaving the stage you're working on.
+ *
+ * A stage the repair jumped over (`skipped` — a warranty job with nothing to
+ * quote, a device already fixed on the bench, or an Exit that bailed forward)
+ * is NOT behind us in the sense a check mark claims: nobody did that work. It
+ * gets its own struck-through marker and breaks the emerald run, so a skipped
+ * repair stops reading as one that sailed through. `reason_label` is the rule
+ * the shop wrote, so the caption says why rather than only that.
  */
-export default function StagePath({ stages, currentStageId, paused, peekKey, onPeek }) {
+export default function StagePath({ stages, currentStageId, paused, peekKey, onPeek, skipped }) {
     if (!stages?.length) return null;
 
     const currentIndex = stages.findIndex((s) => s.id === currentStageId);
+    const skippedKeys = new Set(skipped?.map((s) => s.key) ?? []);
+    const skipLabels = new Map(
+        skipped?.filter((s) => s.reason_label).map((s) => [s.key, s.reason_label]) ?? [],
+    );
 
     const statusOf = (index) => {
         if (currentIndex < 0) return "upcoming";
-        if (index < currentIndex) return "done";
+        if (index < currentIndex) return skippedKeys.has(stages[index].key) ? "skipped" : "done";
         if (index === currentIndex) return "current";
         return "upcoming";
     };
@@ -26,6 +37,9 @@ export default function StagePath({ stages, currentStageId, paused, peekKey, onP
                 const status = statusOf(index);
                 const isPeeking = peekKey === stage.key;
                 const isLast = index === stages.length - 1;
+                // The break in the green run is the point: it shows where the
+                // repair left the normal road, not just that a stage is blank.
+                const brokenAfter = status === "skipped" || statusOf(index + 1) === "skipped";
 
                 return (
                     <li key={stage.id} className="flex items-start flex-1 min-w-[72px]">
@@ -46,16 +60,30 @@ export default function StagePath({ stages, currentStageId, paused, peekKey, onP
                                         ? "font-bold text-gray-900"
                                         : status === "done"
                                           ? "font-semibold text-emerald-700"
-                                          : "font-medium text-gray-500"
+                                          : status === "skipped"
+                                            ? "font-medium text-gray-400 line-through"
+                                            : "font-medium text-gray-500"
                                 }`}
                             >
                                 {stage.name}
                             </span>
+                            {status === "skipped" && (
+                                <span
+                                    className="text-[9px] font-bold uppercase tracking-wide text-gray-400 -mt-1 text-center leading-tight"
+                                    title={skipLabels.get(stage.key) || undefined}
+                                >
+                                    {skipLabels.get(stage.key) ?? "Skipped"}
+                                </span>
+                            )}
                         </button>
                         {!isLast && (
                             <div
-                                className={`flex-1 h-0.5 mt-4 mx-1 rounded ${
-                                    status === "done" ? "bg-emerald-500" : "bg-gray-200"
+                                className={`flex-1 mt-4 mx-1 ${
+                                    brokenAfter
+                                        ? "border-t-2 border-dashed border-gray-300"
+                                        : status === "done"
+                                          ? "h-0.5 rounded bg-emerald-500"
+                                          : "h-0.5 rounded bg-gray-200"
                                 }`}
                             />
                         )}
@@ -67,6 +95,13 @@ export default function StagePath({ stages, currentStageId, paused, peekKey, onP
 }
 
 function StageMarker({ status, index, paused }) {
+    if (status === "skipped") {
+        return (
+            <span className="w-7 h-7 rounded-full bg-white border border-dashed border-gray-400 text-gray-400 flex items-center justify-center">
+                <Minus className="w-3.5 h-3.5" strokeWidth={2.5} />
+            </span>
+        );
+    }
     if (status === "done") {
         return (
             <span className="w-7 h-7 rounded-full bg-emerald-500 text-white flex items-center justify-center">
@@ -103,12 +138,25 @@ function StageMarker({ status, index, paused }) {
  * For a stage already behind us it also offers the way back: something was
  * missed, so return the repair there and pick it up again. Recorded as a
  * correction, and it re-routes to whoever owns that stage.
+ *
+ * A skipped stage keeps that button too — it's the way back when a customer
+ * changes their mind about a decline and the repair should happen after all.
  */
-export function StagePeek({ stage, status, currentStageName, onClose, onMoveBack, busy }) {
+export function StagePeek({ stage, status, currentStageName, onClose, onMoveBack, busy, skippedEntry }) {
     if (!stage) return null;
 
+    const skippedLabel =
+        skippedEntry?.reason_label ??
+        (skippedEntry?.reason === "not_applicable" ? "doesn't apply to this repair" : null);
     const label =
-        status === "done" ? "Completed" : status === "current" ? "Current stage" : "Upcoming";
+        status === "done"
+            ? "Completed"
+            : status === "skipped"
+              ? (skippedLabel ? `Skipped — ${skippedLabel}` : "Skipped")
+              : status === "current"
+                ? "Current stage"
+                : "Upcoming";
+    const canMoveBack = status === "done" || status === "skipped";
 
     return (
         <div className="mt-3 rounded-xl border border-dashed border-blue-200 bg-blue-50/40 p-4">
@@ -151,7 +199,7 @@ export function StagePeek({ stage, status, currentStageName, onClose, onMoveBack
             )}
 
             <div className="mt-4 flex items-center gap-3 flex-wrap">
-                {status === "done" && onMoveBack && (
+                {canMoveBack && onMoveBack && (
                     <button
                         type="button"
                         onClick={onMoveBack}
@@ -159,7 +207,7 @@ export function StagePeek({ stage, status, currentStageName, onClose, onMoveBack
                         className="px-3.5 py-2 rounded-lg bg-white border border-gray-300 text-sm font-bold text-gray-800 hover:bg-gray-50 disabled:opacity-60 inline-flex items-center gap-1.5"
                     >
                         <Undo2 className="w-4 h-4 text-gray-500" />
-                        Go back to this stage
+                        {status === "skipped" ? "Do this stage after all" : "Go back to this stage"}
                     </button>
                 )}
                 <button

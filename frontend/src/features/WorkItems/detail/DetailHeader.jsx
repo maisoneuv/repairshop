@@ -1,6 +1,6 @@
 import { Link } from "react-router-dom";
-import { AlertTriangle, Phone, User, Zap } from "lucide-react";
-import { customerName, deviceName } from "./fieldRegistry";
+import { AlertTriangle, Phone, ShieldCheck, User, Zap } from "lucide-react";
+import { customerName, deviceName, isWarranty } from "./fieldRegistry";
 
 /**
  * The record header (§7B), for the redesigned page only —
@@ -49,10 +49,21 @@ export default function DetailHeader({ workItem }) {
                         {device ?? workItem.reference_id}
                     </h1>
                     {/* The reference id is in the breadcrumb; the subline is the
-                        category, which the title doesn't carry. */}
-                    {category && (
-                        <p className="text-xs text-gray-500 mt-1.5 truncate">{category}</p>
-                    )}
+                        category, which the title doesn't carry — plus warranty,
+                        which changes what the whole page means (no money to
+                        collect, Quote skipped) and so can't live only in the
+                        money column further down the page. */}
+                    <div className="flex items-center gap-2 mt-1.5 min-w-0">
+                        {category && (
+                            <p className="text-xs text-gray-500 truncate">{category}</p>
+                        )}
+                        {isWarranty(workItem) && (
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-50 text-amber-800 ring-1 ring-amber-200 text-[11px] font-bold shrink-0">
+                                <ShieldCheck className="w-3 h-3" />
+                                Warranty — no charge
+                            </span>
+                        )}
+                    </div>
                 </div>
 
                 <div className="flex flex-col items-end gap-2.5 shrink-0">

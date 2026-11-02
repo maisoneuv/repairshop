@@ -7,6 +7,9 @@
  * needed every time is the friction that peek exists to absorb instead. The
  * backend drops blank values, so an empty recap means "nothing captured yet"
  * and the card hides rather than showing a column of dashes.
+ *
+ * How the repair got here is NOT one of these rows — an Exit is louder than
+ * reference material, so it sits above in its own banner (`RouteBanner`).
  */
 export default function RecapCard({ items }) {
     if (!items?.length) return null;

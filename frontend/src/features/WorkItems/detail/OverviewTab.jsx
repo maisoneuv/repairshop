@@ -83,7 +83,7 @@ export default function OverviewTab({
             {/* Column 3 — the money. The balance stays a card on purpose. */}
             <div className="space-y-3">
                 <SectionLabel>Money &amp; logistics</SectionLabel>
-                {warranty ? <WarrantyBadge /> : <SettlementCard workItem={workItem} />}
+                {warranty ? <WarrantyBadge /> : <SettlementCard workItem={workItem} payments={payments} />}
                 <div className="divide-y divide-gray-100">
                     {!warranty && payments.length > 0 && (
                         <PaymentsSection payments={payments} currency={workItem.currency} />
@@ -326,13 +326,26 @@ function money(amount, currency) {
     return `${n.toFixed(2)} ${currency ?? ""}`.trim();
 }
 
+/** What the customer has handed over. Withdrawals are stored negative. */
+export function collectedTotal(payments) {
+    return payments.reduce((total, p) => {
+        const amount = Number(p.amount);
+        return Number.isNaN(amount) ? total : total + amount;
+    }, 0);
+}
+
 /** The balance keeps its card: it is the one figure the page is built around. */
-function SettlementCard({ workItem }) {
+function SettlementCard({ workItem, payments }) {
     const currency = workItem.currency;
-    const quoted = Number(workItem.final_price ?? workItem.estimated_price ?? 0);
-    const prepaid = Number(workItem.prepaid_amount ?? 0);
-    const balance = quoted - prepaid;
-    const due = balance > 0;
+    const charged = workItem.final_price ?? workItem.estimated_price;
+    const collected = collectedTotal(payments);
+
+    if (charged == null && collected === 0) return <UnpricedCard />;
+
+    const balance = Number(charged ?? 0) - collected;
+    // Rounding on either side can leave a fraction of a grosz behind, which is
+    // settled rather than owed.
+    const due = balance > 0.005;
 
     return (
         <section className="bg-white rounded-xl border border-gray-200 overflow-hidden">
@@ -343,25 +356,41 @@ function SettlementCard({ workItem }) {
                     {workItem.final_price != null && (
                         <Row label="Final price" value={money(workItem.final_price, currency)} />
                     )}
-                    {prepaid > 0 && (
-                        <Row label="Prepaid" value={`−${money(prepaid, currency)}`} valueClass="text-emerald-700" />
+                    {collected !== 0 && (
+                        <Row
+                            label="Paid"
+                            value={`−${money(collected, currency)}`}
+                            valueClass="text-emerald-700"
+                        />
                     )}
                 </div>
             </div>
             <div className={`px-3.5 py-3 flex items-end justify-between ${due ? "bg-rose-50" : "bg-emerald-50"}`}>
                 <div>
                     <p className={`text-[11px] font-bold tracking-wider ${due ? "text-rose-800" : "text-emerald-800"}`}>
-                        BALANCE DUE
+                        {balance < -0.005 ? "OVERPAID" : "BALANCE DUE"}
                     </p>
                     <p className={`text-[11px] font-bold mt-0.5 ${due ? "text-rose-700" : "text-emerald-700"}`}>
                         {due ? "Unpaid" : "Settled"}
                     </p>
                 </div>
                 <p className={`text-2xl font-bold tabular-nums ${due ? "text-rose-800" : "text-emerald-800"}`}>
-                    {balance.toFixed(2)}
+                    {Math.abs(balance).toFixed(2)}
                     <span className="text-sm font-semibold"> {currency}</span>
                 </p>
             </div>
+        </section>
+    );
+}
+
+function UnpricedCard() {
+    return (
+        <section className="bg-white rounded-xl border border-gray-200 px-3.5 pt-3 pb-3.5">
+            <SectionLabel>Settlement</SectionLabel>
+            <p className="text-sm text-gray-700 mt-2">Not priced yet</p>
+            <p className="text-[11px] text-gray-500 mt-0.5">
+                A balance appears once the repair is quoted.
+            </p>
         </section>
     );
 }

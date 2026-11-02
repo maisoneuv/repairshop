@@ -54,6 +54,25 @@ def build_table_data(queryset, columns):
 
     return all_rows
 
+# Fields whose options come from the tenant's own PicklistValue rows rather
+# than from Django choices, mapped to their PicklistValue category. Shared with
+# the checkpoint-field serializer so both describe a field the same way.
+PICKLIST_FIELDS = {
+    'WorkItem': {
+        'status': 'workitem_status',
+        'type': 'workitem_type',
+        'priority': 'workitem_priority',
+        'intake_method': 'intake_method',
+        'dropoff_method': 'dropoff_method',
+        'payment_method': 'payment_method',
+        'currency': 'currency',
+    },
+    'Task': {
+        'status': 'task_status',
+    },
+}
+
+
 def get_model_schema(model_class, tenant=None):
     """
     Generate schema information for a Django model.
@@ -66,22 +85,6 @@ def get_model_schema(model_class, tenant=None):
         Dictionary containing field information including types, defaults, and choices
     """
     schema = {}
-
-    # Define which fields use dynamic picklists (mapped to PicklistValue category)
-    PICKLIST_FIELDS = {
-        'WorkItem': {
-            'status': 'workitem_status',
-            'type': 'workitem_type',
-            'priority': 'workitem_priority',
-            'intake_method': 'intake_method',
-            'dropoff_method': 'dropoff_method',
-            'payment_method': 'payment_method',
-            'currency': 'currency',
-        },
-        'Task': {
-            'status': 'task_status',
-        }
-    }
 
     model_name = model_class.__name__
 
@@ -170,6 +173,29 @@ def create_system_note(obj, message):
     )
 
 
+_TRUTHY = {'true', 'yes', '1', 'on'}
+_FALSY = {'false', 'no', '0', 'off', ''}
+
+
+def as_bool(value):
+    """Coerce a loosely-typed boolean; None if `value` isn't recognisably one.
+
+    Checkbox custom fields are stored as free-form JSON, so the same tick
+    arrives as True, "true" or 1 depending on which client wrote it.
+    """
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, int) and value in (0, 1):
+        return bool(value)
+    if isinstance(value, str):
+        lowered = value.strip().lower()
+        if lowered in _TRUTHY:
+            return True
+        if lowered in _FALSY:
+            return False
+    return None
+
+
 def validate_custom_field_values(tenant, model_name, values: dict):
     from rest_framework import serializers
     from core.models import CustomField
@@ -207,6 +233,17 @@ def validate_custom_field_values(tenant, model_name, values: dict):
             options = field.config.get('options', [])
             if val not in options:
                 errors[field.field_key] = "Invalid option."
+
+        elif field.field_type == 'checkbox':
+            # Stored as free-form JSON, so clients have sent True, "true" and 1
+            # for the same tick. A guided-process stage can be configured to
+            # skip on this value, so normalise it rather than let "false" route
+            # as truthy.
+            coerced = as_bool(val)
+            if coerced is None:
+                errors[field.field_key] = "Must be true or false."
+            else:
+                values[field.field_key] = coerced
 
     if errors:
         raise serializers.ValidationError({'custom_fields': errors})

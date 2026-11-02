@@ -42,8 +42,15 @@ export default function ProcessSection({ enabled, loading, state, currentStage, 
     const isPeekingElsewhere = peekStage && peekStage.id !== state.current_stage;
     const currentIndex = state.stages.findIndex((s) => s.id === state.current_stage);
     const peekIndex = peekStage ? state.stages.findIndex((s) => s.id === peekStage.id) : -1;
+    const skippedEntry = peekStage
+        ? state.skipped?.find((s) => s.key === peekStage.key)
+        : null;
     const peekStatus =
-        peekIndex < currentIndex ? "done" : peekIndex === currentIndex ? "current" : "upcoming";
+        peekIndex < currentIndex
+            ? (skippedEntry ? "skipped" : "done")
+            : peekIndex === currentIndex
+              ? "current"
+              : "upcoming";
 
     // Actions mutate the work item too (captured values, dual-written status),
     // so the page around us needs to know something changed.
@@ -86,6 +93,7 @@ export default function ProcessSection({ enabled, loading, state, currentStage, 
                     stages={state.stages}
                     currentStageId={state.current_stage}
                     paused={Boolean(state.pause)}
+                    skipped={state.skipped}
                     peekKey={isPeekingElsewhere ? peekKey : null}
                     onPeek={(key) => setPeekKey((prev) => (prev === key ? null : key))}
                 />
@@ -93,6 +101,7 @@ export default function ProcessSection({ enabled, loading, state, currentStage, 
                     <StagePeek
                         stage={peekStage}
                         status={peekStatus}
+                        skippedEntry={skippedEntry}
                         currentStageName={currentStage?.name}
                         busy={busy}
                         onClose={() => setPeekKey(null)}

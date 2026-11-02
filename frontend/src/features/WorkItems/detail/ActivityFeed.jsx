@@ -305,7 +305,11 @@ function buildEntries(notes, emails, transitions, calls = []) {
             title: moved
                 ? `${t.from_stage_name} → ${t.to_stage_name}`
                 : `${meta.verb} · ${t.to_stage_name ?? t.from_stage_name ?? "stage"}`,
-            body: t.note,
+            // The outcome names what was decided, the note says why. Without a
+            // note the two are the same string, so don't print it twice.
+            body: [t.outcome_label, t.note !== t.outcome_label ? t.note : null]
+                .filter(Boolean)
+                .join("\n") || t.note,
             who: t.by_user_name,
             at: t.at,
         });
