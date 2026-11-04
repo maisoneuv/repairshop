@@ -13,6 +13,7 @@ from core.models import UserRole
 from core.serializers import UserSerializer
 from core.views import GenericSearchView
 from .models import CashRegister, CashTransaction, CashTransactionType, Employee, Location, RepairShop
+from .locations import get_or_create_customer_location, location_city
 from customers.models import Customer
 from .serializers import (
     CashRegisterSerializer, CashTransactionSerializer, CashTransferSerializer,
@@ -375,7 +376,7 @@ class CurrentEmployeeView(APIView):
 
         # Get this user's Employee profile in this tenant
         try:
-            employee = Employee.objects.select_related('user', 'location').get(user=user) #todo add tenant filtering
+            employee = Employee.objects.select_related('user', 'location__address', 'location__shop__address').get(user=user) #todo add tenant filtering
         except Employee.DoesNotExist:
             raise NotFound("Employee profile not found in this tenant.")
 
@@ -402,6 +403,7 @@ class CurrentEmployeeView(APIView):
                 "id": employee.id,
                 "location_id": employee.location.id if employee.location else None,
                 "location_name": employee.location.name if employee.location else None,
+                "location_city": location_city(employee.location),
                 "role": employee.role,
             },
             "availableTenants": availableTenants,
@@ -531,24 +533,7 @@ def ensure_customer_address_location(request):
     except (Address.DoesNotExist, ValueError, TypeError):
         return Response({"detail": "Address not found"}, status=404)
 
-    location = Location.objects.filter(
-        tenant=request.tenant,
-        type='customer',
-        customer=customer,
-        address=address,
-    ).select_related('customer', 'address').first()
-
-    created = False
-    if not location:
-        display_name = label or f"{customer.first_name} {customer.last_name} address"
-        location = Location.objects.create(
-            tenant=request.tenant,
-            name=display_name,
-            type='customer',
-            customer=customer,
-            address=address,
-        )
-        created = True
+    location, created = get_or_create_customer_location(request.tenant, customer, address, label)
 
     payload = {
         "id": location.id,

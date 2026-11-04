@@ -7,6 +7,7 @@ from .views import (
     TaskViewSet,
     TaskTypeViewSet,
     DashboardView,
+    AgendaView,
 )
 from .process_views import AllWorkItemsView, MyWorkView, NotificationViewSet
 from .process_config_views import (
@@ -37,6 +38,7 @@ urlpatterns = [
     path('api/schema/work-item/', WorkItemSchemaView.as_view(), name="work_item_schema"),
     path('api/schema/task/', TaskSchemaView.as_view(), name="task_schema"),
     path('dashboard/', DashboardView.as_view(), name="dashboard"),
+    path('agenda/', AgendaView.as_view(), name="agenda"),
     # Guided-process queues (§7E)
     path('my-work/', MyWorkView.as_view(), name="my_work"),
     path('all-work-items/', AllWorkItemsView.as_view(), name="all_work_items"),

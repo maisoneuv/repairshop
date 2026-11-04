@@ -69,6 +69,7 @@ INSTALLED_APPS = [
     'ckeditor',
     'calls',
     'mobile',
+    'appointments',
     # Stores spent refresh tokens - required for rotation to work.
     'rest_framework_simplejwt.token_blacklist',
 ]
@@ -306,6 +307,10 @@ if _redis_cache_url:
             'LOCATION': _redis_cache_url,
         }
     }
+
+GEOCODER_PROVIDER = os.getenv('GEOCODER_PROVIDER', 'nominatim')
+# Nominatim's usage policy requires an identifying User-Agent with contact info.
+GEOCODER_USER_AGENT = os.getenv('GEOCODER_USER_AGENT', '')
 
 CELERY_BROKER_URL = os.getenv('CELERY_BROKER_URL', 'redis://localhost:6379/0')
 CELERY_RESULT_BACKEND = os.getenv('CELERY_RESULT_BACKEND', 'redis://localhost:6379/0')

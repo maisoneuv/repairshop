@@ -45,11 +45,17 @@ class LocationSerializer(serializers.ModelSerializer):
         model = Location
         fields = ["id", "type", "name", "shop_id", "customer_id", "address_id", "address"]
 
+    def _tenant_locations(self):
+        tenant = self.context.get("tenant") or getattr(self.context.get("request"), "tenant", None)
+        if tenant is None:
+            return Location.objects.none()
+        return Location.objects.filter(tenant=tenant)
+
     def to_internal_value(self, data):
         # Handle integer IDs (for existing locations) by returning the location instance
         if isinstance(data, int):
             try:
-                location = Location.objects.get(id=data)
+                location = self._tenant_locations().get(id=data)
                 return {"id": location.id}
             except Location.DoesNotExist:
                 raise serializers.ValidationError(f"Location with id {data} does not exist")
@@ -57,7 +63,7 @@ class LocationSerializer(serializers.ModelSerializer):
         # Handle dictionary with only 'id' key - treat as existing location reference
         if isinstance(data, dict) and set(data.keys()) == {"id"}:
             try:
-                location = Location.objects.get(id=data["id"])
+                location = self._tenant_locations().get(id=data["id"])
                 return {"id": location.id}
             except Location.DoesNotExist:
                 raise serializers.ValidationError(f"Location with id {data['id']} does not exist")
@@ -72,7 +78,7 @@ class LocationSerializer(serializers.ModelSerializer):
         # If caller passed an existing location id, just return that instance
         if set(validated.keys()) == {"id"}:
             try:
-                return Location.objects.get(id=validated["id"])
+                return self._tenant_locations().get(id=validated["id"])
             except Location.DoesNotExist:
                 raise serializers.ValidationError({"id": "Location not found"})
 

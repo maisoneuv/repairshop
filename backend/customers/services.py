@@ -2,6 +2,7 @@
 Customer search service using hybrid search approach
 """
 from django.db.models import Q, Count, Prefetch, Case, When, IntegerField, Value
+from core.phone import DEFAULT_REGION, region_for_tenant, to_e164_from_parts
 from core.phone_search import normalize_phone_query
 from .models import Customer
 from tasks.models import WorkItem
@@ -127,3 +128,39 @@ def serialize_customer_search_result(customer):
     ]
 
     return customer_data
+
+
+def find_matching_customers(tenant, *, email=None, prefix=None, phone_number=None, limit=5):
+    """Existing customers that look like the same person, strongest match first."""
+    matches = []
+    if email:
+        matches.extend(Customer.objects.filter(tenant=tenant, email__iexact=email)[:limit])
+    phone_e164 = to_e164_from_parts(prefix, phone_number, region_for_tenant(tenant) if tenant else DEFAULT_REGION)
+    if phone_e164:
+        seen = {c.pk for c in matches}
+        matches.extend(
+            c for c in Customer.objects.filter(tenant=tenant, phone_e164=phone_e164)[:limit]
+            if c.pk not in seen
+        )
+    if not matches and phone_number:
+        matches.extend(
+            Customer.objects.filter(tenant=tenant, prefix=prefix, phone_number=phone_number)[:limit]
+        )
+    return matches[:limit]
+
+
+def match_or_create_customer(tenant, *, first_name, last_name=None, email=None, prefix=None,
+                             phone_number=None, address=None):
+    matches = find_matching_customers(tenant, email=email, prefix=prefix, phone_number=phone_number, limit=1)
+    if matches:
+        return matches[0], False
+    customer = Customer.objects.create(
+        tenant=tenant,
+        first_name=first_name,
+        last_name=last_name or '',
+        email=email or None,
+        prefix=prefix,
+        phone_number=phone_number,
+        address=address,
+    )
+    return customer, True

@@ -1,4 +1,5 @@
 import { Outlet, useLocation } from "react-router-dom";
+import { ConfirmDialogHost } from "../components/ConfirmDialog";
 import { useNavigate } from "react-router-dom";
 import UserProfileDropdown from "../components/UserProfileDropdown";
 import { useUser } from "../context/UserContext";
@@ -159,6 +160,7 @@ export default function AppLayout() {
                 />
             )}
             <Toaster position="top-center" richColors closeButton />
+            <ConfirmDialogHost />
         </div>
     );
 }

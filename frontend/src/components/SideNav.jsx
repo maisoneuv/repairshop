@@ -18,6 +18,8 @@ import {
     UserPlus,
     Settings,
     Inbox,
+    Map as MapIcon,
+    CalendarDays,
 } from "lucide-react";
 import GlobalActionsSection from "../features/CustomActions/GlobalActionsSection";
 import { useGuidedProcessEnabled } from "../hooks/useGuidedProcess";
@@ -70,6 +72,17 @@ const NAV_GROUPS = [
         ],
     },
     {
+        key: "appointments",
+        label: "Pickups & Returns",
+        icon: Truck,
+        mobileOnly: false,
+        basePaths: ["/appointments"],
+        children: [
+            { label: "Route Planner", path: "/appointments/planner", icon: MapIcon },
+            { label: "All Appointments", path: "/appointments", icon: List },
+        ],
+    },
+    {
         key: "leads",
         label: "Leady",
         icon: UserPlus,
@@ -91,6 +104,12 @@ const PRIMARY_LINKS = [
         icon: Home,
         path: "/",
     },
+    {
+        key: "calendar",
+        label: "Calendar",
+        icon: CalendarDays,
+        path: "/calendar",
+    },
 ];
 
 function isGroupActive(group, location) {
@@ -104,6 +123,10 @@ function isChildActive(child, location) {
 
     if (child.search) {
         return pathMatch && location.search === child.search;
+    }
+
+    if (child.path === "/appointments") {
+        return location.pathname === child.path;
     }
 
     // For /work-items without search, don't match when ?view=my is present

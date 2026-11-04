@@ -102,8 +102,73 @@ class Address(models.Model):
     postal_code = models.CharField(max_length=20)
     country = models.CharField(max_length=100, default="Poland")
 
+    GEOCODE_PENDING = 'pending'
+    GEOCODE_OK = 'ok'
+    GEOCODE_FAILED = 'failed'
+    GEOCODE_MANUAL = 'manual'
+    GEOCODE_STATUS_CHOICES = [
+        (GEOCODE_PENDING, 'Pending'),
+        (GEOCODE_OK, 'Geocoded'),
+        (GEOCODE_FAILED, 'Not found'),
+        (GEOCODE_MANUAL, 'Set by hand'),
+    ]
+
+    latitude = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True)
+    longitude = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True)
+    geocode_status = models.CharField(max_length=10, choices=GEOCODE_STATUS_CHOICES, default=GEOCODE_PENDING)
+    geocoded_at = models.DateTimeField(null=True, blank=True)
+
+    LOCATION_FIELDS = ("street", "building_number", "postal_code", "city", "country")
+    _PIN_FIELDS = ("latitude", "longitude", "geocode_status", "geocoded_at")
+
     def __str__(self):
         return f"{self.street} {self.building_number} {self.city}"
+
+    @classmethod
+    def from_db(cls, db, field_names, values):
+        instance = super().from_db(db, field_names, values)
+        instance._remember_saved_state()
+        return instance
+
+    def _remember_saved_state(self):
+        self._saved_state = {f: getattr(self, f) for f in (*self.LOCATION_FIELDS, "latitude", "longitude")}
+
+    def save(self, *args, **kwargs):
+        """Wherever an address is edited (admin, customer forms, imports), a
+        changed address gets a fresh map lookup, unless coordinates are being
+        saved along with it."""
+        saved = getattr(self, "_saved_state", None)
+        update_fields = kwargs.get("update_fields")
+        location_saved = update_fields is None or bool(set(update_fields) & set(self.LOCATION_FIELDS))
+        moved = saved is None or any(getattr(self, f) != saved[f] for f in self.LOCATION_FIELDS)
+        pinned_now = self.latitude is not None and (
+            saved is None or (self.latitude, self.longitude) != (saved["latitude"], saved["longitude"])
+        )
+
+        needs_lookup = False
+        if location_saved and moved and not pinned_now:
+            self.latitude = self.longitude = None
+            self.geocode_status = self.GEOCODE_PENDING
+            needs_lookup = True
+        elif self.latitude is None and self.geocode_status in (self.GEOCODE_OK, self.GEOCODE_MANUAL):
+            # "Found" without coordinates can't be drawn; look it up again.
+            self.geocode_status = self.GEOCODE_PENDING
+            needs_lookup = True
+        if needs_lookup and update_fields is not None:
+            kwargs["update_fields"] = list({*update_fields, *self._PIN_FIELDS})
+
+        super().save(*args, **kwargs)
+        self._remember_saved_state()
+        if needs_lookup:
+            from core.tasks import queue_geocoding
+            queue_geocoding(self)
+
+    def geocode_query(self):
+        return ", ".join(filter(None, [
+            f"{self.street} {self.building_number}".strip(),
+            f"{self.postal_code} {self.city}".strip(),
+            self.country,
+        ]))
 
 
 class TimeStampedModel(models.Model):

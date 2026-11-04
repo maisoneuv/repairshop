@@ -12,6 +12,8 @@ django-extensions
 
 # Celery and Redis for async tasks
 celery==5.4.0
+# kombu 5.7 imports `packaging` without declaring it, which crashes the workers.
+kombu==5.6.1
 redis==5.2.0
 requests==2.32.3
 

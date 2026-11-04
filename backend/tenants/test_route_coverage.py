@@ -113,6 +113,7 @@ AUDITED_VIEWS = {
     "service.views.transfer_between_registers",        # registers verified against request.tenant
     # tasks
     "tasks.views.DashboardView",        # all WorkItem/Task/PicklistValue queries filter tenant
+    "tasks.views.AgendaView",           # build_agenda filters tenant; employee looked up with tenant=
     "tasks.views.WorkItemSchemaView",   # get_model_schema(tenant=request.tenant)
     "tasks.views.TaskSchemaView",       # get_model_schema(tenant=request.tenant)
 }
