@@ -193,6 +193,8 @@ class WorkItemSerializer(serializers.ModelSerializer):
             else:
                 raise serializers.ValidationError({"owner_id": "Owner is required and current user has no associated employee"})
 
+        tenant_locations = Location.objects.filter(tenant=tenant)
+
         def resolve_location(payload, allow_null=False):
             if payload is None:
                 if allow_null:
@@ -201,7 +203,7 @@ class WorkItemSerializer(serializers.ModelSerializer):
 
             if isinstance(payload, int):
                 try:
-                    return Location.objects.get(id=payload)
+                    return tenant_locations.get(id=payload)
                 except Location.DoesNotExist:
                     raise serializers.ValidationError({"detail": "Location not found"})
 
@@ -213,7 +215,7 @@ class WorkItemSerializer(serializers.ModelSerializer):
 
                 if not remaining:
                     try:
-                        return Location.objects.get(id=payload["id"])
+                        return tenant_locations.get(id=payload["id"])
                     except Location.DoesNotExist:
                         raise serializers.ValidationError({"detail": "Location not found"})
 

@@ -32,6 +32,7 @@ export default function OverviewTab({
     onDeviceUpdated,
     activity,
     summary,
+    appointments,
 }) {
     const warranty = isWarranty(workItem);
 
@@ -89,6 +90,7 @@ export default function OverviewTab({
                         <PaymentsSection payments={payments} currency={workItem.currency} />
                     )}
                     <LocationSection workItem={workItem} />
+                    {appointments}
                 </div>
             </div>
         </div>

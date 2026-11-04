@@ -1,5 +1,5 @@
 from decimal import Decimal
-from datetime import timedelta
+from datetime import date, timedelta
 
 from django.http import JsonResponse
 from django.shortcuts import render, redirect, reverse, get_object_or_404
@@ -9,6 +9,7 @@ from django.utils import timezone
 from customers.serializers import CustomerSerializer
 from service.models import CashRegister, CashTransaction, CashTransactionType, Employee
 from service.serializers import EmployeeSerializer
+from .agenda import MAX_RANGE_DAYS, build_agenda, build_carried_over
 from .models import WorkItem, Task, TaskType
 from .forms import WorkItemForm, TaskForm
 from django.views.generic import TemplateView, ListView, DetailView, CreateView, UpdateView
@@ -23,7 +24,7 @@ from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated  # or AllowAny for dev
 from django_filters.rest_framework import DjangoFilterBackend
-from rest_framework.exceptions import PermissionDenied
+from rest_framework.exceptions import PermissionDenied, ValidationError
 from core.mixins import TenantScopedMixin
 from core.models import Note, PicklistValue
 # Guided work-item process (flag-gated); the actions no-op with a 404 when the
@@ -1092,4 +1093,55 @@ class DashboardView(APIView):
             'financial': financial,
             'technician_workload': workload,
             'tasks_overdue_by_assignee': tasks_overdue_by_assignee,
+        })
+
+
+class AgendaView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    @staticmethod
+    def _parse_date(value, field):
+        try:
+            return date.fromisoformat(value)
+        except (TypeError, ValueError):
+            raise ValidationError({field: "Use YYYY-MM-DD."})
+
+    def get(self, request):
+        tenant = getattr(request, 'tenant', None)
+        if not tenant:
+            return Response({'detail': 'Tenant not resolved'}, status=status.HTTP_400_BAD_REQUEST)
+
+        params = request.query_params
+        date_from = self._parse_date(params.get('date_from'), 'date_from')
+        date_to = self._parse_date(params.get('date_to'), 'date_to')
+        if date_to < date_from:
+            raise ValidationError({'date_to': 'Must not be before date_from.'})
+        if (date_to - date_from).days >= MAX_RANGE_DAYS:
+            raise ValidationError({'date_to': f'Range is limited to {MAX_RANGE_DAYS} days.'})
+
+        current = Employee.objects.select_related('user').filter(user=request.user, tenant=tenant).first()
+        can_view_all = request.user.has_permission('view_all_tasks', tenant)
+
+        requested = params.get('employee')
+        if requested in (None, '') and current:
+            employee = current
+        elif requested in (None, '', 'all'):
+            if not can_view_all:
+                raise PermissionDenied("You can only view your own agenda.")
+            employee = None
+        else:
+            employee = get_object_or_404(Employee.objects.select_related('user'), pk=requested, tenant=tenant)
+            if employee != current and not can_view_all:
+                raise PermissionDenied("You can only view your own agenda.")
+
+        carried_over = None
+        if params.get('today'):
+            carried_over = build_carried_over(tenant, employee, self._parse_date(params['today'], 'today'))
+
+        return Response({
+            **build_agenda(tenant, employee, date_from, date_to),
+            'carried_over': carried_over,
+            'employee': {'id': employee.id, 'name': str(employee)} if employee else None,
+            'current_employee_id': current.id if current else None,
+            'can_view_all': can_view_all,
         })

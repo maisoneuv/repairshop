@@ -35,6 +35,7 @@ import useRecordSurfaces, { useFieldSaver } from "../features/WorkItems/detail/u
 import ProcessSection from "../features/WorkItems/process/ProcessSection";
 import StageHistory from "../features/WorkItems/process/StageHistory";
 import useGuidedProcess from "../hooks/useGuidedProcess";
+import WorkItemAppointments from "../features/Appointments/WorkItemAppointments";
 
 /** The redesigned tab set (§7A/§7B): Overview and Fields replace Details. */
 const REDESIGN_TABS = [
@@ -546,6 +547,7 @@ export default function WorkItemDetail() {
                                                 onCustomerUpdated={handleCustomerUpdated}
                                                 onDeviceUpdated={handleDeviceUpdated}
                                                 summary={summaryBlock}
+                                                appointments={<WorkItemAppointments workItem={workItem} />}
                                                 activity={
                                                     <ActivityFeed
                                                         workItemId={workItem.id}
@@ -606,6 +608,12 @@ export default function WorkItemDetail() {
                         {guided.enabled && !redesign && <StageHistory transitions={guided.state?.transitions} />}
 
                         {relatedTasksBlock}
+
+                        {!redesign && (
+                            <div className="bg-white rounded-xl shadow-lg border border-gray-200 px-6 py-3">
+                                <WorkItemAppointments workItem={workItem} />
+                            </div>
+                        )}
 
                         {summaryBlock}
 

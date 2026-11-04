@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
 import { fetchDashboard } from "../api/dashboard";
 import { getStatusClasses } from "../utils/statusColors";
+import MyDayCard from "../features/Calendar/MyDayCard";
 
 /* ─── helper: relative time ─── */
 function timeAgo(isoString) {
@@ -467,6 +468,8 @@ export default function Home() {
 
   return (
     <div className="space-y-6">
+      <MyDayCard />
+
       {/* KPI Cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <KpiCard label="Open Items" value={data.kpis.total_open} accent="blue" />

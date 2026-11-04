@@ -28,6 +28,9 @@ import LeadBoard from "./pages/LeadBoard";
 import CarMode from "./pages/CarMode";
 import MobilePhotoUpload from "./pages/MobilePhotoUpload";
 import MyWork from "./pages/MyWork";
+import AppointmentList from "./features/Appointments/AppointmentList";
+import Planner from "./features/Appointments/Planner";
+import CalendarPage from "./pages/CalendarPage";
 
 function App() {
     const { user, loading, isLocked } = useUser();
@@ -83,6 +86,9 @@ function App() {
                 <Route path="/settings/custom-fields" element={<CustomFieldsSettings />} />
                 <Route path="/system-settings/*" element={<SystemSettingsPage />} />
                 <Route path="/leads" element={<LeadBoard />} />
+                <Route path="/appointments" element={<AppointmentList />} />
+                <Route path="/appointments/planner" element={<Planner />} />
+                <Route path="/calendar" element={<CalendarPage />} />
             </Route>
             <Route path="/car" element={<CarMode />} />
             <Route path="/reset-password/:uid/:token" element={<PasswordResetPage />} />

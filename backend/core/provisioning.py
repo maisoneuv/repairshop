@@ -23,6 +23,7 @@ INCLUDED_APP_LABELS = {
     "integrations",
     "core",
     "calls",
+    "appointments",
 }
 
 

@@ -66,6 +66,11 @@ class Employee(models.Model):
     user = models.OneToOneField(User, on_delete=models.PROTECT)
     role = models.CharField(max_length=100)
     location = models.ForeignKey(Location, on_delete=models.PROTECT)
+    is_driver = models.BooleanField(default=False)
+    # Default start of this driver's routes; their shop when empty.
+    home_address = models.ForeignKey(
+        "core.Address", on_delete=models.SET_NULL, null=True, blank=True, related_name="+",
+    )
 
     def __str__(self):
         return f"{self.user.first_name} {self.user.last_name}"

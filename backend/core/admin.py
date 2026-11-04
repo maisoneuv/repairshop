@@ -92,8 +92,10 @@ class CustomPermissionAdmin(TenantAwareImportExportAdmin):
 
 @admin.register(Address)
 class AddressAdmin(TenantAwareImportExportAdmin):
-    list_display = ('street', 'building_number', 'city', 'postal_code', 'country')
+    list_display = ('street', 'building_number', 'city', 'postal_code', 'country', 'geocode_status')
     search_fields = ('street', 'city', 'postal_code', 'country')
+    # Set by the map lookup; editing the address here triggers a new one.
+    readonly_fields = ('latitude', 'longitude', 'geocode_status', 'geocoded_at')
 
 
 @admin.register(Note)

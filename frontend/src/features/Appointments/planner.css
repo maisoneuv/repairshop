@@ -1,0 +1,28 @@
+.appt-pin {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 26px;
+    height: 26px;
+    color: #fff;
+    font: 600 12px/1 system-ui, sans-serif;
+    border: 2px solid #fff;
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.35);
+}
+.appt-pin--pickup { border-radius: 9999px; }
+.appt-pin--return_delivery { border-radius: 5px; }
+.appt-pin--selected { outline: 3px solid #111827; outline-offset: 1px; }
+.appt-pin--dim { opacity: 0.45; }
+.appt-start {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+    height: 24px;
+    border-radius: 6px;
+    background: #111827;
+    color: #fff;
+    border: 2px solid #fff;
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.35);
+}
+.appt-map-placing .leaflet-container { cursor: crosshair; }

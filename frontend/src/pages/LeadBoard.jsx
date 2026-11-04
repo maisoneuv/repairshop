@@ -2,6 +2,7 @@ import { useEffect, useState, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { listLeads, updateLead, convertLead } from "../api/leads";
 import QuickLeadModal from "../components/QuickLeadModal";
+import AppointmentForm from "../features/Appointments/AppointmentForm";
 
 const STATUS_BADGE = {
     new: "bg-gray-100 text-gray-600",
@@ -16,6 +17,7 @@ export default function LeadBoard() {
     const [error, setError] = useState("");
     const [modal, setModal] = useState(null); // null | { mode: "create" } | { mode: "edit", lead: {...} }
     const [converting, setConverting] = useState(null);
+    const [pickupFor, setPickupFor] = useState(null);
 
     const load = useCallback(async () => {
         setLoading(true);
@@ -183,6 +185,12 @@ export default function LeadBoard() {
                                                                 Edytuj
                                                             </button>
                                                             <button
+                                                                onClick={() => setPickupFor(lead)}
+                                                                className="px-2 py-1 text-xs font-medium bg-blue-100 text-blue-700 rounded-lg hover:bg-blue-200"
+                                                            >
+                                                                Zaplanuj odbiór
+                                                            </button>
+                                                            <button
                                                                 onClick={() => handleConvert(lead.id)}
                                                                 disabled={converting === lead.id}
                                                                 className="px-2 py-1 text-xs font-medium bg-green-100 text-green-700 rounded-lg hover:bg-green-200 disabled:opacity-50"
@@ -201,6 +209,27 @@ export default function LeadBoard() {
                     </div>
                 </div>
             </div>
+
+            {pickupFor && (
+                <AppointmentForm
+                    initial={{
+                        type: "pickup",
+                        lead: pickupFor.id,
+                        first_name: pickupFor.first_name,
+                        last_name: pickupFor.last_name,
+                        prefix: pickupFor.prefix,
+                        phone_number: pickupFor.phone_number,
+                        email: pickupFor.email,
+                        device_description: pickupFor.device_description,
+                        notes: pickupFor.notes,
+                    }}
+                    onClose={() => setPickupFor(null)}
+                    onSaved={(saved) => {
+                        setPickupFor(null);
+                        navigate(`/appointments/planner?focus=${saved.id}`);
+                    }}
+                />
+            )}
 
             {modal && (
                 <QuickLeadModal

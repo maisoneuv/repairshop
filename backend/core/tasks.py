@@ -152,3 +152,38 @@ def forward_inbound_email(self, email_message_id):
 
     msg.send(fail_silently=False)
     logger.info("Forwarded inbound email %s to %s", email.pk, forward_to)
+
+
+@shared_task(
+    bind=True,
+    autoretry_for=(requests.RequestException,),
+    retry_backoff=30,
+    max_retries=3,
+)
+def geocode_address_task(self, address_id):
+    from .geocoding import geocode_address
+    from .models import Address
+
+    from .geocoding import GeocoderUnavailable
+
+    address = Address.objects.filter(pk=address_id).first()
+    if address is None:
+        return
+    try:
+        geocode_address(address)
+    except GeocoderUnavailable as exc:
+        # Left as pending so `geocode_addresses` picks it up once configured.
+        logger.error("Geocoding disabled: %s", exc)
+
+
+def queue_geocoding(address):
+    """Geocode after the surrounding transaction commits; never fail the caller."""
+    from django.db import transaction
+
+    def _send():
+        try:
+            geocode_address_task.delay(address.pk)
+        except Exception:
+            logger.exception("Could not queue geocoding for address %s", address.pk)
+
+    transaction.on_commit(_send)

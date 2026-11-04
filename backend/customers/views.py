@@ -19,6 +19,7 @@ from core.picklists import (
     workitem_status_index,
 )
 from .serializers import CustomerSerializer, LeadSerializer, AssetSerializer
+from .services import match_or_create_customer
 from .models import Customer, Asset, Lead
 from tasks.models import WorkItem
 from django.views.generic import TemplateView, ListView, DetailView, CreateView, UpdateView
@@ -560,23 +561,14 @@ class LeadViewSet(TenantScopedMixin, viewsets.ModelViewSet):
         lead = self.get_object()
         if lead.status == 'converted':
             return Response({'detail': 'Lead już skonwertowany.'}, status=400)
-        tenant = request.tenant
-        customer = None
-        if lead.email:
-            customer = Customer.objects.filter(tenant=tenant, email=lead.email).first()
-        if not customer and lead.phone_number:
-            customer = Customer.objects.filter(
-                tenant=tenant, prefix=lead.prefix, phone_number=lead.phone_number
-            ).first()
-        if not customer:
-            customer = Customer.objects.create(
-                tenant=tenant,
-                first_name=lead.first_name,
-                last_name=lead.last_name or '',
-                email=lead.email,
-                prefix=lead.prefix,
-                phone_number=lead.phone_number,
-            )
+        customer, _ = match_or_create_customer(
+            request.tenant,
+            first_name=lead.first_name,
+            last_name=lead.last_name,
+            email=lead.email,
+            prefix=lead.prefix,
+            phone_number=lead.phone_number,
+        )
         lead.status = 'converted'
         lead.save(update_fields=['status'])
         return Response(CustomerSerializer(customer, context={'request': request}).data)
