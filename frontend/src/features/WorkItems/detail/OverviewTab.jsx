@@ -1,11 +1,12 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import {
-    AlertTriangle, Camera, Check, Mail, MapPin, Pause, Pencil, Phone,
+    AlertTriangle, ArrowDownToLine, ArrowUpFromLine, Camera, Check, Mail, MapPin, Pause, Pencil, Phone, Plus,
 } from "lucide-react";
 import { EditableValue } from "./InlineEdit";
-import { customerName, deviceName, isWarranty } from "./fieldRegistry";
+import { asRef, customerName, deviceName, isWarranty } from "./fieldRegistry";
 import TasksSection from "./TasksSection";
+import AssignDeviceForm from "./AssignDeviceForm";
 import AssetForm from "../../../components/AssetForm";
 import CustomerForm from "../../../components/CustomerForm";
 
@@ -30,9 +31,11 @@ export default function OverviewTab({
     onAddPhotos,
     onCustomerUpdated,
     onDeviceUpdated,
+    onDeviceAssigned,
     activity,
     summary,
     appointments,
+    fields = [],
 }) {
     const warranty = isWarranty(workItem);
 
@@ -48,6 +51,7 @@ export default function OverviewTab({
                         warranty={warranty}
                         onAddPhotos={onAddPhotos}
                         onDeviceUpdated={onDeviceUpdated}
+                        onDeviceAssigned={onDeviceAssigned}
                     />
                     <CustomerSection
                         workItem={workItem}
@@ -89,7 +93,7 @@ export default function OverviewTab({
                     {!warranty && payments.length > 0 && (
                         <PaymentsSection payments={payments} currency={workItem.currency} />
                     )}
-                    <LocationSection workItem={workItem} />
+                    <LogisticsSection workItem={workItem} fields={fields} />
                     {appointments}
                 </div>
             </div>
@@ -143,10 +147,27 @@ function CardAction({ onClick, icon: Icon, children }) {
     );
 }
 
-function DeviceSection({ workItem, warranty, onAddPhotos, onDeviceUpdated }) {
+function DeviceSection({ workItem, warranty, onAddPhotos, onDeviceUpdated, onDeviceAssigned }) {
     const [editing, setEditing] = useState(false);
+    const [assigning, setAssigning] = useState(false);
     const asset = workItem.deviceDetails;
+    const canAssign = !asset && onDeviceAssigned && (workItem.customerDetails || workItem.customer);
     const name = deviceName(asset) ?? "No device linked";
+
+    if (assigning) {
+        return (
+            <Section title="Device">
+                <AssignDeviceForm
+                    workItemId={workItem.id}
+                    onCancel={() => setAssigning(false)}
+                    onAssigned={async () => {
+                        await onDeviceAssigned();
+                        setAssigning(false);
+                    }}
+                />
+            </Section>
+        );
+    }
 
     // Device is a shared entity with its own endpoint — edited in place through
     // its own form, not the work item's edit-all save.
@@ -174,6 +195,9 @@ function DeviceSection({ workItem, warranty, onAddPhotos, onDeviceUpdated }) {
                     <CardAction onClick={onAddPhotos} icon={Camera}>Add photos</CardAction>
                     {asset && onDeviceUpdated && (
                         <CardAction onClick={() => setEditing(true)} icon={Pencil}>Edit</CardAction>
+                    )}
+                    {canAssign && (
+                        <CardAction onClick={() => setAssigning(true)} icon={Plus}>Add device</CardAction>
                     )}
                 </div>
             }
@@ -439,25 +463,71 @@ function PaymentsSection({ payments, currency }) {
     );
 }
 
-function LocationSection({ workItem }) {
-    const where = workItem.fulfillment_shop?.name
-        ?? workItem.dropoff_point?.name
-        ?? workItem.pickup_point?.name;
-    if (!where) return null;
+/**
+ * Where the device came from and where it goes back. Pickup/dropoff point are
+ * the intake and return legs respectively, so they're labelled that way here.
+ */
+function LogisticsSection({ workItem, fields }) {
+    const field = (key) => fields.find((f) => f.key === key);
+    const leg = (methodKey, pointKey, pointPlaceholder) => {
+        const method = field(methodKey);
+        const point = field(pointKey);
+        return (
+            <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-xs items-baseline">
+                <dt className="text-gray-500">How</dt>
+                <dd>
+                    {method ? (
+                        <EditableValue
+                            fieldKey={methodKey}
+                            value={method.value}
+                            choices={method.choices}
+                            format={(v) => choiceLabel(method.choices, v)}
+                        />
+                    ) : choiceLabel(null, workItem[methodKey]) || "—"}
+                </dd>
+                <dt className="text-gray-500">{methodKey === "intake_method" ? "From" : "To"}</dt>
+                <dd>
+                    {point ? (
+                        <EditableValue
+                            fieldKey={pointKey}
+                            value={point.value}
+                            type="foreignkey"
+                            config={point.config}
+                            placeholder={pointPlaceholder}
+                        />
+                    ) : asRef(workItem[pointKey])?.label || "—"}
+                </dd>
+            </dl>
+        );
+    };
 
     return (
-        <Section title="Device location">
-            <div className="flex items-center gap-2.5">
-                <span className="w-8 h-8 rounded-lg bg-emerald-50 flex items-center justify-center shrink-0">
-                    <MapPin className="w-4 h-4 text-emerald-700" />
-                </span>
-                <div className="min-w-0">
-                    <p className="font-bold text-sm text-gray-900 truncate">{where}</p>
-                    <p className="text-[11px] text-gray-500">
-                        {workItem.fulfillment_shop?.name ? "Fulfillment shop" : "Dropoff point"}
-                    </p>
+        <Section title="Logistics">
+            <div className="space-y-3">
+                <div>
+                    <h4 className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wide text-gray-500 mb-1">
+                        <ArrowDownToLine className="w-3 h-3" aria-hidden="true" /> Intake
+                    </h4>
+                    {leg("intake_method", "pickup_point", "Not recorded")}
                 </div>
+                <div>
+                    <h4 className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wide text-gray-500 mb-1">
+                        <ArrowUpFromLine className="w-3 h-3" aria-hidden="true" /> Return
+                    </h4>
+                    {leg("dropoff_method", "dropoff_point", "Not decided")}
+                </div>
+                {workItem.fulfillment_shop?.name && (
+                    <p className="flex items-center gap-1.5 text-xs text-gray-700">
+                        <MapPin className="w-3 h-3 text-gray-400" aria-hidden="true" />
+                        Repaired at <span className="font-semibold">{workItem.fulfillment_shop.name}</span>
+                    </p>
+                )}
             </div>
         </Section>
     );
+}
+
+function choiceLabel(choices, value) {
+    if (!value) return "";
+    return choices?.find(([v]) => v === value)?.[1] ?? value;
 }

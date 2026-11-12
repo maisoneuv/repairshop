@@ -8,3 +8,4 @@ class CoreConfig(AppConfig):
     def ready(self):
         # Connect Anymail webhook signal receivers (delivery tracking + inbound replies).
         from . import email_webhooks  # noqa: F401
+        from . import signals  # noqa: F401

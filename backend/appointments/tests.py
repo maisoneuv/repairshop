@@ -478,7 +478,7 @@ class DriverTests(AppointmentApiTestCase):
 @override_settings(GEOCODER_PROVIDER="nominatim", GEOCODER_USER_AGENT="tests")
 class GeocodingTests(TestCase):
     def make_address(self, **extra):
-        return Address.objects.create(street="Długa", building_number="5", city="Kraków", postal_code="31-147", **extra)
+        return Address.objects.create(**{"street": "Długa", "building_number": "5", "city": "Kraków", "postal_code": "31-147", **extra})
 
     @mock.patch("core.geocoding._throttle")
     @mock.patch("core.geocoding._session.get")
@@ -491,6 +491,34 @@ class GeocodingTests(TestCase):
         self.assertEqual(address.geocode_status, Address.GEOCODE_OK)
         self.assertEqual(address.latitude, Decimal("50.068123"))
         self.assertEqual(get.call_args.kwargs["headers"]["User-Agent"], "tests")
+
+    @mock.patch("core.tasks.queue_geocoding")
+    @mock.patch("core.geocoding._throttle")
+    @mock.patch("core.geocoding._session.get")
+    def test_lookup_fills_missing_postal_code_without_requeueing(self, get, _throttle, queue):
+        get.return_value.json.return_value = [
+            {"lat": "50.06", "lon": "19.94", "address": {"postcode": "31-147"}},
+        ]
+        address = self.make_address(postal_code="")
+        queue.reset_mock()
+        geocode_address(Address.objects.get(pk=address.pk))
+        address.refresh_from_db()
+        self.assertEqual((address.postal_code, address.geocode_status), ("31-147", Address.GEOCODE_OK))
+        queue.assert_not_called()
+
+    @mock.patch("core.geocoding._throttle")
+    @mock.patch("core.geocoding._session.get")
+    def test_lookup_keeps_postal_code_someone_typed(self, get, _throttle):
+        get.return_value.json.return_value = [
+            {"lat": "50.06", "lon": "19.94", "address": {"postcode": "30-001"}},
+        ]
+        address = geocode_address(self.make_address())
+        address.refresh_from_db()
+        self.assertEqual(address.postal_code, "31-147")
+
+    def test_address_without_postal_code_or_country_defaults_country(self):
+        address = Address.objects.create(street="Długa", building_number="5", city="Kraków", country="")
+        self.assertEqual((address.postal_code, address.country), ("", "Poland"))
 
     @mock.patch("core.geocoding._throttle")
     @mock.patch("core.geocoding._session.get")

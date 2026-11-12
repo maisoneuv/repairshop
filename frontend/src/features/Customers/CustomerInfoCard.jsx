@@ -70,9 +70,6 @@ export default function CustomerInfoCard({ customer, onUpdated }) {
                         <p className="text-gray-600">
                             {primaryAddress.postal_code} {primaryAddress.city}
                         </p>
-                        {primaryAddress.country && (
-                            <p className="text-gray-600">{primaryAddress.country}</p>
-                        )}
                     </div>
                 ) : (
                     <div className="bg-yellow-50 border border-yellow-200 text-yellow-800 rounded-lg p-3 text-sm">
@@ -108,7 +105,6 @@ export default function CustomerInfoCard({ customer, onUpdated }) {
                             building_number: addressData.building_number,
                             city: addressData.city,
                             postal_code: addressData.postal_code,
-                            country: addressData.country,
                             apartment_number: addressData.apartment_number || null,
                         },
                     };

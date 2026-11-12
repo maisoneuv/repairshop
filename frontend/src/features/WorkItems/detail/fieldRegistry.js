@@ -85,9 +85,9 @@ const WORK_ITEM_SECTIONS = [
         title: "Logistics",
         fields: [
             { key: "intake_method", label: "Intake method" },
-            { key: "dropoff_method", label: "Dropoff method" },
-            { key: "pickup_point", label: "Pickup location" },
-            { key: "dropoff_point", label: "Dropoff location" },
+            { key: "pickup_point", label: "Collected from" },
+            { key: "dropoff_method", label: "Return method" },
+            { key: "dropoff_point", label: "Return to" },
             { key: "fulfillment_shop", label: "Fulfillment shop" },
         ],
     },
@@ -187,7 +187,11 @@ function describe(f, workItem, schema, picklists) {
         choices,
         // The FK editor is the checkpoint autocomplete, which speaks {id,label}.
         config: type === "foreignkey"
-            ? { related_app: meta.related_app, related_model: meta.related_model }
+            ? {
+                related_app: meta.related_app,
+                related_model: meta.related_model,
+                customer_id: workItem?.customerDetails?.id ?? workItem?.customer ?? null,
+            }
             : undefined,
         value: type === "foreignkey" ? asRef(raw) : raw,
         ro: Boolean(f.ro),
@@ -197,9 +201,17 @@ function describe(f, workItem, schema, picklists) {
 }
 
 /** Nested FK payload → the {id,label} shape the picker round-trips. */
-function asRef(value) {
+export function asRef(value) {
     if (!value || typeof value !== "object") return null;
-    return { id: value.id, label: value.name ?? value.label ?? `#${value.id}` };
+    const address = value.type === "customer" ? addressText(value.address) : null;
+    return { id: value.id, label: address || (value.name ?? value.label ?? `#${value.id}`) };
+}
+
+function addressText(address) {
+    if (!address || typeof address !== "object") return null;
+    const street = [address.street, address.building_number].filter(Boolean).join(" ");
+    const withFlat = address.apartment_number ? `${street}/${address.apartment_number}` : street;
+    return [withFlat, address.city].filter(Boolean).join(", ") || null;
 }
 
 /**

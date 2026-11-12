@@ -382,6 +382,19 @@ class GuidedProcessAPITestCase(TestCase):
                 self.stage_diag.full_clean()
             self.assertIn("recap_sources", ctx.exception.message_dict)
 
+    def test_stray_spaces_in_a_recap_source_are_forgiven(self):
+        self.stage_diag.recap_sources = ["item. description", " new .technician"]
+        self.stage_diag.full_clean()
+        self.assertEqual(self.stage_diag.recap_sources, ["item.description", "new.technician"])
+
+    def test_a_recap_source_saved_with_spaces_still_renders(self):
+        self.stage_diag.recap_sources = ["item. description"]
+        self.stage_diag.save(update_fields=["recap_sources"])
+        self.enable_flag()
+        self._hand_to_technician()
+        recap = self.recap_for(self.tech_user)
+        self.assertEqual(recap[0]["value"], self.work_item.description)
+
     def test_pause_bounces_to_owner_and_resolve_returns_it(self):
         self.enable_flag()
         self._hand_to_technician()

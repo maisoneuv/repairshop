@@ -86,8 +86,16 @@ class WorkItemSerializer(serializers.ModelSerializer):
         queryset=Device.objects.all(), write_only=True, required=False
     )
     serial_number = serializers.CharField(write_only=True, required=False, allow_null=True, allow_blank=True)
-    pickup_point = LocationSerializer()
-    dropoff_point = LocationSerializer()
+    pickup_point = LocationSerializer(required=False, allow_null=True)
+    dropoff_point = LocationSerializer(required=False)
+    # Not `source=`-aliased like owner_id: that would collide with the nested
+    # fields above. create()/update() fold these into the FK themselves.
+    pickup_point_id = TenantScopedPrimaryKeyRelatedField(
+        queryset=Location.objects.all(), write_only=True, required=False, allow_null=True,
+    )
+    dropoff_point_id = TenantScopedPrimaryKeyRelatedField(
+        queryset=Location.objects.all(), write_only=True, required=False,
+    )
     fulfillment_shop = ShopSerializer(read_only=True)
     fulfillment_shop_id = TenantScopedPrimaryKeyRelatedField(
         source="fulfillment_shop",
@@ -193,41 +201,9 @@ class WorkItemSerializer(serializers.ModelSerializer):
             else:
                 raise serializers.ValidationError({"owner_id": "Owner is required and current user has no associated employee"})
 
-        tenant_locations = Location.objects.filter(tenant=tenant)
-
-        def resolve_location(payload, allow_null=False):
-            if payload is None:
-                if allow_null:
-                    return None
-                raise serializers.ValidationError({"detail": "Location required"})
-
-            if isinstance(payload, int):
-                try:
-                    return tenant_locations.get(id=payload)
-                except Location.DoesNotExist:
-                    raise serializers.ValidationError({"detail": "Location not found"})
-
-            if isinstance(payload, dict) and "id" in payload:
-                remaining = {
-                    key for key, value in payload.items()
-                    if key != "id" and value not in (None, "")
-                }
-
-                if not remaining:
-                    try:
-                        return tenant_locations.get(id=payload["id"])
-                    except Location.DoesNotExist:
-                        raise serializers.ValidationError({"detail": "Location not found"})
-
-            serializer = LocationSerializer(data=payload, context={"request": req})
-            serializer.is_valid(raise_exception=True)
-            return serializer.save()
-
-        pe_data = validated_data.pop("pickup_point")
-        de_data = validated_data.pop("dropoff_point")
-
-        pe = resolve_location(pe_data, allow_null=True)
-        de = resolve_location(de_data)
+        locations = self._pop_locations(validated_data, tenant)
+        if "dropoff_point" not in locations:
+            raise serializers.ValidationError({"dropoff_point": "This field is required."})
 
         fs_id = validated_data.pop("fulfillment_shop_id", None)
         if fs_id is not None:
@@ -265,12 +241,56 @@ class WorkItemSerializer(serializers.ModelSerializer):
         if asset:
             validated_data["customer_asset"] = asset
 
-        validated_data["pickup_point"] = pe
-        validated_data["dropoff_point"] = de
+        validated_data.setdefault("pickup_point", None)
+        validated_data.update(locations)
 
         return super().create(validated_data)
 
+    def _resolve_location(self, payload, tenant, allow_null=False):
+        if payload is None:
+            if allow_null:
+                return None
+            raise serializers.ValidationError({"detail": "Location required"})
+
+        tenant_locations = Location.objects.filter(tenant=tenant)
+        if isinstance(payload, int):
+            try:
+                return tenant_locations.get(id=payload)
+            except Location.DoesNotExist:
+                raise serializers.ValidationError({"detail": "Location not found"})
+
+        if isinstance(payload, dict) and "id" in payload:
+            remaining = {
+                key for key, value in payload.items()
+                if key != "id" and value not in (None, "")
+            }
+            if not remaining:
+                try:
+                    return tenant_locations.get(id=payload["id"])
+                except Location.DoesNotExist:
+                    raise serializers.ValidationError({"detail": "Location not found"})
+
+        serializer = LocationSerializer(data=payload, context={"request": self.context.get("request")})
+        serializer.is_valid(raise_exception=True)
+        return serializer.save()
+
+    def _pop_locations(self, validated_data, tenant):
+        """Accept a location either nested (`pickup_point`: id / {id} / new
+        location) or as `pickup_point_id`; the `_id` form wins if both are sent."""
+        resolved = {}
+        for name in ("pickup_point", "dropoff_point"):
+            if name in validated_data:
+                resolved[name] = self._resolve_location(
+                    validated_data.pop(name), tenant, allow_null=name == "pickup_point")
+            if f"{name}_id" in validated_data:
+                resolved[name] = validated_data.pop(f"{name}_id")
+        if "dropoff_point" in resolved and resolved["dropoff_point"] is None:
+            raise serializers.ValidationError({"dropoff_point": "A work item needs a return location."})
+        return resolved
+
     def update(self, instance, validated_data):
+        tenant = self.context.get("tenant") or getattr(self.context.get("request"), "tenant", None)
+        validated_data.update(self._pop_locations(validated_data, tenant or instance.tenant))
         device = validated_data.pop("device", None)
         serial_number = validated_data.pop("serial_number", None)
 

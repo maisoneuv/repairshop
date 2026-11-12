@@ -229,19 +229,20 @@ export function UserProvider({ children }) {
         };
     }, [user, tenantSettings.logout_on_inactivity, tenantSettings.inactivity_timeout_minutes, triggerLock]);
 
-    // Visibility lock — covers OS screen lock (Ctrl+Cmd+Q) and computer sleep
-    // Uses a 10-second threshold to ignore quick tab switches
+    // Timers are throttled or frozen while the page is hidden (sleep, OS screen lock,
+    // phone screen off), so measure hidden time directly. Phones hide the page on
+    // every screen-off or app switch — locking on a short threshold locks constantly.
     useEffect(() => {
         if (!user || !tenantSettings.logout_on_inactivity) return;
 
         let hiddenAt = null;
-        const LOCK_THRESHOLD_MS = 10_000;
+        const lockAfterMs = tenantSettings.inactivity_timeout_minutes * 60 * 1000;
 
         const onVisibilityChange = () => {
             if (document.visibilityState === 'hidden') {
                 hiddenAt = Date.now();
             } else if (document.visibilityState === 'visible' && hiddenAt !== null) {
-                if (Date.now() - hiddenAt >= LOCK_THRESHOLD_MS) {
+                if (Date.now() - hiddenAt >= lockAfterMs) {
                     triggerLock();
                 }
                 hiddenAt = null;
@@ -250,7 +251,7 @@ export function UserProvider({ children }) {
 
         document.addEventListener('visibilitychange', onVisibilityChange);
         return () => document.removeEventListener('visibilitychange', onVisibilityChange);
-    }, [user, tenantSettings.logout_on_inactivity, triggerLock]);
+    }, [user, tenantSettings.logout_on_inactivity, tenantSettings.inactivity_timeout_minutes, triggerLock]);
 
     // Session health check — fires whenever the tab becomes visible.
     // Independent of logout_on_inactivity: this detects genuine server-side session
@@ -261,7 +262,9 @@ export function UserProvider({ children }) {
             try {
                 await apiClient.get('/api/core/session-ping/');
             } catch (err) {
-                if (err?.response?.status === 401) {
+                // SessionAuthentication is the first DRF authenticator, so an expired session is a 403.
+                const status = err?.response?.status;
+                if (status === 401 || status === 403) {
                     setUser(null);
                     setEmployee(null);
                     setPermissions([]);

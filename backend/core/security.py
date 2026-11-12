@@ -13,6 +13,7 @@ Three layers:
 from django.conf import settings
 from django.core import signing
 from django.core.cache import cache
+from django.utils import timezone
 from rest_framework.throttling import AnonRateThrottle, UserRateThrottle
 
 # --- Scoped IP throttles -----------------------------------------------------
@@ -102,3 +103,22 @@ def has_valid_device_cookie(request, tenant) -> bool:
     except signing.BadSignature:
         return False
     return payload.get('t') == tenant.pk
+
+
+# --- Sign out everywhere --------------------------------------------------------
+
+def sign_out_everywhere(user):
+    """End every web session and caller-ID device sign-in the user holds."""
+    from django.contrib.sessions.models import Session
+    from mobile.models import MobileDevice
+
+    user_pk = str(user.pk)
+    stale = [
+        s.pk for s in Session.objects.filter(expire_date__gt=timezone.now()).iterator()
+        if s.get_decoded().get('_auth_user_id') == user_pk
+    ]
+    Session.objects.filter(pk__in=stale).delete()
+
+    MobileDevice.objects.filter(employee__user=user, revoked_at__isnull=True).update(
+        revoked_at=timezone.now()
+    )

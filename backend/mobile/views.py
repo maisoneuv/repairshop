@@ -129,7 +129,7 @@ class MobileRefreshView(APIView):
         device_id = refresh.get(DEVICE_CLAIM)
         device = MobileDevice.objects.filter(pk=device_id).first() if device_id else None
 
-        if device is None or not device.is_active:
+        if device is None or not device.is_active or not device.employee.user.is_active:
             return Response({"detail": "This device has been signed out."}, status=401)
 
         new_tokens = {"access": str(refresh.access_token)}

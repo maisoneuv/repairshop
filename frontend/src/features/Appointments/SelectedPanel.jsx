@@ -1,14 +1,16 @@
 import { Link } from "react-router-dom";
 import AppointmentActionButtons from "./AppointmentActionButtons";
 import TypeBadge from "./TypeBadge";
-import { CalendarPlus, Crosshair, Pencil, Phone, Radar, X } from "lucide-react";
+import { CalendarPlus, Crosshair, ExternalLink, Pencil, Phone, Radar, X } from "lucide-react";
 import {
     STATUS_BADGE,
     STATUS_LABELS,
     contactName,
+    contactPhone,
     formatAddress,
     formatDay,
     formatWindow,
+    googleMapsUrl,
     hasLocation,
     isOpen,
 } from "./constants";
@@ -28,7 +30,8 @@ export default function SelectedPanel({
     onAction,
 }) {
     const windows = appointment.availability_windows || [];
-    const phone = [appointment.prefix, appointment.phone_number].filter(Boolean).join(" ");
+    const phone = contactPhone(appointment);
+    const mapsUrl = googleMapsUrl(appointment.address);
     const button =
         "inline-flex items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-xs font-medium text-gray-700 hover:border-gray-300 hover:text-gray-900";
 
@@ -45,11 +48,18 @@ export default function SelectedPanel({
                         <span className="text-xs text-gray-500">{appointment.reference_id}</span>
                     </div>
                     <div className="text-xs text-gray-600">{formatAddress(appointment.address)}</div>
-                    {phone && (
-                        <a href={`tel:${appointment.phone_e164 || phone}`} className="inline-flex items-center gap-1 text-xs text-blue-700 hover:underline">
-                            <Phone className="w-3 h-3" aria-hidden="true" /> {phone}
-                        </a>
-                    )}
+                    <div className="flex flex-wrap items-center gap-x-3">
+                        {phone && (
+                            <a href={phone.href} className="inline-flex items-center gap-1 text-xs text-blue-700 hover:underline">
+                                <Phone className="w-3 h-3" aria-hidden="true" /> {phone.display}
+                            </a>
+                        )}
+                        {mapsUrl && (
+                            <a href={mapsUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-xs text-blue-700 hover:underline">
+                                <ExternalLink className="w-3 h-3" aria-hidden="true" /> View on Google Maps
+                            </a>
+                        )}
+                    </div>
                 </div>
                 <button type="button" onClick={onClose} className="text-gray-400 hover:text-gray-700" aria-label="Close details">
                     <X className="w-4 h-4" />

@@ -443,7 +443,7 @@ def create_freeform_location(request):
         return Response({"detail": "Tenant header missing or invalid."}, status=400)
 
     data = request.data
-    required_fields = ['street', 'building_number', 'city', 'postal_code', 'country']
+    required_fields = ['street', 'building_number', 'city']
 
     # Validate required fields
     for field in required_fields:
@@ -458,8 +458,8 @@ def create_freeform_location(request):
             street=data['street'].strip(),
             building_number=data['building_number'].strip(),
             city=data['city'].strip(),
-            postal_code=data['postal_code'].strip(),
-            country=data['country'].strip(),
+            postal_code=(data.get('postal_code') or '').strip(),
+            country=(data.get('country') or '').strip(),
             apartment_number=data.get('apartment_number', '').strip() or None
         )
 
