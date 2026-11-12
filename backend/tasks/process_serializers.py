@@ -15,7 +15,7 @@ from core.models import PicklistValue
 from core.utils import PICKLIST_FIELDS, get_field_type
 
 from .models import (
-    RECAP_ITEM_KEY, RECAP_NOTE_KEY, CheckpointField, Notification, ProcessTemplate,
+    RECAP_ITEM_KEY, RECAP_NOTE_KEY, CheckpointField, split_recap_source, Notification, ProcessTemplate,
     StageDefinition, StageOutcome, StageTransition, WorkItem, WorkItemPause,
 )
 
@@ -333,7 +333,7 @@ def build_recap(work_item, stage, transitions, context):
     for entry in stage.recap_sources:
         if not isinstance(entry, str):
             continue
-        stage_key, _, field_key = entry.partition('.')
+        stage_key, field_key = split_recap_source(entry)
         if stage_key == RECAP_ITEM_KEY:
             if field_key:
                 add_item_field(field_key)

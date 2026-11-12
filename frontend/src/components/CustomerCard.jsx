@@ -118,8 +118,7 @@ export default function CustomerCard({ customer, onEdit, onUpdated }) {
                             {customer.address.apartment_number && (
                                 <p>Apt {customer.address.apartment_number}</p>
                             )}
-                            <p>{customer.address.city}, {customer.address.postal_code}</p>
-                            {customer.address.country && <p>{customer.address.country}</p>}
+                            <p>{[customer.address.postal_code, customer.address.city].filter(Boolean).join(" ")}</p>
                         </div>
                     ) : (
                         <span className="text-sm text-gray-400">No address on file</span>

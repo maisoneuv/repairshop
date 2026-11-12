@@ -2,6 +2,7 @@ import { createContext, useCallback, useContext, useEffect, useRef, useState } f
 import { Check, Lock, Pencil, X } from "lucide-react";
 import { toast } from "sonner";
 import CheckpointFieldInput from "../process/CheckpointFieldInput";
+import LocationInput from "./LocationInput";
 
 /**
  * The shared inline-editing mechanism (§7C).
@@ -113,7 +114,16 @@ export function EditableValue({
 
         return (
             <span className="inline-flex items-start gap-1.5">
-                {type === "foreignkey" ? (
+                {type === "foreignkey" && config?.related_model === "Location" ? (
+                    <span className="min-w-[260px]">
+                        <LocationInput
+                            value={draft || null}
+                            customerId={config.customer_id}
+                            disabled={saving}
+                            onChange={setDraft}
+                        />
+                    </span>
+                ) : type === "foreignkey" ? (
                     <span className="min-w-[220px]">
                         <CheckpointFieldInput
                             field={{ key: fieldKey, label: "", type, config: config ?? {}, required: false }}

@@ -546,8 +546,10 @@ export default function WorkItemDetail() {
                                                 onAddPhotos={() => setActiveTab('photos')}
                                                 onCustomerUpdated={handleCustomerUpdated}
                                                 onDeviceUpdated={handleDeviceUpdated}
+                                                onDeviceAssigned={handleProcessChanged}
                                                 summary={summaryBlock}
                                                 appointments={<WorkItemAppointments workItem={workItem} />}
+                                                fields={surfaces.sections.flatMap((section) => section.fields)}
                                                 activity={
                                                     <ActivityFeed
                                                         workItemId={workItem.id}

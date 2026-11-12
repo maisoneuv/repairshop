@@ -474,8 +474,8 @@ export default function WorkItemForm({ onCreated }) {
                                                                 setSelectedDropoffPoint(item);
                                                                 handleFieldChange("dropoff_point", item.id);
                                                             }}
-                                                            label="Drop-off Location"
-                                                            placeholder="Search drop-off location..."
+                                                            label="Return To"
+                                                            placeholder="Where the customer gets it back..."
                                                             customerId={selectedCustomer?.id}
                                                             onCreateLocation={handleCreateLocation}
                                                             required={schema.dropoff_point.required}
@@ -494,8 +494,8 @@ export default function WorkItemForm({ onCreated }) {
                                                                 setSelectedPickupPoint(item);
                                                                 handleFieldChange("pickup_point", item.id);
                                                             }}
-                                                            label="Pickup Location"
-                                                            placeholder="Search pickup location..."
+                                                            label="Collected From"
+                                                            placeholder="Where the device came from..."
                                                             customerId={selectedCustomer?.id}
                                                             onCreateLocation={handleCreateLocation}
                                                             required={schema.pickup_point?.required}

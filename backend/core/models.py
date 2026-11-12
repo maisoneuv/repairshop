@@ -94,13 +94,17 @@ class User(AbstractUser, PermissionsMixin):
         #raise PermissionDenied()
 
 
+DEFAULT_COUNTRY = "Poland"
+
+
 class Address(models.Model):
     street = models.CharField(max_length=255)
     city = models.CharField(max_length=100)
     building_number = models.CharField(max_length=50)
     apartment_number = models.CharField(max_length=50, blank=True, null=True)
-    postal_code = models.CharField(max_length=20)
-    country = models.CharField(max_length=100, default="Poland")
+    # Optional: whoever takes the address rarely knows it; the map lookup fills it in.
+    postal_code = models.CharField(max_length=20, blank=True, default="")
+    country = models.CharField(max_length=100, blank=True, default=DEFAULT_COUNTRY)
 
     GEOCODE_PENDING = 'pending'
     GEOCODE_OK = 'ok'
@@ -137,6 +141,8 @@ class Address(models.Model):
         """Wherever an address is edited (admin, customer forms, imports), a
         changed address gets a fresh map lookup, unless coordinates are being
         saved along with it."""
+        if not (self.country or "").strip():
+            self.country = DEFAULT_COUNTRY
         saved = getattr(self, "_saved_state", None)
         update_fields = kwargs.get("update_fields")
         location_saved = update_fields is None or bool(set(update_fields) & set(self.LOCATION_FIELDS))

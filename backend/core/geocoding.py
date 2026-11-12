@@ -79,7 +79,7 @@ PROVIDERS = {"nominatim": _nominatim}
 
 
 def geocode(query):
-    """Return {"latitude", "longitude", "label"}, or None when the address isn't found."""
+    """Return {"latitude", "longitude", "label", "postal_code"}, or None when the address isn't found."""
     provider = PROVIDERS[settings.GEOCODER_PROVIDER]
     return provider(query)
 
@@ -91,12 +91,18 @@ def geocode_address(address):
     if address.geocode_status == Address.GEOCODE_MANUAL:
         return address
     match = geocode(address.geocode_query())
+    update_fields = ["latitude", "longitude", "geocode_status", "geocoded_at"]
     if match:
         address.latitude = match["latitude"]
         address.longitude = match["longitude"]
         address.geocode_status = Address.GEOCODE_OK
+        if not address.postal_code and match.get("postal_code"):
+            # Saved together with the new coordinates, so Address.save doesn't
+            # treat the postcode change as a move and queue another lookup.
+            address.postal_code = match["postal_code"]
+            update_fields.append("postal_code")
     else:
         address.geocode_status = Address.GEOCODE_FAILED
     address.geocoded_at = timezone.now()
-    address.save(update_fields=["latitude", "longitude", "geocode_status", "geocoded_at"])
+    address.save(update_fields=update_fields)
     return address

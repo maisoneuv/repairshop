@@ -133,11 +133,13 @@ export default function LocationPicker({
     const hasResults = results.groups && results.groups.some(group => group.items && group.items.length > 0);
 
     return (
-        <div className="relative mb-6">
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-                {label}
-                {required && <span className="text-red-500 ml-1">*</span>}
-            </label>
+        <div className={`relative ${label ? "mb-6" : ""}`}>
+            {label && (
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                    {label}
+                    {required && <span className="text-red-500 ml-1">*</span>}
+                </label>
+            )}
 
             <input
                 type="text"

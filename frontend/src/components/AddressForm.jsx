@@ -1,11 +1,14 @@
+import usePostalCodeFill from "../hooks/usePostalCodeFill";
+
 export default function AddressForm({ address, onChange }) {
+    const fillPostalCode = usePostalCodeFill(address, onChange);
     const handleAddressChange = (e) => {
         const { name, value } = e.target;
         onChange({ ...address, [name]: value });
     };
 
     return (
-        <div className="space-y-4">
+        <div className="space-y-4" onBlur={fillPostalCode}>
 
             <div className="flex gap-4 min-w-0">
                 <input
@@ -49,20 +52,11 @@ export default function AddressForm({ address, onChange }) {
                     name="postal_code"
                     value={address.postal_code || ""}
                     onChange={handleAddressChange}
-                    placeholder="Postal Code"
+                    placeholder="Postal code (auto)"
                     className="w-1/3 border rounded px-3 py-2"
                 />
             </div>
 
-            {/* Row 3: Country full width */}
-            <input
-                type="text"
-                name="country"
-                value={address.country || ""}
-                onChange={handleAddressChange}
-                placeholder="Country"
-                className="w-full border rounded px-3 py-2"
-            />
         </div>
     );
 }

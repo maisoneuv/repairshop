@@ -1,13 +1,14 @@
 import { useDroppable } from "@dnd-kit/core";
 import { SortableContext, useSortable, verticalListSortingStrategy } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { Check, ExternalLink, GripVertical, Pencil, Undo2, UserX, X } from "lucide-react";
+import { Check, ExternalLink, GripVertical, Pencil, Phone, Undo2, UserX, X } from "lucide-react";
 import TypeBadge from "./TypeBadge";
 import {
     COMPLETE_LABELS,
     STATUS_BADGE,
     STATUS_LABELS,
     contactName,
+    contactPhone,
     formatAddress,
     formatTimeRange,
     hasLocation,
@@ -48,6 +49,7 @@ function Stop({ appointment, number, color, columnKey, selected, onSelect, onAct
         data: { column: columnKey, appointmentId: appointment.id },
         disabled: appointment.status === "completed",
     });
+    const phone = contactPhone(appointment);
     return (
         <li
             ref={setNodeRef}
@@ -97,8 +99,20 @@ function Stop({ appointment, number, color, columnKey, selected, onSelect, onAct
                         {!hasLocation(appointment) && <span className="text-[11px] text-amber-700">no map location</span>}
                     </div>
                 </button>
-                <div className="-ml-1.5 mt-1">
-                    <StopActions appointment={appointment} onAction={onAction} />
+                <div className="mt-1.5 flex flex-wrap items-center justify-between gap-x-2 gap-y-1">
+                    {phone && (
+                        <a
+                            href={phone.href}
+                            className="inline-flex items-center gap-1.5 rounded-lg border border-blue-200 bg-blue-50 px-2.5 py-1.5 text-sm font-medium tabular-nums text-blue-800 hover:border-blue-300 hover:bg-blue-100"
+                            aria-label={`Call ${contactName(appointment)} at ${phone.display}`}
+                        >
+                            <Phone className="w-4 h-4" aria-hidden="true" />
+                            {phone.display}
+                        </a>
+                    )}
+                    <div className={phone ? "" : "-ml-1.5"}>
+                        <StopActions appointment={appointment} onAction={onAction} />
+                    </div>
                 </div>
             </div>
         </li>

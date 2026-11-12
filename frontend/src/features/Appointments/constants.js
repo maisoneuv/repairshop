@@ -89,6 +89,26 @@ export function formatAddress(address) {
     return [withFlat, address.city].filter(Boolean).join(", ");
 }
 
+export function contactPhone(appointment) {
+    const display = [appointment.prefix, appointment.phone_number].filter(Boolean).join(" ");
+    if (!display) return null;
+    return { display, href: `tel:${appointment.phone_e164 || display.replace(/\s+/g, "")}` };
+}
+
+export function googleMapsUrl(address) {
+    if (!address) return null;
+    // Flat numbers ("78/20") confuse Google's search, so the query stops at the building.
+    const street = [address.street, address.building_number].filter(Boolean).join(" ");
+    const city = [address.postal_code, address.city].filter(Boolean).join(" ");
+    let query = [street, city, address.country].filter(Boolean).join(", ");
+    const hasCoords = address.latitude != null && address.longitude != null;
+    // A hand-placed pin means the text address geocodes to the wrong spot, so trust the pin.
+    if (hasCoords && (!street || address.geocode_status === "manual")) {
+        query = `${address.latitude},${address.longitude}`;
+    }
+    return query ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(query)}` : null;
+}
+
 export function hasLocation(appointment) {
     return appointment.address?.latitude != null && appointment.address?.longitude != null;
 }

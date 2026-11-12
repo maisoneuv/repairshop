@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import Modal from "./Modal";
+import usePostalCodeFill from "../hooks/usePostalCodeFill";
 
 export default function AddressModal({
     isOpen,
@@ -15,7 +16,6 @@ export default function AddressModal({
         apartment_number: "",
         city: "",
         postal_code: "",
-        country: "",
         label: "",
         save_to_customer: false
     };
@@ -30,6 +30,7 @@ export default function AddressModal({
     const [formData, setFormData] = useState(buildState(initialValues));
 
     const [errors, setErrors] = useState({});
+    const fillPostalCode = usePostalCodeFill(formData, setFormData);
     const [isSubmitting, setIsSubmitting] = useState(false);
 
     useEffect(() => {
@@ -71,14 +72,6 @@ export default function AddressModal({
             newErrors.city = "City is required";
         }
 
-        if (!formData.postal_code.trim()) {
-            newErrors.postal_code = "Postal code is required";
-        }
-
-        if (!formData.country.trim()) {
-            newErrors.country = "Country is required";
-        }
-
         setErrors(newErrors);
         return Object.keys(newErrors).length === 0;
     };
@@ -111,7 +104,7 @@ export default function AddressModal({
 
     return (
         <Modal isOpen={isOpen} onClose={handleClose} title={title}>
-            <div className="space-y-4">
+            <div className="space-y-4" onBlur={fillPostalCode}>
                 {/* Street */}
                 <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -190,42 +183,17 @@ export default function AddressModal({
 
                     <div>
                         <label className="block text-sm font-medium text-gray-700 mb-2">
-                            Postal Code <span className="text-red-500">*</span>
+                            Postal Code
                         </label>
                         <input
                             type="text"
                             name="postal_code"
                             value={formData.postal_code}
                             onChange={handleInputChange}
-                            className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
-                                errors.postal_code ? 'border-red-500' : 'border-gray-300'
-                            }`}
-                            placeholder="Enter postal code"
+                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                            placeholder="Filled in automatically"
                         />
-                        {errors.postal_code && (
-                            <p className="mt-1 text-sm text-red-600">{errors.postal_code}</p>
-                        )}
                     </div>
-                </div>
-
-                {/* Country */}
-                <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                        Country <span className="text-red-500">*</span>
-                    </label>
-                    <input
-                        type="text"
-                        name="country"
-                        value={formData.country}
-                        onChange={handleInputChange}
-                        className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
-                            errors.country ? 'border-red-500' : 'border-gray-300'
-                        }`}
-                        placeholder="Enter country"
-                    />
-                    {errors.country && (
-                        <p className="mt-1 text-sm text-red-600">{errors.country}</p>
-                    )}
                 </div>
 
                 {/* Optional Label */}

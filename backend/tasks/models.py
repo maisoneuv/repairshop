@@ -331,6 +331,12 @@ RECAP_NOTE_KEY = 'note'
 # yet it is exactly what the first technician has to base a diagnosis on.
 RECAP_ITEM_KEY = 'item'
 
+
+def split_recap_source(entry):
+    """'stage.field' -> ('stage', 'field'), forgiving stray spaces around either part."""
+    stage_key, _, field_key = entry.partition('.')
+    return stage_key.strip(), field_key.strip()
+
 def _values_match(actual, expected):
     """Compare a work item's value against one a skip condition expects.
 
@@ -547,12 +553,16 @@ class StageDefinition(models.Model):
             s.key: s for s in
             StageDefinition.objects.filter(process_id=self.process_id).exclude(pk=self.pk)
         }
+        self.recap_sources = [
+            '.'.join(filter(None, split_recap_source(e))) if isinstance(e, str) else e
+            for e in self.recap_sources
+        ]
         errors = []
         for entry in self.recap_sources:
             if not isinstance(entry, str) or not entry.strip():
                 errors.append(f'{entry!r} is not a stage key.')
                 continue
-            stage_key, _, field_key = entry.partition('.')
+            stage_key, field_key = split_recap_source(entry)
             if stage_key == RECAP_ITEM_KEY:
                 if not field_key:
                     errors.append(

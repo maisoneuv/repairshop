@@ -32,8 +32,8 @@ const workItemLayout = [
         collapsedByDefault: true,
         fields: [
             { name: "intake_method", width: "1/3" },
-            { name: "dropoff_point", width: "1/3" },
             { name: "pickup_point", width: "1/3" },
+            { name: "dropoff_point", width: "1/3" },
             { name: "type", width: "1/2" },
             { name: "priority", width: "1/2" },            
         ],

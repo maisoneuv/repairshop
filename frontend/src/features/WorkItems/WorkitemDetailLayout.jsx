@@ -50,7 +50,7 @@ const WorkItemDetailLayout = [
                 groupLabel: "Intake",
                 fields: [
                     { name: "intake_method", label: "Intake Method", type: "select", editable: true },
-                    { name: "pickup_point", label: "Pickup Location", type: "foreignkey", editable: true },
+                    { name: "pickup_point", label: "Collected From", type: "foreignkey", editable: true },
                 ]
             },
             {
@@ -60,10 +60,10 @@ const WorkItemDetailLayout = [
                 ]
             },
             {
-                groupLabel: "Dropoff",
+                groupLabel: "Return",
                 fields: [
-                    { name: "dropoff_method", label: "Dropoff Method", type: "select", editable: true },
-                    { name: "dropoff_point", label: "Dropoff Location", type: "foreignkey", editable: true },
+                    { name: "dropoff_method", label: "Return Method", type: "select", editable: true },
+                    { name: "dropoff_point", label: "Return To", type: "foreignkey", editable: true },
                 ]
             }
         ]

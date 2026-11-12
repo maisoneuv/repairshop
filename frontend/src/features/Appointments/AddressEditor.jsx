@@ -146,17 +146,18 @@ export default function AddressEditor({
                     <label className={labelCls}>Flat</label>
                     <input value={address.apartment_number || ""} onChange={(e) => setField({ apartment_number: e.target.value })} className={inputCls} />
                 </div>
-                <div className="col-span-4 sm:col-span-2">
+                <div className="col-span-4">
                     <label className={labelCls}>City *</label>
                     <input required value={address.city} onChange={(e) => setField({ city: e.target.value })} className={inputCls} />
                 </div>
                 <div className="col-span-2">
                     <label className={labelCls}>Postal code</label>
-                    <input value={address.postal_code || ""} onChange={(e) => setField({ postal_code: e.target.value })} className={inputCls} />
-                </div>
-                <div className="col-span-6 sm:col-span-2">
-                    <label className={labelCls}>Country</label>
-                    <input value={address.country} onChange={(e) => setField({ country: e.target.value })} className={inputCls} />
+                    <input
+                        value={address.postal_code || ""}
+                        onChange={(e) => setField({ postal_code: e.target.value })}
+                        placeholder="Auto"
+                        className={inputCls}
+                    />
                 </div>
             </div>
             {(pin || lookup.state !== "idle") && (

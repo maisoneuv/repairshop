@@ -15,11 +15,35 @@ const emptyForm = {
         street: "",
         city: "",
         postal_code: "",
-        country: "",
         building_number: "",
         apartment_number: ""
     },
 };
+
+const FIELD_LABELS = {
+    phone_number: "Phone number",
+    first_name: "First name",
+    last_name: "Last name",
+    tax_code: "Tax code",
+    referral_source: "Referral source",
+    building_number: "Building number",
+    apartment_number: "Apartment",
+    postal_code: "Postal code",
+};
+
+/** DRF error bag (possibly nested, e.g. address.city) → one readable line. */
+function serverErrorText(data) {
+    if (typeof data === "string") return data;
+    if (Array.isArray(data)) return data.map(serverErrorText).join(" ");
+    return Object.entries(data)
+        .map(([key, value]) => {
+            const nested = value && typeof value === "object" && !Array.isArray(value);
+            if (nested || key === "non_field_errors" || key === "detail") return serverErrorText(value);
+            const label = FIELD_LABELS[key] ?? key.charAt(0).toUpperCase() + key.slice(1).replace(/_/g, " ");
+            return `${label}: ${serverErrorText(value)}`;
+        })
+        .join(" ");
+}
 
 const CONTACT_ERROR_MESSAGE = "Please provide at least one contact method";
 
@@ -39,7 +63,6 @@ export default function CustomerForm({ onSuccess, initialData = null, mode = "cr
                 street: initialData.address?.street || "",
                 city: initialData.address?.city || "",
                 postal_code: initialData.address?.postal_code || "",
-                country: initialData.address?.country || "",
                 building_number: initialData.address?.building_number || "",
                 apartment_number: initialData.address?.apartment_number || "",
             },
@@ -139,7 +162,13 @@ export default function CustomerForm({ onSuccess, initialData = null, mode = "cr
 
             onSuccess?.(response.data);
         } catch (err) {
-            setError("Could not save customer: " + (err?.message || ""));
+            const data = err?.response?.data;
+            if (data && typeof data === "object") {
+                setFieldErrors(Object.fromEntries(Object.keys(data).map((key) => [key, true])));
+                setError(`Could not save customer. ${serverErrorText(data)}`);
+            } else {
+                setError(`Could not save customer: ${err?.message || "unknown error"}`);
+            }
         }
     };
 
