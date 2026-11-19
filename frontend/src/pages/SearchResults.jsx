@@ -1,6 +1,5 @@
 import { useEffect, useState } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
-import axios from 'axios';
 import apiClient from '../api/apiClient';
 import { getPicklistPath } from '../api/autocompleteApi';
 import { buildStatusColorMap, getStatusStyle } from '../utils/statusColors';
@@ -41,7 +40,7 @@ const SearchResults = () => {
         params.append('entity_types', type === 'customers' ? 'customers' : 'work_items');
       }
 
-      const response = await axios.get(`/core/search/?${params.toString()}`);
+      const response = await apiClient.get(`/api/core/search/?${params.toString()}`);
       setResults(response.data);
     } catch (err) {
       console.error('Search error:', err);

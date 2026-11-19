@@ -119,7 +119,7 @@ function Stop({ appointment, number, color, columnKey, selected, onSelect, onAct
     );
 }
 
-function EndpointRow({ label, which, endpoint, column, onEndpointChange }) {
+export function EndpointRow({ label, which, endpoint, column, onEndpointChange }) {
     const value = endpoint?.kind || "";
     return (
         <div className="space-y-1">
