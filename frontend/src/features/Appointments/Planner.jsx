@@ -24,7 +24,9 @@ import DayPlan from "./DayPlan";
 import DriversModal from "./DriversModal";
 import EndpointModal from "./EndpointModal";
 import InboxList from "./InboxList";
+import MobilePlanner from "./MobilePlanner";
 import SelectedPanel from "./SelectedPanel";
+import useMediaQuery from "../../hooks/useMediaQuery";
 import { availableOn, contactName, formatDay, hasLocation, shiftDay, toISODate } from "./constants";
 
 // Kept clear of the pickup (sky), return (violet) and not-home (amber) pin colours.
@@ -120,6 +122,7 @@ function endpointMarkers(columns) {
 
 export default function Planner() {
     const navigate = useNavigate();
+    const isMobile = useMediaQuery("(max-width: 767px)");
     const [searchParams, setSearchParams] = useSearchParams();
     const day = searchParams.get("day") || toISODate(new Date());
     const [typeFilter, setTypeFilter] = useState("all");
@@ -250,6 +253,22 @@ export default function Planner() {
         );
     }
 
+    function scheduleOn(appointment, date, driverId) {
+        return run(
+            scheduleAppointment(appointment.id, { date, driver: driverId }),
+            `${contactName(appointment)} added to ${formatDay(date)}`,
+        );
+    }
+
+    async function moveStop(column, appointmentId, toIndex) {
+        const ids = column.stops.map((s) => s.id);
+        const fromIndex = ids.indexOf(appointmentId);
+        if (!column.route || fromIndex === toIndex || toIndex < 0 || toIndex >= ids.length) return;
+        const next = arrayMove(ids, fromIndex, toIndex);
+        setRoutes((prev) => prev.map((r) => (r.id === column.route.id ? { ...r, stop_ids: next } : r)));
+        await run(reorderRoute(column.route.id, next), null);
+    }
+
     async function handleAction(action, appointment) {
         let result = null;
         try {
@@ -302,11 +321,7 @@ export default function Planner() {
         const overIndex = overId ? targetIds.indexOf(overId) : targetIds.length;
 
         if (from === to) {
-            const oldIndex = targetIds.indexOf(appointmentId);
-            if (oldIndex === overIndex || !target.route) return;
-            const ids = arrayMove(targetIds, oldIndex, overIndex);
-            setRoutes((prev) => prev.map((r) => (r.id === target.route.id ? { ...r, stop_ids: ids } : r)));
-            await run(reorderRoute(target.route.id, ids), null);
+            await moveStop(target, appointmentId, overIndex);
             return;
         }
         const appointment = allKnown.get(appointmentId);
@@ -348,33 +363,55 @@ export default function Planner() {
     return (
         <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
             <div className="px-4 md:px-0">
-                <div className="mb-4 flex flex-wrap items-center gap-3">
-                    <div className="mr-auto">
+                <div className="mb-3 flex items-center gap-2 pt-3 md:mb-4 md:flex-wrap md:gap-3 md:pt-0">
+                    <div className="mr-auto min-w-0">
                         <h1 className="text-xl font-semibold text-gray-800">Route planner</h1>
-                        <p className="text-sm text-gray-500">Group pickups and returns by area and plan who goes where each day.</p>
                     </div>
                     <Link
                         to="/appointments"
-                        className="inline-flex items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-sm text-gray-700 hover:border-gray-300"
+                        aria-label="All appointments"
+                        className="inline-flex h-11 w-11 items-center justify-center gap-1.5 rounded-lg border border-gray-200 bg-white text-sm text-gray-700 hover:border-gray-300 md:h-auto md:w-auto md:px-3 md:py-1.5"
                     >
-                        <List className="w-4 h-4" /> All appointments
+                        <List className="w-4 h-4" /> <span className="hidden md:inline">All appointments</span>
                     </Link>
                     <button
                         type="button"
                         onClick={() => setShowDrivers(true)}
-                        className="inline-flex items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-sm text-gray-700 hover:border-gray-300"
+                        aria-label={`Drivers${drivers.length ? ` (${drivers.length})` : ""}`}
+                        className="inline-flex h-11 w-11 items-center justify-center gap-1.5 rounded-lg border border-gray-200 bg-white text-sm text-gray-700 hover:border-gray-300 md:h-auto md:w-auto md:px-3 md:py-1.5"
                     >
-                        <Users className="w-4 h-4" /> Drivers{drivers.length ? ` (${drivers.length})` : ""}
+                        <Users className="w-4 h-4" />
+                        <span className="hidden md:inline">Drivers{drivers.length ? ` (${drivers.length})` : ""}</span>
                     </button>
                     <button
                         type="button"
                         onClick={() => setForm({})}
-                        className="inline-flex items-center gap-1.5 rounded-lg bg-blue-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-blue-700"
+                        aria-label="New pickup"
+                        className="inline-flex h-11 w-11 items-center justify-center gap-1.5 rounded-lg bg-blue-600 text-sm font-medium text-white hover:bg-blue-700 md:h-auto md:w-auto md:px-3 md:py-1.5"
                     >
-                        <Plus className="w-4 h-4" /> New pickup
+                        <Plus className="w-4 h-4" /> <span className="hidden md:inline">New pickup</span>
                     </button>
                 </div>
 
+                {isMobile ? (
+                    <MobilePlanner
+                        day={day}
+                        onDayChange={setDay}
+                        typeFilter={typeFilter}
+                        onTypeFilterChange={setTypeFilter}
+                        onlyAvailable={onlyAvailable}
+                        onOnlyAvailableChange={setOnlyAvailable}
+                        inbox={filteredInbox}
+                        columns={columns}
+                        drivers={drivers}
+                        loading={loading}
+                        onSchedule={scheduleOn}
+                        onMove={moveStop}
+                        onAction={handleAction}
+                        onEdit={(a) => setForm(a)}
+                        onEndpointChange={handleEndpointChange}
+                    />
+                ) : (
                 <div className="grid gap-4 lg:h-[calc(100vh-11rem)] lg:min-h-[560px] lg:grid-cols-[300px_minmax(0,1fr)_340px]">
                     <section className="flex min-h-0 flex-col rounded-xl border border-gray-200 bg-white">
                         <div className="space-y-2 border-b border-gray-100 p-3">
@@ -484,6 +521,7 @@ export default function Planner() {
                         </div>
                     </section>
                 </div>
+                )}
             </div>
 
             {form && (
